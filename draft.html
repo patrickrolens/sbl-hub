@@ -260,6 +260,39 @@ nav {
 .banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
 .banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
 .banner.ok  { border-color: rgba(76,175,125,.4); color: var(--green); }
+
+/* Mobile-only control; hidden on desktop. */
+#mobile-teams-btn { display: none; }
+
+/* ── MOBILE (≤768px) ──
+   The sidebar leaves the column and becomes a full-screen overlay, so the pool
+   always spans the full width. The collapse toggle now switches between the
+   draft-cards view (sidebar shown) and the tier-lanes view (sidebar hidden). */
+@media (max-width: 768px) {
+  /* Tighten the nav so it doesn't overflow a phone. */
+  .nav-logo { padding: 12px 10px 12px 0; margin-right: 6px; font-size: 14px; }
+  .nav-tab  { padding: 12px 10px; }
+  .nav-right { gap: 8px; padding-left: 8px; }
+
+  /* Sidebar overlays the main area (position:fixed removes it from the flex row,
+     so .main gets the full width). collapsed = slid off-canvas. */
+  .sidebar {
+    position: fixed; top: 49px; left: 0; bottom: 0; width: 100%;
+    min-height: 0; z-index: 60; border-right: none;
+    transform: translateX(0); transition: transform .2s ease;
+  }
+  .sidebar.collapsed { width: 100%; transform: translateX(-100%); }
+  .sidebar-head { position: static; }
+
+  /* Main now owns the full width; keep the big card from forcing overflow. */
+  .status-strip { flex-direction: column; gap: 10px; padding: 12px; }
+  .now-card { min-width: 0; max-width: none; width: 100%; }
+  .upnext-col { width: 100%; }
+  .pool { padding: 12px; }
+
+  /* Reveal the open-overlay button (lives in the toolbar, shown in lanes view). */
+  #mobile-teams-btn { display: inline-flex; }
+}
 </style>
 </head>
 <body>
@@ -314,6 +347,7 @@ nav {
     </div>
 
     <div class="toolbar">
+      <button class="btn" id="mobile-teams-btn" onclick="toggleSidebar()">☰ Teams</button>
       <div class="toolbar-search">
         <span class="si">🔍</span>
         <input type="text" id="search-input" placeholder="Search Pokémon…"
@@ -755,6 +789,9 @@ function selectTeam(id) {
   document.querySelectorAll('.team-card').forEach(c =>
     c.classList.toggle('selected', c.dataset.team === selectedTeam));
   refreshPoolColors();
+  // On mobile the sidebar is an overlay; selecting a team closes it so the
+  // newly blue-highlighted picks are visible in the pool underneath.
+  if (selectedTeam && isMobile()) setSidebarCollapsed(true);
 }
 
 function makeLane(key, mons) {
@@ -836,10 +873,16 @@ function applySearch() {
 }
 
 // ── SIDEBAR COLLAPSE ──
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const collapsed = sb.classList.toggle('collapsed');
+function isMobile() { return window.matchMedia('(max-width: 768px)').matches; }
+
+function setSidebarCollapsed(collapsed) {
+  document.getElementById('sidebar').classList.toggle('collapsed', collapsed);
   document.getElementById('sidebar-toggle').textContent = collapsed ? '⟩' : '⟨';
+}
+
+function toggleSidebar() {
+  const isCollapsed = document.getElementById('sidebar').classList.contains('collapsed');
+  setSidebarCollapsed(!isCollapsed);
 }
 
 // ── KEYBOARD ──
@@ -1107,6 +1150,7 @@ async function init() {
     renderSidebar();
     renderStatus();
     renderPool();
+    if (isMobile()) setSidebarCollapsed(true);   // phones open to the tier-lanes view
     banner.hidden = true;
     document.getElementById('layout').hidden = false;
     initAuth();       // non-blocking; reveals admin controls once the session resolves
