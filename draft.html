@@ -76,10 +76,13 @@ nav {
 /* ── TEAM CARD (sidebar) ── */
 .team-card {
   background: var(--bg2); border: 2px solid var(--border); border-radius: 10px;
-  padding: 9px 11px; transition: border-color .15s, background .15s;
+  padding: 9px 11px; transition: border-color .15s, background .15s; cursor: pointer;
 }
 .team-card.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(124,111,247,.35); }
 .team-card.is-next    { border-color: var(--yellow); box-shadow: 0 0 0 1px rgba(240,192,96,.3); }
+/* Selected (clicked) team — blue. outline sits outside the border so it coexists
+   with the current/next border colors. */
+.team-card.selected  { outline: 2px solid var(--blue); outline-offset: 1px; background: rgba(96,165,250,.08); }
 .team-card-coach { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
 .team-card-name  { font-size: 11px; color: var(--text2); margin-top: 1px; }
 .team-card-row   { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
@@ -87,6 +90,8 @@ nav {
 .team-card-icons img { width: 22px; height: 22px; image-rendering: pixelated; }
 .team-card-pts   { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; align-self: flex-end; }
 .team-card-pts .total { color: var(--text3); font-weight: 600; }
+/* Unfilled roster slots: a faded Pokéball placeholder. */
+.slot-empty { opacity: .28; filter: grayscale(40%); }
 
 /* ── MAIN COLUMN ── */
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -140,7 +145,7 @@ nav {
 .toolbar-search .sc:hover { color: var(--text); }
 
 /* ── POOL (tier lanes — Tier Editor format) ── */
-.pool { padding: 16px; display: flex; flex-direction: column; gap: 6px; max-width: 1400px; }
+.pool { padding: 16px; display: flex; flex-direction: column; gap: 6px; }
 .tier-lane { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .tier-lane.illegal-lane { border-color: rgba(224,85,85,.25); }
 .tier-header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
@@ -158,7 +163,7 @@ nav {
 .pmon {
   display: flex; flex-direction: column; align-items: center;
   background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
-  padding: 5px 5px 3px; width: 68px; position: relative; user-select: none;
+  padding: 5px 5px 3px; width: 68px; position: relative; user-select: none; cursor: pointer;
   transition: border-color .15s, opacity .15s, box-shadow .15s, background .15s;
 }
 .pmon:hover { border-color: var(--accent); }
@@ -168,12 +173,21 @@ nav {
 /* Illegal: not in this season's tier list. Image dimmed/grayscaled (image only). */
 .pmon.illegal-card img { opacity: .4; filter: grayscale(70%); }
 
+/* ── COLOR STATE (one at a time, by precedence: blue > red > yellow) ──
+   A card gets exactly one of team-pick / drafted / pinned, assigned in JS, so the
+   precedence is enforced at assignment time and no !important juggling is needed. */
+/* Team-selected (sidebar click) — blue. Highest priority. */
+.pmon.team-pick { border-color: rgba(96,165,250,.7); background: rgba(96,165,250,.1); box-shadow: 0 0 0 1px rgba(96,165,250,.35); }
+.pmon.team-pick .pmon-name { color: var(--blue); }
 /* Drafted: legal but already taken. Red — NOT dimmed (dimming is reserved for illegal). */
 .pmon.drafted { border-color: rgba(224,85,85,.7); background: rgba(224,85,85,.08); box-shadow: 0 0 0 1px rgba(224,85,85,.35); }
 .pmon.drafted .pmon-name { color: var(--red); }
+/* User pin (single-click) — yellow. Unlimited, multi-select. */
+.pmon.pinned { border-color: rgba(240,192,96,.7); background: rgba(240,192,96,.1); box-shadow: 0 0 0 1px rgba(240,192,96,.35); }
+.pmon.pinned .pmon-name { color: var(--yellow); }
 
 /* Search: matches get accent ring, non-matches fade. Opacity-only so any color above
-   (e.g. drafted red) survives the fade. */
+   survives the fade. */
 .pmon.search-dim   { opacity: .18; }
 .pmon.search-match { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(124,111,247,.4); }
 
@@ -264,6 +278,8 @@ let orderedTeams = [];              // team_ids in sidebar/draft order
 let pokemonById  = {};              // id -> pokemon.json entry
 let collapsed    = new Set();       // collapsed tier lane keys
 let searchQ      = '';
+let selectedTeam = null;            // team_id whose roster is blue-highlighted (one at a time)
+let pinnedIds    = new Set();       // pokemon_id the viewer yellow-pinned (unlimited)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // URL / ID HELPERS — mirror the Planner so sprite/icon paths resolve identically.
@@ -391,10 +407,13 @@ function teamName(id)  { const t = teams.find(x => x.id === id); return t ? t.na
 function coachName(id) { return coachByTeam[id] || '—'; }
 function pointsUsed(id){ return (picksByTeam[id] || []).reduce((s, pid) => s + (tierCost[pid] || 0), 0); }
 
-function iconRow(pokemonIds, sizeClass) {
+// Render a row of drafted icons, optionally padded out to `slotCount` total slots
+// with faded Pokéball placeholders for not-yet-drafted roster spots.
+function iconRow(pokemonIds, sizeClass, slotCount) {
   const wrap = document.createElement('div');
   wrap.className = sizeClass;
-  (pokemonIds || []).forEach(pid => {
+  const ids = pokemonIds || [];
+  ids.forEach(pid => {
     const mon = pokemonById[pid];
     const img = document.createElement('img');
     img.src = iconUrl(mon || { id: pid });
@@ -403,6 +422,15 @@ function iconRow(pokemonIds, sizeClass) {
     attachIconFallback(img, mon || { id: pid });
     wrap.appendChild(img);
   });
+  // Pad to the team's roster size with empty (Pokéball) slots.
+  const empties = Math.max(0, (slotCount || 0) - ids.length);
+  for (let i = 0; i < empties; i++) {
+    const img = document.createElement('img');
+    img.className = 'slot-empty';
+    img.src = POKEBALL_FALLBACK;
+    img.alt = 'Empty slot';
+    wrap.appendChild(img);
+  }
   return wrap;
 }
 
@@ -416,8 +444,10 @@ function renderSidebar() {
     const card = document.createElement('div');
     card.className = 'team-card'
       + (id === currentTeam ? ' is-current' : '')
-      + (id === nextTeam    ? ' is-next'    : '');
+      + (id === nextTeam    ? ' is-next'    : '')
+      + (id === selectedTeam ? ' selected'  : '');
     card.dataset.team = id;
+    card.onclick = () => selectTeam(id);
 
     const coach = document.createElement('div');
     coach.className = 'team-card-coach';
@@ -431,7 +461,7 @@ function renderSidebar() {
 
     const row = document.createElement('div');
     row.className = 'team-card-row';
-    row.appendChild(iconRow(picksByTeam[id], 'team-card-icons'));
+    row.appendChild(iconRow(picksByTeam[id], 'team-card-icons', season.team_size));
 
     const pts = document.createElement('div');
     pts.className = 'team-card-pts';
@@ -461,7 +491,7 @@ function renderStatus() {
   const co  = document.createElement('div'); co.className  = 'now-coach'; co.textContent  = coachName(curId);
   const tm  = document.createElement('div'); tm.className  = 'now-team';  tm.textContent  = teamName(curId);
   nowCard.appendChild(lab); nowCard.appendChild(co); nowCard.appendChild(tm);
-  nowCard.appendChild(iconRow(picksByTeam[curId], 'now-icons'));
+  nowCard.appendChild(iconRow(picksByTeam[curId], 'now-icons', season.team_size));
   const pts = document.createElement('div'); pts.className = 'now-pts';
   pts.innerHTML = 'Points: ' + pointsUsed(curId) + '<span class="total">/' + (season.point_limit ?? '—') + '</span>';
   nowCard.appendChild(pts);
@@ -476,12 +506,9 @@ function renderStatus() {
 
 function makeCard(mon) {
   const isIllegal = !(mon.id in tierCost);
-  const isDrafted = draftedSet.has(mon.id);
 
   const card = document.createElement('div');
-  card.className = 'pmon'
-    + (isIllegal ? ' illegal-card' : '')
-    + (isDrafted ? ' drafted' : '');
+  card.className = 'pmon' + (isIllegal ? ' illegal-card' : '');
   card.dataset.id = mon.id;
   card.dataset.name = mon.name.toLowerCase();
   card.title = mon.name;
@@ -497,7 +524,58 @@ function makeCard(mon) {
   nm.textContent = mon.name;
   card.appendChild(nm);
 
+  // Single-click = yellow pin; double-click = draft (admin, Stage 3). A single
+  // click is delayed briefly so a double-click can cancel it — otherwise every
+  // draft would also leave a stray yellow pin behind.
+  card.addEventListener('click', () => {
+    clearTimeout(card._clickTimer);
+    card._clickTimer = setTimeout(() => onPoolClick(mon, card), 220);
+  });
+  card.addEventListener('dblclick', () => {
+    clearTimeout(card._clickTimer);
+    onPoolDblClick(mon, card);
+  });
+
+  applyCardState(card, mon.id);   // initial color (drafted / selected-team / pinned)
   return card;
+}
+
+// ── COLOR STATE ──
+// Exactly one color class per card, by precedence: team-pick (blue) > drafted (red)
+// > pinned (yellow). illegal-card (image grayscale) and search-* (opacity) are
+// independent axes and are left untouched here.
+function applyCardState(card, id) {
+  card.classList.remove('team-pick', 'drafted', 'pinned');
+  const ownedBySelected = selectedTeam && (picksByTeam[selectedTeam] || []).includes(id);
+  if (ownedBySelected)        card.classList.add('team-pick');
+  else if (draftedSet.has(id)) card.classList.add('drafted');
+  else if (pinnedIds.has(id))  card.classList.add('pinned');
+}
+
+// Reapply color state to every pool card (after a selection change).
+function refreshPoolColors() {
+  document.querySelectorAll('.pmon').forEach(card => applyCardState(card, card.dataset.id));
+}
+
+// ── INTERACTIONS ──
+function onPoolClick(mon, card) {
+  // A drafted Pokémon can't be a draft target, so it can't be yellow-pinned.
+  if (draftedSet.has(mon.id)) return;
+  if (pinnedIds.has(mon.id)) pinnedIds.delete(mon.id);
+  else                       pinnedIds.add(mon.id);
+  applyCardState(card, mon.id);
+}
+
+function onPoolDblClick(mon, card) {
+  // Admin draft action is wired in Stage 3 (needs auth + the current drafter).
+  // For now this just exists so the click/dblclick debounce is in place.
+}
+
+function selectTeam(id) {
+  selectedTeam = (selectedTeam === id) ? null : id;   // click again to deselect
+  document.querySelectorAll('.team-card').forEach(c =>
+    c.classList.toggle('selected', c.dataset.team === selectedTeam));
+  refreshPoolColors();
 }
 
 function makeLane(key, mons) {
