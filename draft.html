@@ -18,6 +18,7 @@
   --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
   --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
   --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+  --nav-h: 49px;   /* measured at runtime so sticky offsets match the real nav */
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; }
@@ -71,7 +72,7 @@ nav {
 /* ── SIDEBAR ── */
 .sidebar {
   width: 300px; flex-shrink: 0; border-right: 1px solid var(--border);
-  background: var(--bg); min-height: calc(100vh - 49px);
+  background: var(--bg); min-height: calc(100vh - var(--nav-h));
   display: flex; flex-direction: column;
   transition: width .18s ease;
 }
@@ -79,7 +80,7 @@ nav {
 .sidebar-head {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 12px; border-bottom: 1px solid var(--border);
-  position: sticky; top: 49px; background: var(--bg); z-index: 5;
+  position: sticky; top: var(--nav-h); background: var(--bg); z-index: 5;
 }
 .sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; white-space: nowrap; }
 .sidebar.collapsed .sidebar-title { display: none; }
@@ -150,7 +151,7 @@ nav {
 .toolbar {
   background: var(--bg2); border-bottom: 1px solid var(--border);
   padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  position: sticky; top: 49px; z-index: 40;
+  position: sticky; top: var(--nav-h); z-index: 40;
 }
 .toolbar-search { position: relative; flex: 1; min-width: 200px; max-width: 360px; }
 .toolbar-search input {
@@ -269,15 +270,22 @@ nav {
    always spans the full width. The collapse toggle now switches between the
    draft-cards view (sidebar shown) and the tier-lanes view (sidebar hidden). */
 @media (max-width: 768px) {
-  /* Tighten the nav so it doesn't overflow a phone. */
-  .nav-logo { padding: 12px 10px 12px 0; margin-right: 6px; font-size: 14px; }
+  /* Keep the nav on one row within the viewport — the tab strip absorbs the
+     slack and scrolls horizontally instead of pushing the page wider. */
+  nav { padding: 0 8px; }
+  .nav-logo { padding: 12px 10px 12px 0; margin-right: 6px; font-size: 14px; flex-shrink: 0; }
+  .nav-tabs { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
   .nav-tab  { padding: 12px 10px; }
-  .nav-right { gap: 8px; padding-left: 8px; }
+  .nav-right { flex-shrink: 0; gap: 8px; padding-left: 8px; }
+  .live-badge #live-text { display: none; }            /* dot only on phones */
+  .user-chip .email { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn { padding: 6px 10px; }
 
   /* Sidebar overlays the main area (position:fixed removes it from the flex row,
      so .main gets the full width). collapsed = slid off-canvas. */
   .sidebar {
-    position: fixed; top: 49px; left: 0; bottom: 0; width: 100%;
+    position: fixed; top: var(--nav-h); left: 0; bottom: 0; width: 100%;
     min-height: 0; z-index: 60; border-right: none;
     transform: translateX(0); transition: transform .2s ease;
   }
@@ -1140,6 +1148,14 @@ async function refreshDraftState() {
   }
 }
 
+// Keep --nav-h in sync with the actual nav height so the sticky toolbar and the
+// mobile sidebar overlay line up exactly (the nav is shorter on phones).
+function setNavHeight() {
+  const nav = document.querySelector('nav');
+  if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
+}
+window.addEventListener('resize', setNavHeight);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1150,6 +1166,7 @@ async function init() {
     renderSidebar();
     renderStatus();
     renderPool();
+    setNavHeight();
     if (isMobile()) setSidebarCollapsed(true);   // phones open to the tier-lanes view
     banner.hidden = true;
     document.getElementById('layout').hidden = false;
