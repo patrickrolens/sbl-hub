@@ -45,6 +45,13 @@ nav {
 .nav-tab:hover { color: var(--text); }
 .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; padding-left: 12px; }
+.live-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text3); }
+.live-badge .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); transition: background .2s; }
+.live-badge.on  { color: var(--green); }
+.live-badge.on  .live-dot { background: var(--green); box-shadow: 0 0 6px rgba(76,175,125,.8); animation: live-pulse 2s infinite; }
+.live-badge.err { color: var(--red); }
+.live-badge.err .live-dot { background: var(--red); }
+@keyframes live-pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 .btn {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 7px;
   color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 14px; cursor: pointer;
@@ -266,6 +273,7 @@ nav {
     <a class="nav-tab" href="schedule.html">Matches</a>
   </div>
   <div class="nav-right">
+    <span class="live-badge" id="live-badge" title="Live updates"><span class="live-dot"></span><span id="live-text">Connecting…</span></span>
     <button class="btn" id="login-btn" onclick="openLogin()" hidden>Admin Login</button>
     <span class="user-chip" id="user-chip" hidden>
       <span class="dot"></span><span class="email" id="user-email"></span>
@@ -1011,6 +1019,85 @@ function escapeHtml(s) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// REALTIME — subscribe to draft picks + the draft row. On any change, re-fetch the
+// small slice of state and re-render. Re-fetching (rather than diffing the event
+// payload) keeps inserts/updates/deletes uniform and sidesteps the thin DELETE
+// payload. Client-only state (yellow pins, team selection, collapsed lanes,
+// search) lives in globals the renderers read, so it survives a refresh untouched.
+// ─────────────────────────────────────────────────────────────────────────────
+let liveChannel = null;
+let refreshTimer = null;
+
+function initRealtime() {
+  liveChannel = sb.channel('draft-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'team_pokemon' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'drafts' }, scheduleRefresh)
+    .subscribe(status => updateLiveBadge(status));
+}
+
+function updateLiveBadge(status) {
+  const badge = document.getElementById('live-badge');
+  const text  = document.getElementById('live-text');
+  badge.classList.remove('on', 'err');
+  if (status === 'SUBSCRIBED')      { badge.classList.add('on');  text.textContent = 'Live'; }
+  else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { badge.classList.add('err'); text.textContent = 'Reconnecting…'; }
+  else                              { text.textContent = 'Connecting…'; }
+}
+
+// Coalesce bursts of events (e.g. an INSERT + a drafts UPDATE from one pick) into
+// a single re-fetch.
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(refreshDraftState, 200);
+}
+
+async function refreshDraftState() {
+  try {
+    const teamIds = teams.map(t => t.id);
+
+    const [draftRes, picksRes] = await Promise.all([
+      sb.from('drafts').select('draft_order, current_pick_number, status').eq('season_id', season.id).maybeSingle(),
+      teamIds.length
+        ? sb.from('team_pokemon').select('team_id, pokemon_id, draft_pick_number').eq('acquired_via', 'draft').in('team_id', teamIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (draftRes.error) throw draftRes.error;
+    if (picksRes.error) throw picksRes.error;
+
+    draft = draftRes.data || null;
+
+    // Rebuild pick-derived state from scratch.
+    picksByTeam = {}; draftedSet = new Set(); draftPicks = [];
+    (picksRes.data || [])
+      .sort((a, b) => (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
+      .forEach(p => {
+        (picksByTeam[p.team_id] = picksByTeam[p.team_id] || []).push(p.pokemon_id);
+        draftedSet.add(p.pokemon_id);
+        draftPicks.push({ pick_number: p.draft_pick_number, team_id: p.team_id, pokemon_id: p.pokemon_id });
+      });
+
+    // A Pokémon that's now drafted can't stay yellow-pinned (matches the local rule).
+    pinnedIds.forEach(id => { if (draftedSet.has(id)) pinnedIds.delete(id); });
+
+    // Draft order can change (e.g. admin edit), so recompute it too.
+    if (draft && Array.isArray(draft.draft_order) && draft.draft_order.length) {
+      orderedTeams = draft.draft_order.filter(id => teamIds.includes(id));
+    } else {
+      orderedTeams = [...teams]
+        .sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name))
+        .map(t => t.id);
+    }
+
+    renderSidebar();
+    renderStatus();
+    refreshPoolColors();
+    updateUndoButton();
+  } catch (err) {
+    console.error('Realtime refresh failed:', err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────────────────────────────────────
 async function init() {
@@ -1022,7 +1109,8 @@ async function init() {
     renderPool();
     banner.hidden = true;
     document.getElementById('layout').hidden = false;
-    initAuth();   // non-blocking; reveals admin controls once the session resolves
+    initAuth();       // non-blocking; reveals admin controls once the session resolves
+    initRealtime();   // live updates for all viewers
   } catch (err) {
     console.error(err);
     banner.className = 'banner err';
