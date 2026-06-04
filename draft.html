@@ -207,6 +207,9 @@ nav {
 /* ── ADMIN OPERATOR HINT (shown in the status strip when logged in as admin) ── */
 .op-hint { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
 .op-hint .op-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.btn-undo { border-color: rgba(224,85,85,.4); color: #ffb3b3; }
+.btn-undo:hover { border-color: var(--red); }
+.btn-undo:disabled { color: var(--text3); border-color: var(--border); }
 
 /* ── MODAL ── */
 .modal-overlay {
@@ -295,8 +298,10 @@ nav {
         <div class="op-hint" id="op-hint" hidden>
           <span class="op-dot"></span>Operator mode — double-click a Pokémon to draft it
         </div>
-        <!-- Skip / Undo land here in Stage 4. -->
-        <div id="admin-controls" hidden></div>
+        <!-- Admin-only draft controls, revealed once an admin session resolves. -->
+        <div id="admin-controls" hidden>
+          <button class="btn btn-undo" id="undo-btn" onclick="undoLastPick()">↩ Undo last pick</button>
+        </div>
       </div>
     </div>
 
@@ -346,6 +351,7 @@ let coachByTeam  = {};              // team_id -> coach display_name
 let tierCost     = {};              // pokemon_id -> point_cost (this season's legal set)
 let draft        = null;            // drafts row (may be null until Patrick seeds it)
 let picksByTeam  = {};              // team_id -> [pokemon_id, …] in draft order
+let draftPicks   = [];              // global ordered [{pick_number, team_id, pokemon_id}] for undo
 let draftedSet   = new Set();       // pokemon_id that are already drafted
 let orderedTeams = [];              // team_ids in sidebar/draft order
 let pokemonById  = {};              // id -> pokemon.json entry
@@ -440,7 +446,7 @@ async function loadData() {
   draft = draftRes.data || null;
 
   // Drafted picks for this season's teams.
-  picksByTeam = {}; draftedSet = new Set();
+  picksByTeam = {}; draftedSet = new Set(); draftPicks = [];
   if (teamIds.length) {
     const { data: picks, error: picksErr } = await sb
       .from('team_pokemon')
@@ -453,6 +459,7 @@ async function loadData() {
       .forEach(p => {
         (picksByTeam[p.team_id] = picksByTeam[p.team_id] || []).push(p.pokemon_id);
         draftedSet.add(p.pokemon_id);
+        draftPicks.push({ pick_number: p.draft_pick_number, team_id: p.team_id, pokemon_id: p.pokemon_id });
       });
   }
 
@@ -718,6 +725,7 @@ async function draftPokemon(mon, teamId, pickNumber) {
     // Local state.
     (picksByTeam[teamId] = picksByTeam[teamId] || []).push(mon.id);
     draftedSet.add(mon.id);
+    draftPicks.push({ pick_number: pickNumber, team_id: teamId, pokemon_id: mon.id });
     pinnedIds.delete(mon.id);           // a drafted Pokémon clears its yellow pin
     draft.current_pick_number = pickNumber + 1;
     if (isLast) { draft.status = 'complete'; }
@@ -725,6 +733,7 @@ async function draftPokemon(mon, teamId, pickNumber) {
     renderSidebar();
     renderStatus();
     refreshPoolColors();
+    updateUndoButton();
     showToast('Drafted ' + mon.name + ' to ' + teamName(teamId) + '.', 'ok');
     if (isLast) showToast('Draft complete!', 'ok');
   } catch (err) {
@@ -871,8 +880,76 @@ function updateAuthUI() {
     loginBtn.hidden = false;
     chip.hidden = true;
   }
-  // Operator hint only when an admin can actually draft.
+  // Operator hint and controls only when an admin can actually draft.
   opHint.hidden = !isAdmin;
+  document.getElementById('admin-controls').hidden = !isAdmin;
+  updateUndoButton();
+}
+
+// Enable Undo only when there's a pick to reverse.
+function updateUndoButton() {
+  const btn = document.getElementById('undo-btn');
+  if (!btn) return;
+  btn.disabled = !(isAdmin && draftPicks.length > 0);
+}
+
+// Reverse the most recent pick: delete its team_pokemon row, move the pointer
+// back to that drafter, and return the Pokémon to the pool. No skips exist, so
+// the last pick is simply the highest draft_pick_number.
+function undoLastPick() {
+  if (!isAdmin) return;
+  if (!draftPicks.length) { showToast('Nothing to undo.', 'err'); return; }
+  const last = draftPicks[draftPicks.length - 1];
+  const mon  = pokemonById[last.pokemon_id];
+  const monName = mon ? mon.name : last.pokemon_id;
+
+  openModal(
+    '<h3>Undo last pick?</h3>'
+    + '<p>This removes <b>' + escapeHtml(monName) + '</b> from <b>' + escapeHtml(teamName(last.team_id)) + '</b>'
+    +   ' (pick #' + last.pick_number + ') and puts it back in the pool. '
+    +   '<b>' + escapeHtml(coachName(last.team_id)) + '</b> goes back on the clock.</p>'
+    + '<div class="modal-actions">'
+    +   '<button class="btn" onclick="closeModal()">Cancel</button>'
+    +   '<button class="btn btn-undo" id="confirm-undo-btn">Undo</button>'
+    + '</div>'
+  );
+  document.getElementById('confirm-undo-btn').onclick = () => { closeModal(); performUndo(last); };
+}
+
+async function performUndo(last) {
+  try {
+    const { error: delErr } = await sb.from('team_pokemon')
+      .delete()
+      .eq('team_id', last.team_id)
+      .eq('pokemon_id', last.pokemon_id)
+      .eq('acquired_via', 'draft');
+    if (delErr) throw delErr;
+
+    // Pointer goes back to the undone pick; reopening the draft if it had completed.
+    const { error: updErr } = await sb.from('drafts')
+      .update({ current_pick_number: last.pick_number, status: 'in_progress', completed_at: null })
+      .eq('season_id', season.id);
+    if (updErr) throw updErr;
+
+    // Local state.
+    draftPicks.pop();
+    draftedSet.delete(last.pokemon_id);
+    const arr = picksByTeam[last.team_id] || [];
+    const at = arr.lastIndexOf(last.pokemon_id);
+    if (at !== -1) arr.splice(at, 1);
+    draft.current_pick_number = last.pick_number;
+    draft.status = 'in_progress';
+
+    renderSidebar();
+    renderStatus();
+    refreshPoolColors();
+    updateUndoButton();
+    const mon = pokemonById[last.pokemon_id];
+    showToast('Undid pick #' + last.pick_number + ' — ' + (mon ? mon.name : last.pokemon_id) + ' returned to the pool.', 'ok');
+  } catch (err) {
+    console.error(err);
+    showToast('Undo failed: ' + (err.message || err), 'err');
+  }
 }
 
 function openLogin() {
