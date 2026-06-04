@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SBL Hub — Draft</title>
+
+<!-- Supabase JS client (v2). Same pattern as hello-world.html. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* ─────────────────────────────────────────────────────────────────────────────
+   TOKENS — lifted verbatim from the Planner / Tier Editor so the three apps share
+   one palette. (Planner uses --cb-green for colorblind mode; the hub doesn't need
+   that axis yet, so --blue stays the plain blue.)
+───────────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── NAV ── (logo + page tabs, matching the Tier Editor nav bar) ── */
+nav {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 1rem;
+  position: sticky; top: 0; z-index: 100;
+}
+.nav-logo {
+  font-size: 15px; font-weight: 700; color: var(--accent);
+  padding: 14px 16px 14px 0; margin-right: 8px;
+  border-right: 1px solid var(--border); white-space: nowrap;
+}
+.nav-tabs { display: flex; align-items: stretch; }
+.nav-tab {
+  padding: 14px 16px; font-size: 13px; font-weight: 600; color: var(--text2);
+  text-decoration: none; border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+}
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── PAGE GRID: sidebar | main ── */
+.layout { display: flex; align-items: flex-start; gap: 0; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: 300px; flex-shrink: 0; border-right: 1px solid var(--border);
+  background: var(--bg); min-height: calc(100vh - 49px);
+  display: flex; flex-direction: column;
+  transition: width .18s ease;
+}
+.sidebar.collapsed { width: 44px; }
+.sidebar-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 49px; background: var(--bg); z-index: 5;
+}
+.sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; white-space: nowrap; }
+.sidebar.collapsed .sidebar-title { display: none; }
+.sidebar-toggle {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text2); cursor: pointer; font-size: 13px; line-height: 1;
+  padding: 5px 8px; margin-left: auto;
+}
+.sidebar.collapsed .sidebar-toggle { margin-left: 0; }
+.sidebar-toggle:hover { color: var(--text); border-color: var(--accent); }
+.sidebar-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.sidebar.collapsed .sidebar-body { display: none; }
+
+/* ── TEAM CARD (sidebar) ── */
+.team-card {
+  background: var(--bg2); border: 2px solid var(--border); border-radius: 10px;
+  padding: 9px 11px; transition: border-color .15s, background .15s;
+}
+.team-card.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(124,111,247,.35); }
+.team-card.is-next    { border-color: var(--yellow); box-shadow: 0 0 0 1px rgba(240,192,96,.3); }
+.team-card-coach { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.team-card-name  { font-size: 11px; color: var(--text2); margin-top: 1px; }
+.team-card-row   { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+.team-card-icons { display: flex; flex-wrap: wrap; gap: 2px; flex: 1; min-height: 22px; }
+.team-card-icons img { width: 22px; height: 22px; image-rendering: pixelated; }
+.team-card-pts   { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; align-self: flex-end; }
+.team-card-pts .total { color: var(--text3); font-weight: 600; }
+
+/* ── MAIN COLUMN ── */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ── STATUS STRIP (big current-drafter card + up-next) ── */
+.status-strip {
+  display: flex; align-items: stretch; gap: 16px;
+  padding: 16px; border-bottom: 1px solid var(--border);
+}
+.now-card {
+  flex: 0 0 auto; min-width: 360px; max-width: 520px;
+  background: var(--bg2); border: 2px solid var(--accent);
+  box-shadow: 0 0 0 1px rgba(124,111,247,.3); border-radius: 12px; padding: 14px 16px;
+}
+.now-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--accent); text-transform: uppercase; }
+.now-coach { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.1; margin-top: 4px; }
+.now-team  { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.now-icons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; min-height: 36px; }
+.now-icons img { width: 36px; height: 36px; image-rendering: pixelated; }
+.now-pts   { font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 10px; }
+.now-pts .total { color: var(--text3); font-weight: 600; }
+
+.upnext-col { display: flex; flex-direction: column; gap: 10px; justify-content: flex-start; }
+.upnext-card {
+  background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--yellow);
+  border-radius: 8px; padding: 10px 14px;
+}
+.upnext-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--yellow); text-transform: uppercase; }
+.upnext-text  { font-size: 14px; font-weight: 600; color: var(--text); margin-top: 3px; }
+.upnext-text .pl { color: var(--text2); font-weight: 400; }
+
+/* Admin-only controls live here; hidden until Stage 3 wires auth. */
+#admin-controls[hidden] { display: none; }
+
+/* ── TOOLBAR / SEARCH ── (copied from Tier Editor for matching style) ── */
+.toolbar {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  position: sticky; top: 49px; z-index: 40;
+}
+.toolbar-search { position: relative; flex: 1; min-width: 200px; max-width: 360px; }
+.toolbar-search input {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 32px; color: var(--text); font-size: 13px; outline: none;
+}
+.toolbar-search input:focus { border-color: var(--accent); }
+.toolbar-search input::placeholder { color: var(--text3); }
+.toolbar-search .si { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; }
+.toolbar-search .sc { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 0; line-height: 1; display: none; }
+.toolbar-search .sc.visible { display: block; }
+.toolbar-search .sc:hover { color: var(--text); }
+
+/* ── POOL (tier lanes — Tier Editor format) ── */
+.pool { padding: 16px; display: flex; flex-direction: column; gap: 6px; max-width: 1400px; }
+.tier-lane { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.tier-lane.illegal-lane { border-color: rgba(224,85,85,.25); }
+.tier-header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+.tier-header:hover { background: rgba(255,255,255,.02); }
+.tier-pts { font-size: 20px; font-weight: 700; color: var(--accent); min-width: 40px; }
+.tier-pts.illegal-pts { color: var(--red); font-size: 14px; letter-spacing: .5px; }
+.tier-label { font-size: 11px; color: var(--text3); font-weight: 600; }
+.tier-count { font-size: 12px; color: var(--text3); margin-left: 6px; }
+.tier-collapse-icon { font-size: 11px; color: var(--text3); margin-left: 4px; }
+.tier-body { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; min-height: 58px; }
+.tier-body.collapsed { display: none; }
+.tier-empty-msg { font-size: 11px; color: var(--text3); font-style: italic; }
+
+/* ── POKEMON CARD ── */
+.pmon {
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 5px 3px; width: 68px; position: relative; user-select: none;
+  transition: border-color .15s, opacity .15s, box-shadow .15s, background .15s;
+}
+.pmon:hover { border-color: var(--accent); }
+.pmon img { width: 40px; height: 40px; image-rendering: pixelated; pointer-events: none; display: block; }
+.pmon-name { font-size: 9px; color: var(--text2); text-align: center; margin-top: 2px; line-height: 1.2; word-break: break-word; pointer-events: none; }
+
+/* Illegal: not in this season's tier list. Image dimmed/grayscaled (image only). */
+.pmon.illegal-card img { opacity: .4; filter: grayscale(70%); }
+
+/* Drafted: legal but already taken. Red — NOT dimmed (dimming is reserved for illegal). */
+.pmon.drafted { border-color: rgba(224,85,85,.7); background: rgba(224,85,85,.08); box-shadow: 0 0 0 1px rgba(224,85,85,.35); }
+.pmon.drafted .pmon-name { color: var(--red); }
+
+/* Search: matches get accent ring, non-matches fade. Opacity-only so any color above
+   (e.g. drafted red) survives the fade. */
+.pmon.search-dim   { opacity: .18; }
+.pmon.search-match { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(124,111,247,.4); }
+
+/* ── LOADING / ERROR BANNER ── */
+.banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
+.banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
+.banner.ok  { border-color: rgba(76,175,125,.4); color: var(--green); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">SBL Hub</div>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="standings.html">Standings</a>
+    <a class="nav-tab active" href="draft.html">Draft</a>
+    <a class="nav-tab" href="schedule.html">Schedule</a>
+    <a class="nav-tab" href="schedule.html">Matches</a>
+  </div>
+</nav>
+
+<div id="boot-banner" class="banner">Loading draft…</div>
+
+<div class="layout" id="layout" hidden>
+  <!-- ── SIDEBAR: all teams in draft order ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <span class="sidebar-title">Draft Order</span>
+      <button class="sidebar-toggle" id="sidebar-toggle" title="Collapse sidebar" onclick="toggleSidebar()">⟨</button>
+    </div>
+    <div class="sidebar-body" id="sidebar-body"></div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <div class="main">
+    <div class="status-strip">
+      <div class="now-card" id="now-card"><!-- current drafter, big --></div>
+      <div class="upnext-col">
+        <div class="upnext-card">
+          <div class="upnext-label">Up Next</div>
+          <div class="upnext-text" id="upnext-text">—</div>
+        </div>
+        <!-- Skip / Undo land here in Stage 4, revealed by auth in Stage 3. -->
+        <div id="admin-controls" hidden></div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="toolbar-search">
+        <span class="si">🔍</span>
+        <input type="text" id="search-input" placeholder="Search Pokémon…"
+               oninput="onSearch()" onkeydown="if(event.key==='Escape')clearSearch()">
+        <button class="sc" id="search-clear" onclick="clearSearch()">✕</button>
+      </div>
+    </div>
+
+    <div class="pool" id="pool"></div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG — anon key is public by design; RLS enforces access (same as hello-world).
+// ─────────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Pokéball fallback — identical to the Planner / Tier Editor.
+const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
+
+// ── STATE ──
+let season       = null;            // current seasons row
+let teams        = [];              // teams rows for the season
+let coachByTeam  = {};              // team_id -> coach display_name
+let tierCost     = {};              // pokemon_id -> point_cost (this season's legal set)
+let draft        = null;            // drafts row (may be null until Patrick seeds it)
+let picksByTeam  = {};              // team_id -> [pokemon_id, …] in draft order
+let draftedSet   = new Set();       // pokemon_id that are already drafted
+let orderedTeams = [];              // team_ids in sidebar/draft order
+let pokemonById  = {};              // id -> pokemon.json entry
+let collapsed    = new Set();       // collapsed tier lane keys
+let searchQ      = '';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// URL / ID HELPERS — mirror the Planner so sprite/icon paths resolve identically.
+//   Draft pool + sidebar use ICONS first, falling back to SPRITES, then Pokéball.
+// ─────────────────────────────────────────────────────────────────────────────
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/);
+  if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(mon)   { return mon && mon.id ? './icons/'   + localId(mon.id) + '.png' : ''; }
+function spriteUrl(mon) { return mon && mon.id ? './sprites/' + localId(mon.id) + '.png' : ''; }
+
+// icon → sprite → Pokéball, applied as an inline onerror chain on each <img>.
+function attachIconFallback(img, mon) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/'))       { this.src = spriteUrl(mon); }
+    else if (this.src.includes('/sprites/')){ this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+    else                                    { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SNAKE ORDER — for the read-only current/next display in Stage 1.
+//   draft_order is the round-1 team sequence; even rounds (0-indexed) go forward,
+//   odd rounds reverse. Skip-aware computation arrives in Stage 4.
+// ─────────────────────────────────────────────────────────────────────────────
+function teamAtPick(pickNumber) {
+  if (!draft || !orderedTeams.length || !season) return null;
+  const n = orderedTeams.length;
+  const totalPicks = n * (season.team_size || 0);
+  if (pickNumber < 1 || (totalPicks && pickNumber > totalPicks)) return null;
+  const round = Math.floor((pickNumber - 1) / n);   // 0-indexed round
+  const idx   = (pickNumber - 1) % n;
+  return (round % 2 === 0) ? orderedTeams[idx] : orderedTeams[n - 1 - idx];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA LOAD
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadData() {
+  // pokemon.json (reference data) + Supabase rows in parallel.
+  const pjPromise = fetch('./pokemon.json').then(r => r.json());
+
+  const { data: seasonRow, error: seasonErr } = await sb
+    .from('seasons').select('*').eq('is_current', true).maybeSingle();
+  if (seasonErr) throw seasonErr;
+  if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
+  season = seasonRow;
+
+  const [teamsRes, ownersRes, tiersRes, draftRes] = await Promise.all([
+    sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
+    sb.from('team_owners').select('team_id, ended_week, players(display_name)').is('ended_week', null),
+    sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', season.id),
+    sb.from('drafts').select('draft_order, current_pick_number, status').eq('season_id', season.id).maybeSingle(),
+  ]);
+  for (const r of [teamsRes, ownersRes, tiersRes, draftRes]) if (r.error) throw r.error;
+
+  teams = teamsRes.data || [];
+  const teamIds = teams.map(t => t.id);
+
+  coachByTeam = {};
+  (ownersRes.data || []).forEach(o => {
+    if (teamIds.includes(o.team_id) && o.players) coachByTeam[o.team_id] = o.players.display_name;
+  });
+
+  tierCost = {};
+  (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; });
+
+  draft = draftRes.data || null;
+
+  // Drafted picks for this season's teams.
+  picksByTeam = {}; draftedSet = new Set();
+  if (teamIds.length) {
+    const { data: picks, error: picksErr } = await sb
+      .from('team_pokemon')
+      .select('team_id, pokemon_id, draft_pick_number')
+      .eq('acquired_via', 'draft')
+      .in('team_id', teamIds);
+    if (picksErr) throw picksErr;
+    (picks || [])
+      .sort((a, b) => (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
+      .forEach(p => {
+        (picksByTeam[p.team_id] = picksByTeam[p.team_id] || []).push(p.pokemon_id);
+        draftedSet.add(p.pokemon_id);
+      });
+  }
+
+  // Sidebar / draft order: prefer drafts.draft_order, else initial_seed, else name.
+  if (draft && Array.isArray(draft.draft_order) && draft.draft_order.length) {
+    orderedTeams = draft.draft_order.filter(id => teamIds.includes(id));
+  } else {
+    orderedTeams = [...teams]
+      .sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name))
+      .map(t => t.id);
+  }
+
+  // pokemon.json index.
+  const pj = await pjPromise;
+  const arr = Array.isArray(pj) ? pj : pj.pokemon;
+  pokemonById = {};
+  arr.forEach(p => { pokemonById[p.id] = p; });
+
+  // Illegal lanes are noisy; collapse them by default.
+  collapsed.add('illegal');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function teamName(id)  { const t = teams.find(x => x.id === id); return t ? t.name : '—'; }
+function coachName(id) { return coachByTeam[id] || '—'; }
+function pointsUsed(id){ return (picksByTeam[id] || []).reduce((s, pid) => s + (tierCost[pid] || 0), 0); }
+
+function iconRow(pokemonIds, sizeClass) {
+  const wrap = document.createElement('div');
+  wrap.className = sizeClass;
+  (pokemonIds || []).forEach(pid => {
+    const mon = pokemonById[pid];
+    const img = document.createElement('img');
+    img.src = iconUrl(mon || { id: pid });
+    img.alt = mon ? mon.name : pid;
+    img.title = mon ? mon.name : pid;
+    attachIconFallback(img, mon || { id: pid });
+    wrap.appendChild(img);
+  });
+  return wrap;
+}
+
+function renderSidebar() {
+  const body = document.getElementById('sidebar-body');
+  body.innerHTML = '';
+  const currentTeam = draft ? teamAtPick(draft.current_pick_number) : null;
+  const nextTeam    = draft ? teamAtPick((draft.current_pick_number || 0) + 1) : null;
+
+  orderedTeams.forEach(id => {
+    const card = document.createElement('div');
+    card.className = 'team-card'
+      + (id === currentTeam ? ' is-current' : '')
+      + (id === nextTeam    ? ' is-next'    : '');
+    card.dataset.team = id;
+
+    const coach = document.createElement('div');
+    coach.className = 'team-card-coach';
+    coach.textContent = coachName(id);
+    card.appendChild(coach);
+
+    const name = document.createElement('div');
+    name.className = 'team-card-name';
+    name.textContent = teamName(id);
+    card.appendChild(name);
+
+    const row = document.createElement('div');
+    row.className = 'team-card-row';
+    row.appendChild(iconRow(picksByTeam[id], 'team-card-icons'));
+
+    const pts = document.createElement('div');
+    pts.className = 'team-card-pts';
+    pts.innerHTML = pointsUsed(id) + '<span class="total">/' + (season.point_limit ?? '—') + '</span>';
+    row.appendChild(pts);
+
+    card.appendChild(row);
+    body.appendChild(card);
+  });
+}
+
+function renderStatus() {
+  const nowCard = document.getElementById('now-card');
+  const upnext  = document.getElementById('upnext-text');
+
+  if (!draft || draft.status === 'pending' || !draft.current_pick_number) {
+    nowCard.innerHTML = '<div class="now-label">On the Clock</div>'
+      + '<div class="now-coach">Draft not started</div>'
+      + '<div class="now-team">' + (draft ? 'Status: ' + draft.status : 'No draft row for this season yet') + '</div>';
+    upnext.textContent = '—';
+    return;
+  }
+
+  const curId = teamAtPick(draft.current_pick_number);
+  nowCard.innerHTML = '';
+  const lab = document.createElement('div'); lab.className = 'now-label'; lab.textContent = 'On the Clock';
+  const co  = document.createElement('div'); co.className  = 'now-coach'; co.textContent  = coachName(curId);
+  const tm  = document.createElement('div'); tm.className  = 'now-team';  tm.textContent  = teamName(curId);
+  nowCard.appendChild(lab); nowCard.appendChild(co); nowCard.appendChild(tm);
+  nowCard.appendChild(iconRow(picksByTeam[curId], 'now-icons'));
+  const pts = document.createElement('div'); pts.className = 'now-pts';
+  pts.innerHTML = 'Points: ' + pointsUsed(curId) + '<span class="total">/' + (season.point_limit ?? '—') + '</span>';
+  nowCard.appendChild(pts);
+
+  const nextId = teamAtPick(draft.current_pick_number + 1);
+  if (nextId) {
+    upnext.innerHTML = teamName(nextId) + ' <span class="pl">(' + coachName(nextId) + ')</span>';
+  } else {
+    upnext.textContent = 'Draft complete';
+  }
+}
+
+function makeCard(mon) {
+  const isIllegal = !(mon.id in tierCost);
+  const isDrafted = draftedSet.has(mon.id);
+
+  const card = document.createElement('div');
+  card.className = 'pmon'
+    + (isIllegal ? ' illegal-card' : '')
+    + (isDrafted ? ' drafted' : '');
+  card.dataset.id = mon.id;
+  card.dataset.name = mon.name.toLowerCase();
+  card.title = mon.name;
+
+  const img = document.createElement('img');
+  img.src = iconUrl(mon);
+  img.alt = mon.name;
+  attachIconFallback(img, mon);
+  card.appendChild(img);
+
+  const nm = document.createElement('div');
+  nm.className = 'pmon-name';
+  nm.textContent = mon.name;
+  card.appendChild(nm);
+
+  return card;
+}
+
+function makeLane(key, mons) {
+  const isIllegal = key === 'illegal';
+  const lane = document.createElement('div');
+  lane.className = 'tier-lane' + (isIllegal ? ' illegal-lane' : '');
+
+  const header = document.createElement('div');
+  header.className = 'tier-header';
+  header.onclick = () => { collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key); renderPool(); };
+
+  const pts = document.createElement('div');
+  pts.className = 'tier-pts' + (isIllegal ? ' illegal-pts' : '');
+  pts.textContent = isIllegal ? 'ILLEGAL' : String(key);
+  header.appendChild(pts);
+
+  if (!isIllegal) {
+    const lbl = document.createElement('div'); lbl.className = 'tier-label'; lbl.textContent = 'pts';
+    header.appendChild(lbl);
+  }
+  const cnt = document.createElement('div'); cnt.className = 'tier-count'; cnt.textContent = '(' + mons.length + ')';
+  header.appendChild(cnt);
+  const ci = document.createElement('span'); ci.className = 'tier-collapse-icon'; ci.textContent = collapsed.has(key) ? '▶' : '▼';
+  header.appendChild(ci);
+  lane.appendChild(header);
+
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'tier-body' + (collapsed.has(key) ? ' collapsed' : '');
+  if (mons.length === 0) {
+    const msg = document.createElement('span'); msg.className = 'tier-empty-msg'; msg.textContent = 'No Pokémon in this tier';
+    bodyEl.appendChild(msg);
+  } else {
+    mons.sort((a, b) => a.name.localeCompare(b.name));
+    mons.forEach(m => bodyEl.appendChild(makeCard(m)));
+  }
+  lane.appendChild(bodyEl);
+  return lane;
+}
+
+function renderPool() {
+  const pool = document.getElementById('pool');
+  pool.innerHTML = '';
+
+  // Legal lanes: distinct point costs present this season, descending.
+  const costs = [...new Set(Object.values(tierCost))].sort((a, b) => b - a);
+  const allMons = Object.values(pokemonById);
+
+  costs.forEach(cost => {
+    const mons = allMons.filter(m => tierCost[m.id] === cost);
+    pool.appendChild(makeLane(cost, mons));
+  });
+
+  // Illegal lane: everything not in this season's tier list.
+  const illegalMons = allMons.filter(m => !(m.id in tierCost));
+  pool.appendChild(makeLane('illegal', illegalMons));
+
+  applySearch();
+}
+
+// ── SEARCH (opacity-only dim; matches keep their color) ──
+function onSearch() {
+  searchQ = document.getElementById('search-input').value.trim().toLowerCase();
+  document.getElementById('search-clear').classList.toggle('visible', searchQ.length > 0);
+  applySearch();
+}
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  searchQ = '';
+  document.getElementById('search-clear').classList.remove('visible');
+  applySearch();
+}
+function applySearch() {
+  document.querySelectorAll('.pmon').forEach(card => {
+    const name = card.dataset.name || '';
+    if (!searchQ)                 { card.classList.remove('search-dim', 'search-match'); }
+    else if (name.includes(searchQ)) { card.classList.remove('search-dim'); card.classList.add('search-match'); }
+    else                          { card.classList.add('search-dim'); card.classList.remove('search-match'); }
+  });
+}
+
+// ── SIDEBAR COLLAPSE ──
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const collapsed = sb.classList.toggle('collapsed');
+  document.getElementById('sidebar-toggle').textContent = collapsed ? '⟩' : '⟨';
+}
+
+// ── KEYBOARD ──
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') clearSearch();
+  if ((e.key === 'f' || e.key === 'F') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); document.getElementById('search-input').focus(); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+async function init() {
+  const banner = document.getElementById('boot-banner');
+  try {
+    await loadData();
+    renderSidebar();
+    renderStatus();
+    renderPool();
+    banner.hidden = true;
+    document.getElementById('layout').hidden = false;
+  } catch (err) {
+    console.error(err);
+    banner.className = 'banner err';
+    banner.textContent = 'Could not load the draft: ' + (err.message || err);
+  }
+}
+init();
+</script>
+</body>
+</html>
