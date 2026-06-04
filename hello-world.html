@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hub Connection Test</title>
+
+  <!-- Supabase JS client (v2). Exposes a global `supabase` with createClient(). -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --border: #262b36;
+      --text: #e6e9ef;
+      --muted: #8b93a3;
+      --accent: #5b9cff;
+      --ok: #4caf7f;
+      --err: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 48px 20px;
+      line-height: 1.5;
+    }
+    main { width: 100%; max-width: 560px; }
+    h1 { font-size: 1.4rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 24px; }
+
+    #status {
+      font-size: 0.85rem;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      margin-bottom: 20px;
+    }
+    #status.ok  { border-color: #1f5e44; color: var(--ok); }
+    #status.err { border-color: #5e2424; color: var(--err); }
+
+    ul { list-style: none; margin: 0; padding: 0; }
+    li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      margin-bottom: 8px;
+    }
+    .player { font-weight: 600; }
+    .team { color: var(--muted); font-size: 0.9rem; text-align: right; }
+    code {
+      background: #0b0d11;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>League Hub — Connection Test</h1>
+    <p class="sub">Reads players and their current team via the <code>team_owners</code> join, using the anon key. A populated list confirms the client connects and your public-read RLS policies allow anonymous SELECTs.</p>
+
+    <div id="status">Initializing…</div>
+    <ul id="list"></ul>
+  </main>
+
+  <script>
+    // ---------------------------------------------------------------
+    // 1. Paste your project credentials here.
+    //    Supabase dashboard -> Project Settings -> API
+    //    The anon key is meant to be public in client code; RLS is
+    //    what actually enforces access.
+    // ---------------------------------------------------------------
+    const SUPABASE_URL = "https://arypbyzeppbpbursmzcs.supabase.co";        // e.g. https://abcdefgh.supabase.co
+    const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+
+    const statusEl = document.getElementById("status");
+    const listEl = document.getElementById("list");
+
+    function setStatus(msg, kind) {
+      statusEl.textContent = msg;
+      statusEl.className = kind || "";
+    }
+
+    async function main() {
+      // Guard against running before credentials are filled in.
+      if (SUPABASE_URL.startsWith("YOUR_") || SUPABASE_ANON_KEY.startsWith("YOUR_")) {
+        setStatus("Add your project URL and anon key at the top of the <script> block, then reload.", "err");
+        return;
+      }
+
+      const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      setStatus("Querying…");
+
+      // team_owners has FKs to both players and teams, so PostgREST can
+      // embed each as a nested object. ended_week IS NULL = current owner.
+      // (Remove the .is(...) filter to see full ownership history instead.)
+      const { data, error } = await sb
+        .from("team_owners")
+        .select("started_week, ended_week, players(display_name), teams(name, slug)")
+        .is("ended_week", null);
+
+      if (error) {
+        setStatus("Query failed: " + error.message, "err");
+        console.error(error);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        setStatus("Connected, but no current owners returned. Check the team_owners seed data.", "ok");
+        return;
+      }
+
+      // Sort by team name for readable output.
+      const rows = data
+        .filter(r => r.players && r.teams)
+        .sort((a, b) => a.teams.name.localeCompare(b.teams.name));
+
+      listEl.innerHTML = rows.map(r => `
+        <li>
+          <span class="player">${r.players.display_name}</span>
+          <span class="team">${r.teams.name}</span>
+        </li>
+      `).join("");
+
+      setStatus(`Success — ${rows.length} player${rows.length === 1 ? "" : "s"} loaded from Supabase.`, "ok");
+    }
+
+    main();
+  </script>
+</body>
+</html>
