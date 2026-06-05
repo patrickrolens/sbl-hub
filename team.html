@@ -267,12 +267,13 @@ button.nav-tab { background: none; border-top: none; border-left: none; border-r
   .layout { grid-template-columns: 1fr; }
   .col-left { border-right: none; border-bottom: 1px solid var(--border); }
   .roster-grid { grid-template-columns: 1fr; }
-  /* Keep the nav on one row within the viewport — the tab strip absorbs the slack
-     and scrolls horizontally instead of pushing the page (and the admin chip) wider. */
-  nav { padding: 0 8px; }
+  /* The whole nav — logo, tabs, and admin section — scrolls horizontally as one
+     row, so nothing (including the admin chip) pushes the page wider than the
+     viewport. margin-left:auto still right-aligns the admin section when it fits. */
+  nav { padding: 0 8px; overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
   .nav-logo { padding: 12px 10px 12px 0; margin-right: 6px; font-size: 14px; flex-shrink: 0; }
-  .nav-tabs { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tabs { flex-shrink: 0; }
   .nav-tab { padding: 12px 10px; white-space: nowrap; flex-shrink: 0; }
   .nav-right { flex-shrink: 0; padding-left: 8px; gap: 8px; }
   .user-chip .email { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1035,7 +1036,7 @@ function setNavHeight() {
   const nav = document.querySelector('nav');
   if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
 }
-window.addEventListener('resize', () => { setNavHeight(); closeTeamMenu(); });
+window.addEventListener('resize', () => { setNavHeight(); positionTeamMenu(); });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEAM SELECTOR — searchable dropdown off the Teams tab. Teams listed as
@@ -1056,17 +1057,22 @@ function toggleTeamMenu(e) {
   const menu = document.getElementById('team-menu');
   menu.hidden ? openTeamMenu() : closeTeamMenu();
 }
-function openTeamMenu() {
+// Anchor the fixed panel just under the trigger, clamped to the viewport, so the
+// horizontally-scrolling nav can't clip it.
+function positionTeamMenu() {
   const menu = document.getElementById('team-menu');
-  const trigger = document.getElementById('teams-tab');
-  menu.hidden = false;
-  trigger.setAttribute('aria-expanded', 'true');
-  // Anchor the fixed panel just under the trigger, clamped to the viewport, so the
-  // horizontally-scrolling mobile tab strip can't clip it.
-  const r = trigger.getBoundingClientRect();
+  if (!menu || menu.hidden) return;
+  const r = document.getElementById('teams-tab').getBoundingClientRect();
   const w = menu.offsetWidth;
   menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
   menu.style.top = r.bottom + 'px';
+}
+
+function openTeamMenu() {
+  const menu = document.getElementById('team-menu');
+  menu.hidden = false;
+  document.getElementById('teams-tab').setAttribute('aria-expanded', 'true');
+  positionTeamMenu();
   const search = document.getElementById('team-search');
   search.value = '';
   teamMenuKbdIndex = -1;
