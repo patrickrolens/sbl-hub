@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SBL Hub — Team</title>
+
+<!-- Supabase JS client (v2). Same pattern as draft.html / hello-world.html. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* ─────────────────────────────────────────────────────────────────────────────
+   TOKENS — shared verbatim with the Planner / Draft page so all hub pages match.
+───────────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+  --nav-h: 49px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── NAV ── (identical header to the Draft page) ── */
+nav {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 1rem;
+  position: sticky; top: 0; z-index: 100;
+}
+.nav-logo {
+  font-size: 15px; font-weight: 700; color: var(--accent);
+  padding: 14px 16px 14px 0; margin-right: 8px;
+  border-right: 1px solid var(--border); white-space: nowrap;
+}
+.nav-tabs { display: flex; align-items: stretch; }
+.nav-tab {
+  padding: 14px 16px; font-size: 13px; font-weight: 600; color: var(--text2);
+  text-decoration: none; border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+}
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; padding-left: 12px; }
+.btn {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 7px;
+  color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 14px; cursor: pointer;
+  font-family: inherit; transition: border-color .15s, background .15s;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-accent:hover { filter: brightness(1.08); border-color: var(--accent); }
+.user-chip { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
+.user-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.user-chip .email { color: var(--text); font-weight: 600; }
+
+/* ── TYPE BADGES ── (lifted from the Planner) ── */
+.type-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+.t-Normal{background:#9199a1;color:#fff}.t-Fire{background:#e6724a;color:#fff}.t-Water{background:#539ddf;color:#fff}
+.t-Grass{background:#5bbd58;color:#fff}.t-Electric{background:#f3d23b;color:#333}.t-Ice{background:#74cfc0;color:#fff}
+.t-Fighting{background:#ce4069;color:#fff}.t-Poison{background:#ab6ac8;color:#fff}.t-Ground{background:#d97845;color:#fff}
+.t-Flying{background:#89aae3;color:#fff}.t-Psychic{background:#f97176;color:#fff}.t-Bug{background:#90c12c;color:#fff}
+.t-Rock{background:#c7b78b;color:#fff}.t-Ghost{background:#5269ac;color:#fff}.t-Dragon{background:#0b6dc3;color:#fff}
+.t-Dark{background:#5a5366;color:#fff}.t-Steel{background:#5a8ea1;color:#fff}.t-Fairy{background:#ec8fe6;color:#fff}
+
+/* ── PAGE GRID: team panel | roster | schedule ── */
+.layout {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr) 320px;
+  align-items: start;
+  gap: 0;
+}
+.col { min-width: 0; }
+.col-left  { border-right: 1px solid var(--border); }
+.col-right { border-left: 1px solid var(--border); }
+.col-main  { padding: 16px; }
+
+/* Shared "card" surface used across the panels. */
+.card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; margin: 12px;
+}
+.card-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3);
+  text-transform: uppercase; margin-bottom: 10px;
+}
+
+/* ── TEAM IDENTITY ── */
+.identity { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+.identity .logo {
+  width: 92px; height: 92px; object-fit: contain; border-radius: 12px;
+  background: var(--bg3); border: 1px solid var(--border); padding: 6px;
+}
+.identity .team-name { font-size: 20px; font-weight: 700; line-height: 1.15; }
+.coach-current { font-size: 13px; font-weight: 600; color: var(--text); }
+.coach-current .lead { color: var(--text3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; margin-right: 4px; }
+.coach-past { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+/* ── TEAM STATS ── */
+.record-big { text-align: center; margin-bottom: 12px; }
+.record-big .matches { font-size: 26px; font-weight: 800; color: var(--text); line-height: 1.1; }
+.record-big .games   { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-box {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 2px;
+}
+.stat-box .k { font-size: 10px; font-weight: 700; letter-spacing: .4px; color: var(--text3); text-transform: uppercase; }
+.stat-box .v { font-size: 16px; font-weight: 700; color: var(--text); }
+.stat-box .v.pos { color: var(--green); }
+.stat-box .v.neg { color: var(--red); }
+.kf-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.kf-cell { text-align: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 7px 4px; }
+.kf-cell .k { font-size: 9px; font-weight: 700; letter-spacing: .3px; color: var(--text3); text-transform: uppercase; }
+.kf-cell .v { font-size: 14px; font-weight: 700; margin-top: 2px; }
+
+/* ── ROSTER (active member cards) ── */
+.roster-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.roster-head h2 { font-size: 15px; font-weight: 700; }
+.roster-head .sub { font-size: 11px; color: var(--text3); }
+.roster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.member {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px;
+}
+.member-head { display: flex; gap: 12px; align-items: flex-start; }
+.member-sprite { width: 72px; height: 72px; image-rendering: pixelated; flex-shrink: 0; }
+.member-id { flex: 1; min-width: 0; }
+.member-name { font-size: 15px; font-weight: 700; line-height: 1.15; }
+.member-types { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+.member-meta-top { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+.pts-badge { font-size: 12px; font-weight: 700; color: var(--accent); background: rgba(124,111,247,.12); border: 1px solid rgba(124,111,247,.4); border-radius: 6px; padding: 2px 8px; }
+.speed-pill {
+  font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 8px;
+  color: #fff; display: inline-flex; align-items: center; gap: 5px;
+}
+.speed-pill .lbl { opacity: .85; font-weight: 600; }
+
+.member-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.member-stats .cell { text-align: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 6px 2px; }
+.member-stats .cell .k { font-size: 9px; font-weight: 700; letter-spacing: .3px; color: var(--text3); text-transform: uppercase; }
+.member-stats .cell .v { font-size: 14px; font-weight: 700; margin-top: 2px; }
+.v.pos { color: var(--green); } .v.neg { color: var(--red); }
+
+.member-foot { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text2); border-top: 1px solid var(--border); padding-top: 8px; }
+.member-foot .line { display: flex; justify-content: space-between; gap: 8px; }
+.member-foot .line .k { color: var(--text3); }
+.member-foot .line .v { color: var(--text); font-weight: 600; }
+.member-foot .pct { color: var(--text3); font-weight: 400; }
+
+/* ── INACTIVE MEMBERS (compact) ── */
+.inactive-list { display: flex; flex-direction: column; gap: 8px; }
+.inactive-item { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+.inactive-item img { width: 32px; height: 32px; image-rendering: pixelated; flex-shrink: 0; }
+.inactive-item .nm { font-size: 12px; font-weight: 600; flex: 1; min-width: 0; }
+.inactive-item .wk { font-size: 10px; color: var(--text3); text-align: right; line-height: 1.3; white-space: nowrap; }
+
+/* ── TRANSACTIONS ── */
+.txn-list { display: flex; flex-direction: column; gap: 8px; }
+.txn { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.txn .swap { font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.txn .swap .drop { color: var(--red); } .txn .swap .gain { color: var(--green); }
+.txn .swap img { width: 22px; height: 22px; image-rendering: pixelated; vertical-align: middle; }
+.txn .with { font-size: 10px; color: var(--text3); margin-top: 4px; }
+
+/* ── PLAYER SCHEDULE ── */
+.sched-list { display: flex; flex-direction: column; gap: 8px; }
+.sched-row {
+  display: block; text-decoration: none; color: inherit;
+  background: var(--bg3); border: 1px solid var(--border); border-left: 3px solid var(--border);
+  border-radius: 8px; padding: 9px 11px; transition: border-color .15s, background .15s;
+}
+.sched-row:hover { border-color: var(--accent); }
+.sched-row.win  { border-left-color: var(--blue); }
+.sched-row.loss { border-left-color: var(--red); }
+.sched-row.next { border-left-color: var(--yellow); background: rgba(240,192,96,.06); }
+.sched-wk { font-size: 10px; font-weight: 700; letter-spacing: .4px; color: var(--text3); text-transform: uppercase; }
+.sched-match { font-size: 12px; color: var(--text); margin-top: 3px; line-height: 1.4; }
+.sched-match .me  { font-weight: 700; }
+.sched-match .pl  { color: var(--text3); font-weight: 400; }
+.sched-match .vs  { color: var(--text3); }
+.sched-score { font-size: 13px; font-weight: 700; margin-top: 4px; }
+.sched-row.win  .sched-score { color: var(--blue); }
+.sched-row.loss .sched-score { color: var(--red); }
+.sched-tag { font-size: 10px; font-weight: 700; color: var(--yellow); text-transform: uppercase; letter-spacing: .4px; margin-top: 3px; }
+
+/* ── EMPTY STATES ── */
+.empty { font-size: 11px; color: var(--text3); font-style: italic; padding: 4px 0; }
+
+/* ── LOADING / ERROR BANNER ── */
+.banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
+.banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
+
+/* ── MODAL / TOAST (shared with the Draft page; used for admin login) ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay[hidden] { display: none; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: 100%; max-width: 380px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.modal p { font-size: 13px; color: var(--text2); line-height: 1.5; margin-bottom: 14px; }
+.modal input[type=email] { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; margin-bottom: 14px; }
+.modal input[type=email]:focus { border-color: var(--accent); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+#toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 300; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.toast { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 13px; color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,.4); animation: toast-in .18s ease; max-width: 90vw; }
+.toast.ok { border-color: rgba(76,175,125,.5); } .toast.err { border-color: rgba(224,85,85,.55); color: #ff9c9c; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RESPONSIVE — the sketch calls for the roster to drop from 2 columns to 1 on
+   narrow screens; the side panels stack under the roster before that. A proper
+   mobile pass is Phase 5, so this is just the coarse breakpoints for now.
+───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1180px) {
+  .layout { grid-template-columns: 320px minmax(0, 1fr); }
+  .col-right { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--border); }
+}
+@media (max-width: 820px) {
+  .layout { grid-template-columns: 1fr; }
+  .col-left { border-right: none; border-bottom: 1px solid var(--border); }
+  .roster-grid { grid-template-columns: 1fr; }
+  nav { padding: 0 8px; }
+  .nav-logo { padding: 12px 10px 12px 0; margin-right: 6px; font-size: 14px; }
+  .nav-tab { padding: 12px 10px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">SBL Hub</div>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="standings.html">Standings</a>
+    <a class="nav-tab active" href="team.html">Teams</a>
+    <a class="nav-tab" href="draft.html">Draft</a>
+    <a class="nav-tab" href="schedule.html">Schedule</a>
+  </div>
+  <div class="nav-right">
+    <button class="btn" id="login-btn" onclick="openLogin()" hidden>Admin Login</button>
+    <span class="user-chip" id="user-chip" hidden>
+      <span class="dot"></span><span class="email" id="user-email"></span>
+      <button class="btn" onclick="doLogout()">Log out</button>
+    </span>
+  </div>
+</nav>
+
+<div id="boot-banner" class="banner">Loading team…</div>
+
+<div class="layout" id="layout" hidden>
+
+  <!-- ── LEFT: identity + stats + transactions + inactive ── -->
+  <div class="col col-left">
+    <div class="card">
+      <div class="identity" id="identity"><!-- logo, name, coaches --></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Team Stats</div>
+      <div id="team-stats"><!-- record + SoS/deltas + KOs/Faints --></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Recent Transactions</div>
+      <div id="transactions"><!-- free agency / trades --></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Inactive Team Members</div>
+      <div id="inactive"><!-- released team_pokemon --></div>
+    </div>
+  </div>
+
+  <!-- ── CENTER: active member cards ── -->
+  <div class="col col-main">
+    <div class="roster-head">
+      <h2 id="roster-title">Active Roster</h2>
+      <span class="sub" id="roster-sub"></span>
+    </div>
+    <div class="roster-grid" id="roster"><!-- member cards --></div>
+  </div>
+
+  <!-- ── RIGHT: player schedule ── -->
+  <div class="col col-right">
+    <div class="card">
+      <div class="card-title">Player Schedule</div>
+      <div id="schedule"><!-- match list --></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Reusable modal (admin login) -->
+<div class="modal-overlay" id="modal-overlay" hidden onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG — anon key is public by design; RLS enforces access (same as draft.html).
+// ─────────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const POKEMON_JSON_URL = "https://patrickrolens.github.io/vgc-draft-planner/pokemon.json";
+const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
+
+const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
+
+// Speed-tier ramp — lifted verbatim from the Planner so card speed colors match.
+const SPEED_TIERS = [
+  { l: "≤30",     a: 0,   b: 30,   col: "#7c4dff" },
+  { l: "31–50",   a: 31,  b: 50,   col: "#2979ff" },
+  { l: "51–70",   a: 51,  b: 70,   col: "#00bcd4" },
+  { l: "71–90",   a: 71,  b: 90,   col: "#4caf50" },
+  { l: "91–110",  a: 91,  b: 110,  col: "#ffeb3b" },
+  { l: "111–130", a: 111, b: 130,  col: "#ff9800" },
+  { l: ">130",    a: 131, b: 9999, col: "#f44336" },
+];
+function speedTierColor(spe) {
+  const t = SPEED_TIERS.find(t => spe >= t.a && spe <= t.b);
+  return t ? t.col : "#f44336";
+}
+// #ffeb3b (91–110) is bright; dark text reads better on it.
+function speedTextColor(spe) { return (spe >= 91 && spe <= 110) ? "#333" : "#fff"; }
+
+// ── STATE ──
+let season       = null;   // current seasons row
+let allTeams     = [];      // every team in the season (for opponents + transactions)
+let team         = null;    // the team being rendered
+let ownerHistory = [];      // this team's team_owners rows, sorted by started_week
+let coachByTeam  = {};      // team_id -> current coach display_name (any team)
+let tierCost     = {};      // pokemon_id -> point_cost (this season)
+let roster       = [];      // team_pokemon rows for this team (active + inactive)
+let matches      = [];      // matches involving this team (any stage), by week
+let gamesByMatch = {};      // match_id -> [game rows]
+let statRows     = [];      // game_pokemon_stats rows for this team
+let regularRecords = {};    // team_id -> { w, l, winRate } over regular season (for SoS)
+let txns         = [];      // unified transaction feed (free agency + trades)
+let pokemonById  = {};      // id -> pokemon.json entry
+let currentUser  = null;
+let isAdmin      = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// URL / ID HELPERS — mirror the Planner so sprite/icon paths resolve identically.
+//   Member cards lead with the larger SPRITE (sprite → icon → Pokéball); compact
+//   spots (inactive list, transactions) use the smaller ICON (icon → sprite → ball).
+// ─────────────────────────────────────────────────────────────────────────────
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/);
+  if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(mon)   { return mon && mon.id ? ASSET_BASE + 'icons/'   + localId(mon.id) + '.png' : ''; }
+function spriteUrl(mon) { return mon && mon.id ? ASSET_BASE + 'sprites/' + localId(mon.id) + '.png' : ''; }
+
+function attachSpriteFallback(img, mon) {
+  img.onerror = function () {
+    if (this.src.includes('/sprites/'))    { this.src = iconUrl(mon); }
+    else                                   { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+function attachIconFallback(img, mon) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/'))      { this.src = spriteUrl(mon); }
+    else                                   { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+
+// ── FORMAT HELPERS ──
+function signed(n) { return (n > 0 ? '+' : '') + n; }
+function deltaClass(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
+// KOs/Faints ratio: — when nothing happened, ∞ when faints are zero but KOs aren't.
+function kfRatio(kos, faints) {
+  if (faints === 0) return kos === 0 ? '—' : '∞';
+  return (kos / faints).toFixed(2);
+}
+function pct(part, whole) { return whole > 0 ? Math.round((part / whole) * 100) + '%' : '—'; }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHICH TEAM? — hash (#slug) wins if present so links are shareable; otherwise the
+// first team by seed then name. A proper dropdown selector lands in the next pass.
+// ─────────────────────────────────────────────────────────────────────────────
+function resolveTeam() {
+  const slug = (location.hash || '').replace(/^#/, '').trim().toLowerCase();
+  if (slug) {
+    const hit = allTeams.find(t => (t.slug || '').toLowerCase() === slug);
+    if (hit) return hit;
+  }
+  return [...allTeams].sort((a, b) =>
+    (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name)
+  )[0] || null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA LOAD
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadData() {
+  const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
+    const ct = res.headers.get('content-type') || '';
+    if (!res.ok || !ct.includes('json')) {
+      throw new Error('pokemon.json not found at "' + POKEMON_JSON_URL + '" (got ' + res.status + ').');
+    }
+    return res.json();
+  });
+
+  const { data: seasonRow, error: seasonErr } = await sb
+    .from('seasons').select('*').eq('is_current', true).maybeSingle();
+  if (seasonErr) throw seasonErr;
+  if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
+  season = seasonRow;
+
+  // Teams, current owners (all teams), past owners (this team), tiers — in parallel.
+  const [teamsRes, ownersRes, tiersRes] = await Promise.all([
+    sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
+    sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
+    sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', season.id),
+  ]);
+  for (const r of [teamsRes, ownersRes, tiersRes]) if (r.error) throw r.error;
+
+  allTeams = teamsRes.data || [];
+  const teamIds = allTeams.map(t => t.id);
+
+  tierCost = {};
+  (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; });
+
+  // Current coach for every team (latest unended owner); full history for the
+  // rendered team is split out after we know which team that is.
+  const owners = (ownersRes.data || []).filter(o => teamIds.includes(o.team_id));
+  coachByTeam = {};
+  owners.filter(o => o.ended_week == null).forEach(o => {
+    if (o.players) coachByTeam[o.team_id] = o.players.display_name;
+  });
+
+  // pokemon.json index.
+  const pj = await pjPromise;
+  const arr = Array.isArray(pj) ? pj : pj.pokemon;
+  pokemonById = {};
+  arr.forEach(p => { pokemonById[p.id] = p; });
+
+  // Pick the team to show, then pull its team-specific data.
+  team = resolveTeam();
+  if (!team) throw new Error('No teams found for the current season.');
+
+  ownerHistory = owners
+    .filter(o => o.team_id === team.id)
+    .sort((a, b) => (a.started_week || 0) - (b.started_week || 0));
+
+  // Roster, matches, transactions for this team. Matches/games/stats are empty
+  // until results are entered, so these resolve to [] for now and the page shows
+  // placeholders — the aggregation below lights up automatically once data lands.
+  const [rosterRes, matchRes, faRes, tradeRes, regMatchRes] = await Promise.all([
+    sb.from('team_pokemon')
+      .select('pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number')
+      .eq('team_id', team.id),
+    sb.from('matches')
+      .select('id, stage, week, team_a_id, team_b_id, team_a_score, team_b_score, winner_team_id, match_date')
+      .eq('season_id', season.id)
+      .or('team_a_id.eq.' + team.id + ',team_b_id.eq.' + team.id),
+    sb.from('free_agency_moves')
+      .select('pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at')
+      .eq('season_id', season.id).eq('team_id', team.id),
+    sb.from('trades')
+      .select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at')
+      .eq('season_id', season.id).or('team_a_id.eq.' + team.id + ',team_b_id.eq.' + team.id),
+    sb.from('matches')
+      .select('team_a_id, team_b_id, winner_team_id')
+      .eq('season_id', season.id).eq('stage', 'regular'),
+  ]);
+  for (const r of [rosterRes, matchRes, faRes, tradeRes, regMatchRes]) if (r.error) throw r.error;
+
+  roster  = rosterRes.data || [];
+  matches = (matchRes.data || []).sort((a, b) => (a.week || 0) - (b.week || 0));
+
+  // Games + per-Pokémon stats for this team's matches (only if any matches exist).
+  gamesByMatch = {}; statRows = [];
+  const matchIds = matches.map(m => m.id);
+  if (matchIds.length) {
+    const [gamesRes, statsRes] = await Promise.all([
+      sb.from('games').select('id, match_id, game_number, winner_team_id').in('match_id', matchIds),
+      sb.from('game_pokemon_stats').select('game_id, pokemon_id, kills, deaths').eq('team_id', team.id),
+    ]);
+    for (const r of [gamesRes, statsRes]) if (r.error) throw r.error;
+    (gamesRes.data || []).forEach(g => { (gamesByMatch[g.match_id] = gamesByMatch[g.match_id] || []).push(g); });
+    statRows = statsRes.data || [];
+  }
+
+  // Season-wide regular-season records, used only for Strength of Schedule.
+  regularRecords = computeRegularRecords(regMatchRes.data || [], teamIds);
+
+  // Unified, reverse-chronological transaction feed.
+  txns = buildTransactions(faRes.data || [], tradeRes.data || []);
+}
+
+// Per-team W/L and win rate across the regular season (decided matches only).
+function computeRegularRecords(regMatches, teamIds) {
+  const rec = {};
+  teamIds.forEach(id => { rec[id] = { w: 0, l: 0 }; });
+  regMatches.forEach(m => {
+    if (!m.winner_team_id) return;
+    [m.team_a_id, m.team_b_id].forEach(tid => {
+      if (!rec[tid]) return;
+      if (tid === m.winner_team_id) rec[tid].w++; else rec[tid].l++;
+    });
+  });
+  Object.values(rec).forEach(r => {
+    const dec = r.w + r.l;
+    r.winRate = dec > 0 ? r.w / dec : null;
+  });
+  return rec;
+}
+
+function buildTransactions(faMoves, trades) {
+  const feed = [];
+  faMoves.forEach(m => feed.push({
+    kind: 'fa', week: m.effective_week, when: m.occurred_at,
+    added: m.pokemon_added_id, dropped: m.pokemon_dropped_id, withLabel: 'Free Agency',
+  }));
+  trades.forEach(t => {
+    const weGiveUp = t.team_a_id === team.id ? t.pokemon_a_id : t.pokemon_b_id;
+    const weGet    = t.team_a_id === team.id ? t.pokemon_b_id : t.pokemon_a_id;
+    const otherId  = t.team_a_id === team.id ? t.team_b_id : t.team_a_id;
+    const other    = allTeams.find(x => x.id === otherId);
+    const withName = other ? other.name + (coachByTeam[otherId] ? ' (' + coachByTeam[otherId] + ')' : '') : 'another team';
+    feed.push({ kind: 'trade', week: t.effective_week, when: t.occurred_at, added: weGet, dropped: weGiveUp, withLabel: withName });
+  });
+  return feed.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAT AGGREGATION — all derive from the loaded arrays. With no game data these
+// return zeros / nulls, which the renderers turn into "0", "—", or "+0".
+// ─────────────────────────────────────────────────────────────────────────────
+function teamMatchRecord() {
+  let w = 0, l = 0, gw = 0, gl = 0;
+  matches.filter(m => m.stage === 'regular').forEach(m => {
+    const isA  = m.team_a_id === team.id;
+    const my   = isA ? m.team_a_score : m.team_b_score;
+    const opp  = isA ? m.team_b_score : m.team_a_score;
+    gw += my || 0; gl += opp || 0;
+    if (m.winner_team_id === team.id) w++;
+    else if (m.winner_team_id) l++;
+  });
+  return { w, l, gw, gl };
+}
+
+function teamKoFaint() {
+  let kos = 0, faints = 0;
+  statRows.forEach(s => { kos += s.kills || 0; faints += s.deaths || 0; });
+  return { kos, faints };
+}
+
+// Strength of schedule: average regular-season win rate of opponents faced.
+// SoSoS: average win rate of those opponents' opponents.
+function strengthOfSchedule() {
+  const regMatches = matches.filter(m => m.stage === 'regular');
+  const myOpponents = regMatches.map(m => (m.team_a_id === team.id ? m.team_b_id : m.team_a_id));
+  if (!myOpponents.length) return { sos: null, sosos: null };
+
+  const rateOf = id => (regularRecords[id] ? regularRecords[id].winRate : null);
+  const avg = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+
+  const sos = avg(myOpponents.map(rateOf));
+
+  // Opponents-of-opponents requires the full regular-season opponent map.
+  // We only loaded thin (team_a, team_b, winner) rows for records, so rebuild the
+  // adjacency from this team's view plus a best-effort: without every team's full
+  // schedule on hand, SoSoS stays null until the standings page shares that map.
+  // (Left as a clearly-scoped follow-up; SoS alone is meaningful for now.)
+  const sosos = null;
+  return { sos, sosos };
+}
+
+function fmtRate(r) { return r == null ? '—' : (r * 100).toFixed(0) + '%'; }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function render() {
+  renderIdentity();
+  renderTeamStats();
+  renderRoster();
+  renderInactive();
+  renderTransactions();
+  renderSchedule();
+  document.getElementById('roster-title').textContent = team.name;
+}
+
+function renderIdentity() {
+  const el = document.getElementById('identity');
+  el.innerHTML = '';
+
+  const logo = document.createElement('img');
+  logo.className = 'logo';
+  logo.alt = team.name + ' logo';
+  logo.src = team.logo_url || POKEBALL_FALLBACK;
+  logo.onerror = function () { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; };
+  el.appendChild(logo);
+
+  const nm = document.createElement('div');
+  nm.className = 'team-name';
+  nm.textContent = team.name;
+  el.appendChild(nm);
+
+  const current = ownerHistory.filter(o => o.ended_week == null).map(o => o.players && o.players.display_name).filter(Boolean);
+  const past    = ownerHistory.filter(o => o.ended_week != null).map(o => o.players && o.players.display_name).filter(Boolean);
+
+  const cur = document.createElement('div');
+  cur.className = 'coach-current';
+  cur.innerHTML = '<span class="lead">Coach</span>' + (current.length ? escapeHtml(current.join(', ')) : '—');
+  el.appendChild(cur);
+
+  if (past.length) {
+    const p = document.createElement('div');
+    p.className = 'coach-past';
+    p.textContent = 'Formerly: ' + past.join(', ');
+    el.appendChild(p);
+  }
+}
+
+function renderTeamStats() {
+  const el = document.getElementById('team-stats');
+  const rec = teamMatchRecord();
+  const kf  = teamKoFaint();
+  const sos = strengthOfSchedule();
+  const matchDelta = rec.w - rec.l;
+  const gameDelta  = rec.gw - rec.gl;
+  const kfDelta    = kf.kos - kf.faints;
+
+  el.innerHTML =
+    '<div class="record-big">'
+    + '<div class="matches">' + rec.w + '–' + rec.l + '</div>'
+    + '<div class="games">(' + rec.gw + '–' + rec.gl + ' games)</div>'
+    + '</div>'
+    + '<div class="stat-grid">'
+    +   statBox('Strength of Sched.', fmtRate(sos.sos))
+    +   statBox('Str. of Str. of Sched.', fmtRate(sos.sosos))
+    +   statBox('Match Δ', signed(matchDelta), deltaClass(matchDelta))
+    +   statBox('Game Δ', signed(gameDelta), deltaClass(gameDelta))
+    + '</div>'
+    + '<div class="kf-row">'
+    +   kfCell('KOs', kf.kos)
+    +   kfCell('Faints', kf.faints)
+    +   kfCell('K/F Ratio', kfRatio(kf.kos, kf.faints))
+    +   kfCell('KF Δ', signed(kfDelta), deltaClass(kfDelta))
+    + '</div>';
+}
+function statBox(k, v, cls) { return '<div class="stat-box"><span class="k">' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>'; }
+function kfCell(k, v, cls)  { return '<div class="kf-cell"><div class="k">' + k + '</div><div class="v ' + (cls || '') + '">' + v + '</div></div>'; }
+
+// Per-Pokémon KOs/Faints and participation, scoped to the weeks it was rostered.
+function memberStats(row) {
+  const aw = row.acquired_week || 1;
+  const rw = row.released_week; // null = still active
+
+  // Games/matches this team played while the mon was owned (regular + post).
+  let ownedGames = 0, ownedMatches = 0;
+  const ownedGameIds = new Set();
+  matches.forEach(m => {
+    const inWindow = (m.week >= aw) && (rw == null || m.week < rw);
+    if (!inWindow) return;
+    const gs = gamesByMatch[m.id] || [];
+    if (gs.length) { ownedMatches++; gs.forEach(g => { ownedGames++; ownedGameIds.add(g.id); }); }
+  });
+
+  // Appearances + KOs/Faints from this mon's stat rows (only games it played).
+  let kos = 0, faints = 0;
+  const appearedGameIds = new Set();
+  const gameToMatch = {};
+  matches.forEach(m => (gamesByMatch[m.id] || []).forEach(g => { gameToMatch[g.id] = m.id; }));
+  statRows.filter(s => s.pokemon_id === row.pokemon_id).forEach(s => {
+    if (!ownedGameIds.has(s.game_id)) return; // ignore stats outside the owned window
+    appearedGameIds.add(s.game_id);
+    kos += s.kills || 0; faints += s.deaths || 0;
+  });
+  const appearedMatchIds = new Set([...appearedGameIds].map(gid => gameToMatch[gid]));
+
+  return {
+    kos, faints,
+    gpCount: appearedGameIds.size, gpPct: pct(appearedGameIds.size, ownedGames),
+    mpCount: appearedMatchIds.size, mpPct: pct(appearedMatchIds.size, ownedMatches),
+  };
+}
+
+function memberCard(row, opts) {
+  opts = opts || {};
+  const mon  = pokemonById[row.pokemon_id] || { id: row.pokemon_id, name: row.pokemon_id, stats: {} };
+  const cost = (row.pokemon_id in tierCost) ? tierCost[row.pokemon_id] : (mon.points != null ? mon.points : '—');
+  const spe  = (mon.stats && mon.stats.spe != null) ? mon.stats.spe : null;
+  const st   = memberStats(row);
+  const kfDelta = st.kos - st.faints;
+
+  const card = document.createElement('div');
+  card.className = 'member';
+
+  // Head: sprite + name/types/points/speed
+  const head = document.createElement('div');
+  head.className = 'member-head';
+
+  const img = document.createElement('img');
+  img.className = 'member-sprite';
+  img.src = spriteUrl(mon); img.alt = mon.name;
+  attachSpriteFallback(img, mon);
+  head.appendChild(img);
+
+  const idCol = document.createElement('div');
+  idCol.className = 'member-id';
+  let typesHtml = '';
+  if (mon.type1) typesHtml += '<span class="type-badge t-' + mon.type1 + '">' + mon.type1 + '</span>';
+  if (mon.type2) typesHtml += '<span class="type-badge t-' + mon.type2 + '">' + mon.type2 + '</span>';
+  const speedHtml = spe == null ? '' :
+    '<span class="speed-pill" style="background:' + speedTierColor(spe) + ';color:' + speedTextColor(spe) + '">'
+    + '<span class="lbl">Spe</span>' + spe + '</span>';
+  idCol.innerHTML =
+    '<div class="member-name">' + escapeHtml(mon.name) + '</div>'
+    + '<div class="member-types">' + typesHtml + '</div>'
+    + '<div class="member-meta-top"><span class="pts-badge">' + cost + ' pts</span>' + speedHtml + '</div>';
+  head.appendChild(idCol);
+  card.appendChild(head);
+
+  // Stats: KOs / Faints / K/F / KF Δ
+  const stats = document.createElement('div');
+  stats.className = 'member-stats';
+  stats.innerHTML =
+    cell('KOs', st.kos) + cell('Faints', st.faints)
+    + cell('K/F', kfRatio(st.kos, st.faints))
+    + cell('KF Δ', signed(kfDelta), deltaClass(kfDelta));
+  card.appendChild(stats);
+
+  // Foot: week joined (+ dropped for inactive), participation.
+  const foot = document.createElement('div');
+  foot.className = 'member-foot';
+  let lines =
+    '<div class="line"><span class="k">Week Joined</span><span class="v">' + (row.acquired_week || '—') + '</span></div>';
+  if (opts.inactive) {
+    lines += '<div class="line"><span class="k">Week Dropped</span><span class="v">' + (row.released_week || '—') + '</span></div>';
+  }
+  lines +=
+    '<div class="line"><span class="k">Match Part.</span><span class="v">' + st.mpCount + ' <span class="pct">(' + st.mpPct + ')</span></span></div>'
+    + '<div class="line"><span class="k">Game Part.</span><span class="v">' + st.gpCount + ' <span class="pct">(' + st.gpPct + ')</span></span></div>';
+  foot.innerHTML = lines;
+  card.appendChild(foot);
+
+  return card;
+}
+function cell(k, v, cls) { return '<div class="cell"><div class="k">' + k + '</div><div class="v ' + (cls || '') + '">' + v + '</div></div>'; }
+
+function renderRoster() {
+  const el = document.getElementById('roster');
+  el.innerHTML = '';
+  const active = roster
+    .filter(r => r.released_week == null)
+    .sort((a, b) => (a.draft_pick_number || 999) - (b.draft_pick_number || 999) || (a.acquired_week || 0) - (b.acquired_week || 0));
+
+  document.getElementById('roster-sub').textContent =
+    active.length + ' active · ' + (season.team_size || '—') + ' slots';
+
+  if (!active.length) { el.innerHTML = '<div class="empty">No active Pokémon on this roster yet.</div>'; return; }
+  active.forEach(r => el.appendChild(memberCard(r)));
+}
+
+function renderInactive() {
+  const el = document.getElementById('inactive');
+  el.innerHTML = '';
+  const inactive = roster
+    .filter(r => r.released_week != null)
+    .sort((a, b) => (b.released_week || 0) - (a.released_week || 0));
+
+  if (!inactive.length) { el.innerHTML = '<div class="empty">No inactive Pokémon.</div>'; return; }
+
+  // Compact list in the narrow left column (per the sketch's "more compactly").
+  const list = document.createElement('div');
+  list.className = 'inactive-list';
+  inactive.forEach(r => {
+    const mon = pokemonById[r.pokemon_id] || { id: r.pokemon_id, name: r.pokemon_id };
+    const item = document.createElement('div');
+    item.className = 'inactive-item';
+    const img = document.createElement('img');
+    img.src = iconUrl(mon); img.alt = mon.name; attachIconFallback(img, mon);
+    item.appendChild(img);
+    const nm = document.createElement('div');
+    nm.className = 'nm'; nm.textContent = mon.name;
+    item.appendChild(nm);
+    const wk = document.createElement('div');
+    wk.className = 'wk';
+    wk.innerHTML = 'Joined W' + (r.acquired_week || '—') + '<br>Dropped W' + (r.released_week || '—');
+    item.appendChild(wk);
+    list.appendChild(item);
+  });
+  el.appendChild(list);
+}
+
+function renderTransactions() {
+  const el = document.getElementById('transactions');
+  el.innerHTML = '';
+  if (!txns.length) { el.innerHTML = '<div class="empty">No transactions yet.</div>'; return; }
+
+  const list = document.createElement('div');
+  list.className = 'txn-list';
+  txns.forEach(t => {
+    const dropped = pokemonById[t.dropped] || { id: t.dropped, name: t.dropped };
+    const added   = pokemonById[t.added]   || { id: t.added,   name: t.added };
+    const row = document.createElement('div');
+    row.className = 'txn';
+    const di = '<img src="' + iconUrl(dropped) + '" alt="" title="' + escapeHtml(dropped.name) + '">';
+    const ai = '<img src="' + iconUrl(added)   + '" alt="" title="' + escapeHtml(added.name)   + '">';
+    row.innerHTML =
+      '<div class="swap"><span class="drop">' + di + ' ' + escapeHtml(dropped.name) + '</span>'
+      + '<span>⇄</span><span class="gain">' + ai + ' ' + escapeHtml(added.name) + '</span></div>'
+      + '<div class="with">Week ' + (t.week || '—') + ' · ' + escapeHtml(t.withLabel) + '</div>';
+    list.appendChild(row);
+    // onerror chains for the inline imgs
+    row.querySelectorAll('img').forEach((im, i) => attachIconFallback(im, i === 0 ? dropped : added));
+  });
+  el.appendChild(list);
+}
+
+function renderSchedule() {
+  const el = document.getElementById('schedule');
+  el.innerHTML = '';
+  if (!matches.length) { el.innerHTML = '<div class="empty">No matches scheduled yet.</div>'; return; }
+
+  // The "next" match is the earliest one with no recorded winner.
+  const nextId = (matches.find(m => !m.winner_team_id) || {}).id;
+
+  const list = document.createElement('div');
+  list.className = 'sched-list';
+  matches.forEach(m => {
+    const isA   = m.team_a_id === team.id;
+    const oppId = isA ? m.team_b_id : m.team_a_id;
+    const opp   = allTeams.find(x => x.id === oppId);
+    const my    = isA ? m.team_a_score : m.team_b_score;
+    const their = isA ? m.team_b_score : m.team_a_score;
+
+    let cls = '';
+    if (m.winner_team_id === team.id) cls = 'win';
+    else if (m.winner_team_id)        cls = 'loss';
+    else if (m.id === nextId)         cls = 'next';
+
+    const myCoach  = coachByTeam[team.id]  ? ' <span class="pl">(' + escapeHtml(coachByTeam[team.id]) + ')</span>' : '';
+    const oppCoach = (opp && coachByTeam[oppId]) ? ' <span class="pl">(' + escapeHtml(coachByTeam[oppId]) + ')</span>' : '';
+    const oppName  = opp ? escapeHtml(opp.name) : 'TBD';
+
+    const a = document.createElement('a');
+    a.className = 'sched-row ' + cls;
+    a.href = 'match.html#' + m.id;
+    let html =
+      '<div class="sched-wk">Week ' + (m.week || '—') + (m.stage !== 'regular' ? ' · ' + escapeHtml(m.stage) : '') + '</div>'
+      + '<div class="sched-match"><span class="me">' + escapeHtml(team.name) + '</span>' + myCoach
+      + ' <span class="vs">vs</span> ' + oppName + oppCoach + '</div>';
+    if (m.winner_team_id) html += '<div class="sched-score">' + (my || 0) + ' – ' + (their || 0) + '</div>';
+    else if (cls === 'next') html += '<div class="sched-tag">Next match</div>';
+    a.innerHTML = html;
+    list.appendChild(a);
+  });
+  el.appendChild(list);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH (admin session continuity across hub pages) — modal + magic link, same as
+// the Draft page. Read-only page, so login only persists/shows the admin chip.
+// ─────────────────────────────────────────────────────────────────────────────
+async function initAuth() {
+  const { data: { session } } = await sb.auth.getSession();
+  await applySession(session);
+  sb.auth.onAuthStateChange((_e, s) => applySession(s));
+}
+async function applySession(session) {
+  currentUser = session ? session.user : null;
+  const loginBtn = document.getElementById('login-btn');
+  const chip = document.getElementById('user-chip');
+  if (currentUser) {
+    const { data: prof } = await sb.from('profiles').select('is_admin').eq('id', currentUser.id).maybeSingle();
+    isAdmin = !!(prof && prof.is_admin);
+    loginBtn.hidden = true; chip.hidden = false;
+    document.getElementById('user-email').textContent = currentUser.email || 'admin';
+  } else {
+    isAdmin = false; loginBtn.hidden = false; chip.hidden = true;
+  }
+}
+function openLogin() {
+  openModal(
+    '<h3>Admin Login</h3>'
+    + '<p>Enter your admin email and we\u2019ll send a magic sign-in link.</p>'
+    + '<input type="email" id="login-email" placeholder="you@example.com" autocomplete="email">'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" id="send-link-btn" onclick="sendMagicLink()">Send link</button></div>'
+  );
+  setTimeout(() => document.getElementById('login-email').focus(), 30);
+  document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') sendMagicLink(); });
+}
+async function sendMagicLink() {
+  const email = (document.getElementById('login-email').value || '').trim();
+  if (!email) { showToast('Enter an email first.', 'err'); return; }
+  const btn = document.getElementById('send-link-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+  if (error) { showToast('Could not send link: ' + error.message, 'err'); btn.disabled = false; btn.textContent = 'Send link'; return; }
+  closeModal(); showToast('Magic link sent to ' + email + '.', 'ok');
+}
+async function doLogout() { await sb.auth.signOut(); showToast('Logged out.', 'ok'); }
+
+function openModal(html) { document.getElementById('modal').innerHTML = html; document.getElementById('modal-overlay').hidden = false; }
+function closeModal() { document.getElementById('modal-overlay').hidden = true; }
+function showToast(msg, kind) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind ? ' ' + kind : '');
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3200);
+}
+
+function setNavHeight() {
+  const nav = document.querySelector('nav');
+  if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
+}
+window.addEventListener('resize', setNavHeight);
+// Re-render when the hash changes so #slug links swap teams without a full reload.
+window.addEventListener('hashchange', () => { location.reload(); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+async function init() {
+  const banner = document.getElementById('boot-banner');
+  try {
+    await loadData();
+    render();
+    setNavHeight();
+    banner.hidden = true;
+    document.getElementById('layout').hidden = false;
+    initAuth();
+  } catch (err) {
+    console.error(err);
+    banner.className = 'banner err';
+    banner.textContent = 'Could not load the team page: ' + (err.message || err);
+  }
+}
+init();
+</script>
+</body>
+</html>
