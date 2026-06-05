@@ -47,14 +47,15 @@ nav {
 
 /* ── TEAM SELECTOR (searchable dropdown off the Teams tab) ── */
 .nav-tab-wrap { position: relative; display: flex; align-items: stretch; }
-button.nav-tab { background: none; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+button.nav-tab { background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
 .nav-trigger .caret { font-size: 10px; transition: transform .15s; }
 .nav-trigger[aria-expanded="true"] .caret { transform: rotate(180deg); }
 .team-menu {
-  position: absolute; top: 100%; left: 0; z-index: 150;
-  width: 280px; max-height: min(60vh, 460px); display: flex; flex-direction: column; overflow: hidden;
-  background: var(--bg2); border: 1px solid var(--border); border-top: none;
-  border-radius: 0 0 10px 10px; box-shadow: 0 14px 34px rgba(0,0,0,.5);
+  position: fixed; z-index: 150;
+  width: 280px; max-width: calc(100vw - 16px); max-height: min(60vh, 460px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 14px 34px rgba(0,0,0,.5);
 }
 .team-menu[hidden] { display: none; }
 .team-menu-search { padding: 8px; border-bottom: 1px solid var(--border); }
@@ -266,9 +267,16 @@ button.nav-tab { background: none; font-family: inherit; cursor: pointer; displa
   .layout { grid-template-columns: 1fr; }
   .col-left { border-right: none; border-bottom: 1px solid var(--border); }
   .roster-grid { grid-template-columns: 1fr; }
+  /* Keep the nav on one row within the viewport — the tab strip absorbs the slack
+     and scrolls horizontally instead of pushing the page (and the admin chip) wider. */
   nav { padding: 0 8px; }
-  .nav-logo { padding: 12px 10px 12px 0; margin-right: 6px; font-size: 14px; }
-  .nav-tab { padding: 12px 10px; }
+  .nav-logo { padding: 12px 10px 12px 0; margin-right: 6px; font-size: 14px; flex-shrink: 0; }
+  .nav-tabs { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tab { padding: 12px 10px; white-space: nowrap; flex-shrink: 0; }
+  .nav-right { flex-shrink: 0; padding-left: 8px; gap: 8px; }
+  .user-chip .email { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn { padding: 6px 10px; }
 }
 </style>
 </head>
@@ -1027,7 +1035,7 @@ function setNavHeight() {
   const nav = document.querySelector('nav');
   if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
 }
-window.addEventListener('resize', setNavHeight);
+window.addEventListener('resize', () => { setNavHeight(); closeTeamMenu(); });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEAM SELECTOR — searchable dropdown off the Teams tab. Teams listed as
@@ -1049,8 +1057,16 @@ function toggleTeamMenu(e) {
   menu.hidden ? openTeamMenu() : closeTeamMenu();
 }
 function openTeamMenu() {
-  document.getElementById('team-menu').hidden = false;
-  document.getElementById('teams-tab').setAttribute('aria-expanded', 'true');
+  const menu = document.getElementById('team-menu');
+  const trigger = document.getElementById('teams-tab');
+  menu.hidden = false;
+  trigger.setAttribute('aria-expanded', 'true');
+  // Anchor the fixed panel just under the trigger, clamped to the viewport, so the
+  // horizontally-scrolling mobile tab strip can't clip it.
+  const r = trigger.getBoundingClientRect();
+  const w = menu.offsetWidth;
+  menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+  menu.style.top = r.bottom + 'px';
   const search = document.getElementById('team-search');
   search.value = '';
   teamMenuKbdIndex = -1;
