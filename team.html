@@ -44,6 +44,35 @@ nav {
 .nav-tab:hover { color: var(--text); }
 .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; padding-left: 12px; }
+
+/* ── TEAM SELECTOR (searchable dropdown off the Teams tab) ── */
+.nav-tab-wrap { position: relative; display: flex; align-items: stretch; }
+button.nav-tab { background: none; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.nav-trigger .caret { font-size: 10px; transition: transform .15s; }
+.nav-trigger[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.team-menu {
+  position: absolute; top: 100%; left: 0; z-index: 150;
+  width: 280px; max-height: min(60vh, 460px); display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg2); border: 1px solid var(--border); border-top: none;
+  border-radius: 0 0 10px 10px; box-shadow: 0 14px 34px rgba(0,0,0,.5);
+}
+.team-menu[hidden] { display: none; }
+.team-menu-search { padding: 8px; border-bottom: 1px solid var(--border); }
+.team-menu-search input {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 10px; color: var(--text); font-size: 13px; outline: none;
+}
+.team-menu-search input:focus { border-color: var(--accent); }
+.team-menu-search input::placeholder { color: var(--text3); }
+.team-menu-list { overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.team-menu-item {
+  display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 6px;
+  padding: 8px 10px; color: var(--text); font-size: 13px; cursor: pointer; font-family: inherit;
+}
+.team-menu-item:hover, .team-menu-item.kbd { background: var(--bg3); }
+.team-menu-item.current { color: var(--accent); font-weight: 700; }
+.team-menu-item .pl { color: var(--text3); font-weight: 400; }
+.team-menu-empty { font-size: 12px; color: var(--text3); padding: 8px 10px; font-style: italic; }
 .btn {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 7px;
   color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 14px; cursor: pointer;
@@ -146,10 +175,14 @@ nav {
 .member-body { flex: 1; min-width: 130px; }
 .member-name { font-size: 15px; font-weight: 700; line-height: 1.15; }
 .member-types { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+.member-abilities { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.ability-tag { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px; background: rgba(124,111,247,.15); color: #a89df9; border: 1px solid rgba(124,111,247,.3); }
 .slot-bst { font-size: 11px; color: var(--text3); margin-top: 6px; }
 .slot-stats-compact { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .stat-num { font-size: 10px; color: var(--text2); }
 .stat-num span { color: var(--text); font-weight: 600; }
+.slot-moves { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+.move-tag { font-size: 10px; background: var(--bg3); border: 1px solid var(--border); padding: 1px 6px; border-radius: 3px; color: var(--text2); }
 
 /* Right — KOs / Faints / K/F / KF Δ as a 2×2, with Match% / Game% as a third row;
    the participation count sits in parentheses directly beneath each percentage. */
@@ -245,7 +278,16 @@ nav {
   <div class="nav-logo">SBL Hub</div>
   <div class="nav-tabs">
     <a class="nav-tab" href="standings.html">Standings</a>
-    <a class="nav-tab active" href="team.html">Teams</a>
+    <div class="nav-tab-wrap">
+      <button class="nav-tab active nav-trigger" id="teams-tab" onclick="toggleTeamMenu(event)" aria-haspopup="true" aria-expanded="false">Teams <span class="caret">▾</span></button>
+      <div class="team-menu" id="team-menu" hidden>
+        <div class="team-menu-search">
+          <input type="text" id="team-search" placeholder="Search teams…" autocomplete="off"
+                 oninput="filterTeamMenu()" onkeydown="onTeamSearchKey(event)">
+        </div>
+        <div class="team-menu-list" id="team-menu-list"></div>
+      </div>
+    </div>
     <a class="nav-tab" href="draft.html">Draft</a>
     <a class="nav-tab" href="schedule.html">Schedule</a>
   </div>
@@ -350,6 +392,7 @@ const BAR_SC = ["#e05555", "#f08040", "#f0c060", "#7c6ff7", "#539ddf", "#4caf7d"
 let season       = null;   // current seasons row
 let allTeams     = [];      // every team in the season (for opponents + transactions)
 let team         = null;    // the team being rendered
+let allOwners    = [];      // every team_owners row in the season
 let ownerHistory = [];      // this team's team_owners rows, sorted by started_week
 let coachByTeam  = {};      // team_id -> current coach display_name (any team)
 let tierCost     = {};      // pokemon_id -> point_cost (this season)
@@ -426,7 +469,8 @@ function resolveTeam() {
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA LOAD
 // ─────────────────────────────────────────────────────────────────────────────
-async function loadData() {
+// Season-wide data that doesn't change when the viewer switches teams.
+async function loadGlobalData() {
   const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
     const ct = res.headers.get('content-type') || '';
     if (!res.ok || !ct.includes('json')) {
@@ -441,13 +485,13 @@ async function loadData() {
   if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
   season = seasonRow;
 
-  // Teams, current owners (all teams), past owners (this team), tiers — in parallel.
-  const [teamsRes, ownersRes, tiersRes] = await Promise.all([
+  const [teamsRes, ownersRes, tiersRes, regMatchRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
     sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', season.id),
+    sb.from('matches').select('team_a_id, team_b_id, winner_team_id').eq('season_id', season.id).eq('stage', 'regular'),
   ]);
-  for (const r of [teamsRes, ownersRes, tiersRes]) if (r.error) throw r.error;
+  for (const r of [teamsRes, ownersRes, tiersRes, regMatchRes]) if (r.error) throw r.error;
 
   allTeams = teamsRes.data || [];
   const teamIds = allTeams.map(t => t.id);
@@ -455,32 +499,31 @@ async function loadData() {
   tierCost = {};
   (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; });
 
-  // Current coach for every team (latest unended owner); full history for the
-  // rendered team is split out after we know which team that is.
-  const owners = (ownersRes.data || []).filter(o => teamIds.includes(o.team_id));
+  // Keep every owner row (for per-team history) and derive each team's current coach.
+  allOwners = (ownersRes.data || []).filter(o => teamIds.includes(o.team_id));
   coachByTeam = {};
-  owners.filter(o => o.ended_week == null).forEach(o => {
+  allOwners.filter(o => o.ended_week == null).forEach(o => {
     if (o.players) coachByTeam[o.team_id] = o.players.display_name;
   });
 
-  // pokemon.json index.
+  // Season-wide regular-season records, used only for Strength of Schedule.
+  regularRecords = computeRegularRecords(regMatchRes.data || [], teamIds);
+
   const pj = await pjPromise;
   const arr = Array.isArray(pj) ? pj : pj.pokemon;
   pokemonById = {};
   arr.forEach(p => { pokemonById[p.id] = p; });
+}
 
-  // Pick the team to show, then pull its team-specific data.
-  team = resolveTeam();
-  if (!team) throw new Error('No teams found for the current season.');
-
-  ownerHistory = owners
+// Everything tied to the currently-selected `team`. Re-run on team switch.
+// Matches/games/stats/transactions are empty until results are entered, so these
+// resolve to [] for now and the page shows placeholders.
+async function loadTeamData() {
+  ownerHistory = allOwners
     .filter(o => o.team_id === team.id)
     .sort((a, b) => (a.started_week || 0) - (b.started_week || 0));
 
-  // Roster, matches, transactions for this team. Matches/games/stats are empty
-  // until results are entered, so these resolve to [] for now and the page shows
-  // placeholders — the aggregation below lights up automatically once data lands.
-  const [rosterRes, matchRes, faRes, tradeRes, regMatchRes] = await Promise.all([
+  const [rosterRes, matchRes, faRes, tradeRes] = await Promise.all([
     sb.from('team_pokemon')
       .select('pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number')
       .eq('team_id', team.id),
@@ -494,11 +537,8 @@ async function loadData() {
     sb.from('trades')
       .select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at')
       .eq('season_id', season.id).or('team_a_id.eq.' + team.id + ',team_b_id.eq.' + team.id),
-    sb.from('matches')
-      .select('team_a_id, team_b_id, winner_team_id')
-      .eq('season_id', season.id).eq('stage', 'regular'),
   ]);
-  for (const r of [rosterRes, matchRes, faRes, tradeRes, regMatchRes]) if (r.error) throw r.error;
+  for (const r of [rosterRes, matchRes, faRes, tradeRes]) if (r.error) throw r.error;
 
   roster  = rosterRes.data || [];
   matches = (matchRes.data || []).sort((a, b) => (a.week || 0) - (b.week || 0));
@@ -516,10 +556,8 @@ async function loadData() {
     statRows = statsRes.data || [];
   }
 
-  // Season-wide regular-season records, used only for Strength of Schedule.
-  regularRecords = computeRegularRecords(regMatchRes.data || [], teamIds);
-
-  // Unified, reverse-chronological transaction feed.
+  // Reset per-team view state and rebuild the transaction feed.
+  altFormActive.clear(); megaBaseActive.clear(); txnExpanded = false;
   txns = buildTransactions(faRes.data || [], tradeRes.data || []);
 }
 
@@ -775,10 +813,15 @@ function memberCard(row, opts) {
   attachSpriteFallback(left.querySelector('.slot-sprite'), disp);
   card.appendChild(left);
 
-  // ── BODY: name, types, BST, compact stat row (speed color-coded) ──
+  // ── BODY: name, types, abilities, BST, compact stats, utility moves ──
+  // Abilities/moves come from the drafted entry (mon), matching the Draft Builder —
+  // altForm sub-objects don't carry their own ability/move data.
   let typesHtml = '';
   if (disp.type1) typesHtml += '<span class="type-badge t-' + disp.type1 + '">' + disp.type1 + '</span>';
   if (disp.type2) typesHtml += '<span class="type-badge t-' + disp.type2 + '">' + disp.type2 + '</span>';
+
+  const abilities = (mon.abilities || []).map(a => '<span class="ability-tag">' + escapeHtml(a) + '</span>').join('');
+  const moves     = (mon.moves || []).slice(0, 8).map(m => '<span class="move-tag">' + escapeHtml(m) + '</span>').join('');
 
   let statsHtml = '';
   if (disp.stats && disp.stats.hp != null) {
@@ -798,7 +841,9 @@ function memberCard(row, opts) {
   body.innerHTML =
     '<div class="member-name">' + escapeHtml(disp.name) + '</div>'
     + '<div class="member-types">' + typesHtml + '</div>'
-    + statsHtml;
+    + (abilities ? '<div class="member-abilities">' + abilities + '</div>' : '')
+    + statsHtml
+    + (moves ? '<div class="slot-moves">' + moves + '</div>' : '');
   card.appendChild(body);
 
   // ── RIGHT: KOs / Faints / K/F / KF Δ (2×2) + Match% / Game% with counts below ──
@@ -983,8 +1028,114 @@ function setNavHeight() {
   if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
 }
 window.addEventListener('resize', setNavHeight);
-// Re-render when the hash changes so #slug links swap teams without a full reload.
-window.addEventListener('hashchange', () => { location.reload(); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEAM SELECTOR — searchable dropdown off the Teams tab. Teams listed as
+// "Team Name (Coach)"; selecting one swaps the page in place and updates #slug.
+// ─────────────────────────────────────────────────────────────────────────────
+let suppressHashChange = false;
+let teamMenuKbdIndex = -1;   // keyboard-highlighted row in the filtered list
+
+function teamMenuEntries() {
+  // Sorted by seed then name; carries the searchable "name + coach" haystack.
+  return [...allTeams]
+    .sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name))
+    .map(t => ({ t, coach: coachByTeam[t.id] || '', hay: (t.name + ' ' + (coachByTeam[t.id] || '')).toLowerCase() }));
+}
+
+function toggleTeamMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('team-menu');
+  menu.hidden ? openTeamMenu() : closeTeamMenu();
+}
+function openTeamMenu() {
+  document.getElementById('team-menu').hidden = false;
+  document.getElementById('teams-tab').setAttribute('aria-expanded', 'true');
+  const search = document.getElementById('team-search');
+  search.value = '';
+  teamMenuKbdIndex = -1;
+  filterTeamMenu();
+  setTimeout(() => search.focus(), 20);
+}
+function closeTeamMenu() {
+  document.getElementById('team-menu').hidden = true;
+  document.getElementById('teams-tab').setAttribute('aria-expanded', 'false');
+}
+
+function filterTeamMenu() {
+  const q = (document.getElementById('team-search').value || '').trim().toLowerCase();
+  const list = document.getElementById('team-menu-list');
+  const matches = teamMenuEntries().filter(e => !q || e.hay.includes(q));
+  teamMenuKbdIndex = -1;
+
+  if (!matches.length) { list.innerHTML = '<div class="team-menu-empty">No teams match “' + escapeHtml(q) + '”.</div>'; return; }
+  list.innerHTML = '';
+  matches.forEach(e => {
+    const btn = document.createElement('button');
+    btn.className = 'team-menu-item' + (team && e.t.id === team.id ? ' current' : '');
+    btn.dataset.id = e.t.id;
+    btn.innerHTML = escapeHtml(e.t.name) + (e.coach ? ' <span class="pl">(' + escapeHtml(e.coach) + ')</span>' : '');
+    btn.onclick = () => selectTeam(e.t.id);
+    list.appendChild(btn);
+  });
+}
+
+// Enter selects the highlighted (or first) result; arrows move the highlight.
+function onTeamSearchKey(e) {
+  const items = [...document.querySelectorAll('.team-menu-item')];
+  if (e.key === 'Escape') { closeTeamMenu(); return; }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const pick = items[teamMenuKbdIndex] || items[0];
+    if (pick) selectTeam(pick.dataset.id);
+    return;
+  }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!items.length) return;
+    teamMenuKbdIndex = e.key === 'ArrowDown'
+      ? Math.min(items.length - 1, teamMenuKbdIndex + 1)
+      : Math.max(0, teamMenuKbdIndex - 1);
+    items.forEach((it, i) => it.classList.toggle('kbd', i === teamMenuKbdIndex));
+    items[teamMenuKbdIndex].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+async function selectTeam(teamId) {
+  const t = allTeams.find(x => x.id === teamId);
+  closeTeamMenu();
+  if (!t || (team && t.id === team.id)) return;
+  team = t;
+  // Update the shareable hash without triggering our own hashchange reload.
+  suppressHashChange = true;
+  location.hash = t.slug || '';
+
+  const banner = document.getElementById('boot-banner');
+  document.getElementById('layout').hidden = true;
+  banner.className = 'banner'; banner.textContent = 'Loading ' + t.name + '…'; banner.hidden = false;
+  try {
+    await loadTeamData();
+    render();
+    banner.hidden = true;
+    document.getElementById('layout').hidden = false;
+  } catch (err) {
+    console.error(err);
+    banner.className = 'banner err';
+    banner.textContent = 'Could not load ' + t.name + ': ' + (err.message || err);
+  }
+}
+
+// Close the menu when clicking anywhere outside it.
+document.addEventListener('click', e => {
+  if (!e.target.closest('.nav-tab-wrap')) closeTeamMenu();
+});
+
+// Back/forward or an edited #slug swaps teams in place (not our own hash writes).
+window.addEventListener('hashchange', () => {
+  if (suppressHashChange) { suppressHashChange = false; return; }
+  const t = resolveTeam();
+  if (t && (!team || t.id !== team.id)) selectTeam(t.id);
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BOOT
@@ -992,7 +1143,10 @@ window.addEventListener('hashchange', () => { location.reload(); });
 async function init() {
   const banner = document.getElementById('boot-banner');
   try {
-    await loadData();
+    await loadGlobalData();
+    team = resolveTeam();
+    if (!team) throw new Error('No teams found for the current season.');
+    await loadTeamData();
     render();
     setNavHeight();
     banner.hidden = true;
