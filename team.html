@@ -125,39 +125,50 @@ nav {
 
 .member {
   background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
-  padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap;
 }
-.member-head { display: flex; gap: 12px; align-items: flex-start; }
-.member-sprite { width: 72px; height: 72px; image-rendering: pixelated; flex-shrink: 0; }
-.member-id { flex: 1; min-width: 0; }
+/* Left rail — mirrors the Planner's Draft Builder .slot-left (sprite, form toggle,
+   point value), with Week Joined/Dropped stacked beneath. */
+.member-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; gap: 4px; width: 72px; }
+.member-left .slot-sprite { width: 72px; height: 72px; image-rendering: auto; display: block; }
+.member-left .slot-sprite.illegal-img { opacity: .3; filter: grayscale(90%); }
+.slot-pts-display { font-size: 20px; font-weight: 700; color: #fff; line-height: 1; }
+.slot-pts-display.illegal-pts { color: var(--red); font-size: 13px; }
+.slot-alt-form-btn { display: block; width: 100%; padding: 2px 4px; font-size: 9px; font-weight: 700; background: rgba(124,111,247,.15); border: 1px solid rgba(124,111,247,.35); color: var(--accent); border-radius: 3px; cursor: pointer; text-align: center; white-space: nowrap; transition: background .15s; }
+.slot-alt-form-btn:hover { background: rgba(124,111,247,.28); }
+.slot-alt-form-btn.active { background: rgba(124,111,247,.3); border-color: rgba(124,111,247,.65); }
+.slot-alt-form-placeholder { height: 21px; }
+.member-left .wk { font-size: 10px; color: var(--text3); text-align: center; line-height: 1.3; }
+.member-left .wk b { color: var(--text2); font-weight: 700; }
+
+/* Body — name, types, BST, and the compact stat row (speed color-coded), lifted
+   from the Planner's slot-stats-compact so the stat presentation matches. */
+.member-body { flex: 1; min-width: 130px; }
 .member-name { font-size: 15px; font-weight: 700; line-height: 1.15; }
 .member-types { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
-.member-meta-top { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
-.pts-badge { font-size: 12px; font-weight: 700; color: var(--accent); background: rgba(124,111,247,.12); border: 1px solid rgba(124,111,247,.4); border-radius: 6px; padding: 2px 8px; }
-.speed-pill {
-  font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 8px;
-  color: #fff; display: inline-flex; align-items: center; gap: 5px;
-}
-.speed-pill .lbl { opacity: .85; font-weight: 600; }
+.slot-bst { font-size: 11px; color: var(--text3); margin-top: 6px; }
+.slot-stats-compact { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.stat-num { font-size: 10px; color: var(--text2); }
+.stat-num span { color: var(--text); font-weight: 600; }
 
-.member-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.member-stats .cell { text-align: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 6px 2px; }
-.member-stats .cell .k { font-size: 9px; font-weight: 700; letter-spacing: .3px; color: var(--text3); text-transform: uppercase; }
-.member-stats .cell .v { font-size: 14px; font-weight: 700; margin-top: 2px; }
+/* Right — KOs / Faints / K/F / KF Δ as a 2×2, with Match% / Game% as a third row;
+   the participation count sits in parentheses directly beneath each percentage. */
+.member-statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex-shrink: 0; width: 134px; }
+.member-statgrid .cell { text-align: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 6px 2px; }
+.member-statgrid .cell .k { font-size: 9px; font-weight: 700; letter-spacing: .3px; color: var(--text3); text-transform: uppercase; }
+.member-statgrid .cell .v { font-size: 14px; font-weight: 700; margin-top: 2px; }
+.member-statgrid .cell .sub { font-size: 9px; color: var(--text3); font-weight: 600; margin-top: 1px; }
 .v.pos { color: var(--green); } .v.neg { color: var(--red); }
 
-.member-foot { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text2); border-top: 1px solid var(--border); padding-top: 8px; }
-.member-foot .line { display: flex; justify-content: space-between; gap: 8px; }
-.member-foot .line .k { color: var(--text3); }
-.member-foot .line .v { color: var(--text); font-weight: 600; }
-.member-foot .pct { color: var(--text3); font-weight: 400; }
+/* ── INACTIVE MEMBERS — same card component, just stacked. ── */
+.inactive-list { display: flex; flex-direction: column; gap: 12px; }
 
-/* ── INACTIVE MEMBERS (compact) ── */
-.inactive-list { display: flex; flex-direction: column; gap: 8px; }
-.inactive-item { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
-.inactive-item img { width: 32px; height: 32px; image-rendering: pixelated; flex-shrink: 0; }
-.inactive-item .nm { font-size: 12px; font-weight: 600; flex: 1; min-width: 0; }
-.inactive-item .wk { font-size: 10px; color: var(--text3); text-align: right; line-height: 1.3; white-space: nowrap; }
+/* Collapsible card header (Recent Transactions). */
+.card-title.center { text-align: center; }
+.card-title.row { display: flex; align-items: center; justify-content: space-between; }
+.expand-arrow { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 11px; line-height: 1; padding: 3px 7px; }
+.expand-arrow:hover { color: var(--text); border-color: var(--accent); }
+.expand-arrow[hidden] { display: none; }
 
 /* ── TRANSACTIONS ── */
 .txn-list { display: flex; flex-direction: column; gap: 8px; }
@@ -258,12 +269,15 @@ nav {
     </div>
 
     <div class="card">
-      <div class="card-title">Team Stats</div>
+      <div class="card-title center">Team Stats</div>
       <div id="team-stats"><!-- record + SoS/deltas + KOs/Faints --></div>
     </div>
 
     <div class="card">
-      <div class="card-title">Recent Transactions</div>
+      <div class="card-title row">
+        <span>Recent Transactions</span>
+        <button class="expand-arrow" id="txn-arrow" onclick="toggleTxns()" hidden>▼</button>
+      </div>
       <div id="transactions"><!-- free agency / trades --></div>
     </div>
 
@@ -325,8 +339,12 @@ function speedTierColor(spe) {
   const t = SPEED_TIERS.find(t => spe >= t.a && spe <= t.b);
   return t ? t.col : "#f44336";
 }
-// #ffeb3b (91–110) is bright; dark text reads better on it.
-function speedTextColor(spe) { return (spe >= 91 && spe <= 110) ? "#333" : "#fff"; }
+
+// Compact stat row order/labels/colors — lifted verbatim from the Planner so the
+// member-card stat presentation matches the Draft Builder exactly.
+const BAR_SK = ["hp", "atk", "def", "spa", "spd", "spe"];
+const BAR_SL = ["HP", "Atk", "Def", "SpA", "SpD", "Spe"];
+const BAR_SC = ["#e05555", "#f08040", "#f0c060", "#7c6ff7", "#539ddf", "#4caf7d"];
 
 // ── STATE ──
 let season       = null;   // current seasons row
@@ -344,6 +362,11 @@ let txns         = [];      // unified transaction feed (free agency + trades)
 let pokemonById  = {};      // id -> pokemon.json entry
 let currentUser  = null;
 let isAdmin      = false;
+
+// View-only form toggles, keyed by Pokémon id (survives nothing — purely display).
+let altFormActive  = new Set();   // base entries currently showing their alt form
+let megaBaseActive = new Set();   // Mega/Primal entries currently showing their base
+let txnExpanded    = false;       // Recent Transactions collapsed by default
 
 // ─────────────────────────────────────────────────────────────────────────────
 // URL / ID HELPERS — mirror the Planner so sprite/icon paths resolve identically.
@@ -582,6 +605,35 @@ function strengthOfSchedule() {
 function fmtRate(r) { return r == null ? '—' : (r * 100).toFixed(0) + '%'; }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FORM TOGGLES — ported from the Planner. A Mega/Primal entry (has baseForm) shows
+// its Mega by default and can flip to the base form; a base entry with an altForm
+// can flip to that alt. Display-only here, so toggling just re-renders the cards.
+// ─────────────────────────────────────────────────────────────────────────────
+function getDisplayMon(mon) {
+  if (!mon) return mon;
+  if (mon.baseForm && megaBaseActive.has(mon.id)) {
+    const base = pokemonById[mon.baseForm];
+    if (base) return Object.assign({}, base);
+  }
+  if (!mon.altForm || !altFormActive.has(mon.id)) return mon;
+  return Object.assign({}, mon, {
+    name: mon.altForm.name,
+    type1: mon.altForm.type1,
+    type2: mon.altForm.type2,
+    stats: mon.altForm.stats,
+    id: mon.altForm.spriteId || mon.id,
+  });
+}
+function toggleAltForm(id) {
+  altFormActive.has(id) ? altFormActive.delete(id) : altFormActive.add(id);
+  renderRoster(); renderInactive();
+}
+function toggleMegaBase(id) {
+  megaBaseActive.has(id) ? megaBaseActive.delete(id) : megaBaseActive.add(id);
+  renderRoster(); renderInactive();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // RENDER
 // ─────────────────────────────────────────────────────────────────────────────
 function render() {
@@ -642,8 +694,8 @@ function renderTeamStats() {
     + '</div>'
     + '<div class="stat-grid">'
     +   statBox('Strength of Sched.', fmtRate(sos.sos))
-    +   statBox('Str. of Str. of Sched.', fmtRate(sos.sosos))
     +   statBox('Match Δ', signed(matchDelta), deltaClass(matchDelta))
+    +   statBox('Str. of Str. of Sched.', fmtRate(sos.sosos))
     +   statBox('Game Δ', signed(gameDelta), deltaClass(gameDelta))
     + '</div>'
     + '<div class="kf-row">'
@@ -693,65 +745,78 @@ function memberStats(row) {
 function memberCard(row, opts) {
   opts = opts || {};
   const mon  = pokemonById[row.pokemon_id] || { id: row.pokemon_id, name: row.pokemon_id, stats: {} };
+  const disp = getDisplayMon(mon);
   const cost = (row.pokemon_id in tierCost) ? tierCost[row.pokemon_id] : (mon.points != null ? mon.points : '—');
-  const spe  = (mon.stats && mon.stats.spe != null) ? mon.stats.spe : null;
   const st   = memberStats(row);
   const kfDelta = st.kos - st.faints;
 
   const card = document.createElement('div');
   card.className = 'member';
 
-  // Head: sprite + name/types/points/speed
-  const head = document.createElement('div');
-  head.className = 'member-head';
+  // ── LEFT RAIL: sprite, form toggle, point value, week(s) ── (mirrors .slot-left)
+  const hasMega = !!mon.baseForm, megaShowing = megaBaseActive.has(mon.id);
+  const hasAlt  = !!mon.altForm,  altShowing  = altFormActive.has(mon.id);
+  const formBtn = hasMega
+    ? '<button class="slot-alt-form-btn' + (megaShowing ? ' active' : '') + '" onclick="toggleMegaBase(\'' + mon.id + '\')" title="' + (megaShowing ? 'Switch to Mega form' : 'Switch to base form') + '">' + (megaShowing ? '▶ Mega' : '◀ Base') + '</button>'
+    : hasAlt
+      ? '<button class="slot-alt-form-btn' + (altShowing ? ' active' : '') + '" onclick="toggleAltForm(\'' + mon.id + '\')" title="' + (altShowing ? 'Switch to base form' : 'Switch to ' + escapeHtml(mon.altForm.name)) + '">' + (altShowing ? '◀ Base' : '▶ Alt') + '</button>'
+      : '<div class="slot-alt-form-placeholder"></div>';
 
-  const img = document.createElement('img');
-  img.className = 'member-sprite';
-  img.src = spriteUrl(mon); img.alt = mon.name;
-  attachSpriteFallback(img, mon);
-  head.appendChild(img);
+  let wkHtml = '<div class="wk"><b>Joined</b><br>Week ' + (row.acquired_week || '—') + '</div>';
+  if (opts.inactive) wkHtml += '<div class="wk"><b>Dropped</b><br>Week ' + (row.released_week || '—') + '</div>';
 
-  const idCol = document.createElement('div');
-  idCol.className = 'member-id';
+  const left = document.createElement('div');
+  left.className = 'member-left';
+  left.innerHTML =
+    '<img class="slot-sprite" src="' + spriteUrl(disp) + '" alt="' + escapeHtml(disp.name) + '">'
+    + formBtn
+    + '<div class="slot-pts-display">' + cost + '</div>'
+    + wkHtml;
+  attachSpriteFallback(left.querySelector('.slot-sprite'), disp);
+  card.appendChild(left);
+
+  // ── BODY: name, types, BST, compact stat row (speed color-coded) ──
   let typesHtml = '';
-  if (mon.type1) typesHtml += '<span class="type-badge t-' + mon.type1 + '">' + mon.type1 + '</span>';
-  if (mon.type2) typesHtml += '<span class="type-badge t-' + mon.type2 + '">' + mon.type2 + '</span>';
-  const speedHtml = spe == null ? '' :
-    '<span class="speed-pill" style="background:' + speedTierColor(spe) + ';color:' + speedTextColor(spe) + '">'
-    + '<span class="lbl">Spe</span>' + spe + '</span>';
-  idCol.innerHTML =
-    '<div class="member-name">' + escapeHtml(mon.name) + '</div>'
-    + '<div class="member-types">' + typesHtml + '</div>'
-    + '<div class="member-meta-top"><span class="pts-badge">' + cost + ' pts</span>' + speedHtml + '</div>';
-  head.appendChild(idCol);
-  card.appendChild(head);
+  if (disp.type1) typesHtml += '<span class="type-badge t-' + disp.type1 + '">' + disp.type1 + '</span>';
+  if (disp.type2) typesHtml += '<span class="type-badge t-' + disp.type2 + '">' + disp.type2 + '</span>';
 
-  // Stats: KOs / Faints / K/F / KF Δ
-  const stats = document.createElement('div');
-  stats.className = 'member-stats';
-  stats.innerHTML =
-    cell('KOs', st.kos) + cell('Faints', st.faints)
-    + cell('K/F', kfRatio(st.kos, st.faints))
-    + cell('KF Δ', signed(kfDelta), deltaClass(kfDelta));
-  card.appendChild(stats);
-
-  // Foot: week joined (+ dropped for inactive), participation.
-  const foot = document.createElement('div');
-  foot.className = 'member-foot';
-  let lines =
-    '<div class="line"><span class="k">Week Joined</span><span class="v">' + (row.acquired_week || '—') + '</span></div>';
-  if (opts.inactive) {
-    lines += '<div class="line"><span class="k">Week Dropped</span><span class="v">' + (row.released_week || '—') + '</span></div>';
+  let statsHtml = '';
+  if (disp.stats && disp.stats.hp != null) {
+    const statNums = BAR_SK.map(function (k, j) {
+      if (k === 'spe') {
+        const sc = speedTierColor(disp.stats[k]);
+        return '<span class="stat-num" style="background:' + sc + '22;border:1px solid ' + sc + '55;border-radius:3px;padding:1px 5px">'
+          + BAR_SL[j] + ' <span style="color:' + sc + ';font-weight:700">' + disp.stats[k] + '</span></span>';
+      }
+      return '<span class="stat-num">' + BAR_SL[j] + ' <span>' + disp.stats[k] + '</span></span>';
+    }).join('');
+    statsHtml = '<div class="slot-bst">BST ' + disp.stats.bst + '</div><div class="slot-stats-compact">' + statNums + '</div>';
   }
-  lines +=
-    '<div class="line"><span class="k">Match Part.</span><span class="v">' + st.mpCount + ' <span class="pct">(' + st.mpPct + ')</span></span></div>'
-    + '<div class="line"><span class="k">Game Part.</span><span class="v">' + st.gpCount + ' <span class="pct">(' + st.gpPct + ')</span></span></div>';
-  foot.innerHTML = lines;
-  card.appendChild(foot);
+
+  const body = document.createElement('div');
+  body.className = 'member-body';
+  body.innerHTML =
+    '<div class="member-name">' + escapeHtml(disp.name) + '</div>'
+    + '<div class="member-types">' + typesHtml + '</div>'
+    + statsHtml;
+  card.appendChild(body);
+
+  // ── RIGHT: KOs / Faints / K/F / KF Δ (2×2) + Match% / Game% with counts below ──
+  const grid = document.createElement('div');
+  grid.className = 'member-statgrid';
+  grid.innerHTML =
+    cell('KOs', st.kos)
+    + cell('Faints', st.faints)
+    + cell('K/F', kfRatio(st.kos, st.faints))
+    + cell('KF Δ', signed(kfDelta), deltaClass(kfDelta))
+    + cellSub('Match %', st.mpPct, '(' + st.mpCount + ')')
+    + cellSub('Game %', st.gpPct, '(' + st.gpCount + ')');
+  card.appendChild(grid);
 
   return card;
 }
-function cell(k, v, cls) { return '<div class="cell"><div class="k">' + k + '</div><div class="v ' + (cls || '') + '">' + v + '</div></div>'; }
+function cell(k, v, cls)   { return '<div class="cell"><div class="k">' + k + '</div><div class="v ' + (cls || '') + '">' + v + '</div></div>'; }
+function cellSub(k, v, sub) { return '<div class="cell"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="sub">' + sub + '</div></div>'; }
 
 function renderRoster() {
   const el = document.getElementById('roster');
@@ -776,36 +841,30 @@ function renderInactive() {
 
   if (!inactive.length) { el.innerHTML = '<div class="empty">No inactive Pokémon.</div>'; return; }
 
-  // Compact list in the narrow left column (per the sketch's "more compactly").
+  // Same card component as the active roster (with Week Dropped added). The narrow
+  // left column makes these wrap; we'll tune the compact layout once data exists.
   const list = document.createElement('div');
   list.className = 'inactive-list';
-  inactive.forEach(r => {
-    const mon = pokemonById[r.pokemon_id] || { id: r.pokemon_id, name: r.pokemon_id };
-    const item = document.createElement('div');
-    item.className = 'inactive-item';
-    const img = document.createElement('img');
-    img.src = iconUrl(mon); img.alt = mon.name; attachIconFallback(img, mon);
-    item.appendChild(img);
-    const nm = document.createElement('div');
-    nm.className = 'nm'; nm.textContent = mon.name;
-    item.appendChild(nm);
-    const wk = document.createElement('div');
-    wk.className = 'wk';
-    wk.innerHTML = 'Joined W' + (r.acquired_week || '—') + '<br>Dropped W' + (r.released_week || '—');
-    item.appendChild(wk);
-    list.appendChild(item);
-  });
+  inactive.forEach(r => list.appendChild(memberCard(r, { inactive: true })));
   el.appendChild(list);
 }
 
+function toggleTxns() { txnExpanded = !txnExpanded; renderTransactions(); }
+
 function renderTransactions() {
   const el = document.getElementById('transactions');
+  const arrow = document.getElementById('txn-arrow');
   el.innerHTML = '';
-  if (!txns.length) { el.innerHTML = '<div class="empty">No transactions yet.</div>'; return; }
+  if (!txns.length) { el.innerHTML = '<div class="empty">No transactions yet.</div>'; if (arrow) arrow.hidden = true; return; }
+
+  // Collapsed by default: show only the most recent. Arrow appears only when there
+  // is more than one to reveal.
+  if (arrow) { arrow.hidden = txns.length <= 1; arrow.textContent = txnExpanded ? '▲' : '▼'; }
+  const shown = txnExpanded ? txns : txns.slice(0, 1);
 
   const list = document.createElement('div');
   list.className = 'txn-list';
-  txns.forEach(t => {
+  shown.forEach(t => {
     const dropped = pokemonById[t.dropped] || { id: t.dropped, name: t.dropped };
     const added   = pokemonById[t.added]   || { id: t.added,   name: t.added };
     const row = document.createElement('div');
