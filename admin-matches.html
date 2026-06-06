@@ -46,6 +46,10 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .page-sub { font-size: 13px; color: var(--text2); margin-bottom: 20px; line-height: 1.5; }
 
 .section { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px 18px; margin-bottom: 18px; }
+.section-head { display: flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; margin-bottom: 4px; }
+.section-head .caret { font-size: 12px; color: var(--text3); }
+.section-head .section-title { margin-bottom: 0; }
+.section-head:hover .section-title { color: var(--text); }
 .section-title { font-size: 13px; font-weight: 700; letter-spacing: .4px; margin-bottom: 4px; }
 .section-sub { font-size: 12px; color: var(--text2); margin-bottom: 14px; line-height: 1.5; }
 
@@ -89,14 +93,14 @@ select:focus, input:focus { border-color: var(--accent); }
 .match-row .badge.upcoming { background: var(--bg2); color: var(--text3); border: 1px solid var(--border); }
 .empty-state { text-align: center; color: var(--text3); font-size: 13px; padding: 32px; font-style: italic; }
 
-/* ── SCHEDULE COVERAGE (collapsible audit) ── */
-.coverage { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 16px; }
-.coverage-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none; }
-.coverage-head:hover { background: rgba(255,255,255,.02); }
-.coverage-head .caret { font-size: 11px; color: var(--text3); }
-.coverage-title { font-size: 12px; font-weight: 700; }
-.coverage-sub { font-size: 11px; color: var(--text3); margin-left: auto; text-align: right; }
-.coverage-body { padding: 2px 12px 8px; border-top: 1px solid var(--border); }
+/* ── COLLAPSIBLE PANEL (shared by coverage + match list) ── */
+.collapse { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 16px; }
+.collapse-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none; }
+.collapse-head:hover { background: rgba(255,255,255,.02); }
+.collapse-head .caret { font-size: 11px; color: var(--text3); }
+.collapse-title { font-size: 12px; font-weight: 700; }
+.collapse-sub { font-size: 11px; color: var(--text3); margin-left: auto; text-align: right; }
+.collapse-body { padding: 2px 12px 8px; border-top: 1px solid var(--border); }
 .cov-row { display: flex; align-items: center; gap: 10px; padding: 6px 2px; border-bottom: 1px solid var(--bg2); }
 .cov-row:last-child { border-bottom: none; }
 .cov-team { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
@@ -188,7 +192,11 @@ select:focus, input:focus { border-color: var(--accent); }
 
   <!-- ── SCHEDULE ── -->
   <div class="section">
-    <div class="section-title">Regular-Season Schedule</div>
+    <div class="section-head" onclick="toggleScheduleSection()">
+      <span class="caret" id="schedule-caret">▼</span>
+      <span class="section-title">Regular-Season Schedule</span>
+    </div>
+    <div id="schedule-body">
     <div class="section-sub">Import the full schedule from your helper sheet (one-time, pre-season), then fine-tune with the add/remove controls below.</div>
 
     <div class="controls">
@@ -228,8 +236,8 @@ select:focus, input:focus { border-color: var(--accent); }
 
     <div id="coverage-panel"></div>
 
-    <div class="summary" id="summary"></div>
     <div id="match-list"></div>
+    </div>
   </div>
 
   <!-- ── MATCH DATA ENTRY (increment 3 — lands here next pass) ── -->
@@ -264,6 +272,8 @@ let ambiguousNames   = new Set();   // a player name that maps to more than one 
 let matches          = [];          // regular-season matches for the selected season
 let gamesCountByMatch = {};         // match_id -> number of games entered
 let coverageCollapsed = true;       // schedule-coverage panel starts collapsed
+let scheduleCollapsed = false;      // whole schedule section starts expanded
+let matchListCollapsed = true;      // individual-match list starts collapsed
 
 // ── HELPERS ──
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
@@ -359,7 +369,7 @@ async function loadSeasonData(seasonId) {
 
 function onSeasonChange() {
   selectedSeasonId = document.getElementById('season-select').value;
-  loadSeasonData(selectedSeasonId).catch(err => { console.error(err); showToast('Could not load season: ' + (err.message || err), 'err'); });
+  loadSeasonData(selectedSeasonId).then(setDefaultWeek).catch(err => { console.error(err); showToast('Could not load season: ' + (err.message || err), 'err'); });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -386,7 +396,7 @@ function renderCoverage() {
   const okCount = rows.filter(r => r.ok).length;
 
   const body = coverageCollapsed ? '' :
-    '<div class="coverage-body">' + rows.map(r =>
+    '<div class="collapse-body">' + rows.map(r =>
       '<div class="cov-row ' + (r.ok ? 'ok' : 'miss') + '">'
       + '<div class="cov-team">' + teamLabelHtml(r.t.id) + '</div>'
       + '<div class="cov-status ' + (r.ok ? 'ok' : 'miss') + '">' + (r.ok ? 'Complete' : 'Missing ' + r.missing.length) + '</div>'
@@ -395,11 +405,11 @@ function renderCoverage() {
     ).join('') + '</div>';
 
   el.innerHTML =
-    '<div class="coverage">'
-    + '<div class="coverage-head" onclick="toggleCoverage()">'
+    '<div class="collapse">'
+    + '<div class="collapse-head" onclick="toggleCoverage()">'
     +   '<span class="caret">' + (coverageCollapsed ? '\u25B6' : '\u25BC') + '</span>'
-    +   '<span class="coverage-title">Schedule coverage</span>'
-    +   '<span class="coverage-sub">' + okCount + ' / ' + rows.length + ' teams fully scheduled \u00B7 '
+    +   '<span class="collapse-title">Schedule coverage</span>'
+    +   '<span class="collapse-sub">' + okCount + ' / ' + rows.length + ' teams fully scheduled \u00B7 '
     +     weeks.length + ' week' + (weeks.length === 1 ? '' : 's') + '</span>'
     + '</div>'
     + body
@@ -415,56 +425,87 @@ function populateTeamSelects() {
 }
 
 function renderMatchList() {
-  const summary = document.getElementById('summary');
   const el = document.getElementById('match-list');
+  el.innerHTML = '';
 
   if (!matches.length) {
-    summary.innerHTML = '<span style="color:var(--text3)">No schedule for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet — import a CSV or add matches above.</span>';
-    el.innerHTML = '';
+    const s = document.createElement('div');
+    s.className = 'summary';
+    s.innerHTML = '<span style="color:var(--text3)">No schedule for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet — import a CSV or add matches above.</span>';
+    el.appendChild(s);
     return;
   }
 
   const weeks = [...new Set(matches.map(m => m.week))].sort((a, b) => a - b);
   const withResults = matches.filter(matchHasResults).length;
-  summary.innerHTML = '<b>' + matches.length + '</b> matches across <b>' + weeks.length + '</b> week'
-    + (weeks.length === 1 ? '' : 's')
-    + (withResults ? ' · <b>' + withResults + '</b> with results entered' : '');
+  const summaryText = matches.length + ' matches across ' + weeks.length + ' week' + (weeks.length === 1 ? '' : 's')
+    + (withResults ? ' \u00B7 ' + withResults + ' with results entered' : '');
 
-  el.innerHTML = '';
-  weeks.forEach(w => {
-    const group = document.createElement('div');
-    group.className = 'week-group';
-    group.innerHTML = '<div class="week-head">Week ' + w + '</div>';
+  const container = document.createElement('div');
+  container.className = 'collapse';
 
-    matches.filter(m => m.week === w)
-      .sort((a, b) => teamLabelText(a.team_a_id).localeCompare(teamLabelText(b.team_a_id)))
-      .forEach(m => {
-        const aWin = m.winner_team_id && m.winner_team_id === m.team_a_id;
-        const bWin = m.winner_team_id && m.winner_team_id === m.team_b_id;
-        const hasRes = matchHasResults(m);
+  const head = document.createElement('div');
+  head.className = 'collapse-head';
+  head.onclick = toggleMatchList;
+  head.innerHTML = '<span class="caret">' + (matchListCollapsed ? '\u25B6' : '\u25BC') + '</span>'
+    + '<span class="collapse-title">Scheduled matches</span>'
+    + '<span class="collapse-sub">' + summaryText + '</span>';
+  container.appendChild(head);
 
-        const row = document.createElement('div');
-        row.className = 'match-row';
-        row.innerHTML =
-          '<div class="teams">' + teamLabelHtml(m.team_a_id) + '<span class="vs">vs</span>' + teamLabelHtml(m.team_b_id) + '</div>'
-          + '<div class="meta">Bo' + (m.series_length || 3) + ' · ' + escapeHtml(fmtDateTime(m.match_date)) + '</div>'
-          + (hasRes
-              ? '<div class="result"><span class="' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
-                + '–<span class="' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>'
-                + '<span class="badge final">Final</span>'
-              : '<span class="badge upcoming">Upcoming</span>');
+  if (!matchListCollapsed) {
+    const body = document.createElement('div');
+    body.className = 'collapse-body';
+    weeks.forEach(w => {
+      const group = document.createElement('div');
+      group.className = 'week-group';
+      group.innerHTML = '<div class="week-head">Week ' + w + '</div>';
 
-        const rm = document.createElement('button');
-        rm.className = 'btn btn-sm btn-danger';
-        rm.textContent = 'Remove';
-        rm.onclick = () => confirmRemoveMatch(m.id);
-        row.appendChild(rm);
+      matches.filter(m => m.week === w)
+        .sort((a, b) => teamLabelText(a.team_a_id).localeCompare(teamLabelText(b.team_a_id)))
+        .forEach(m => {
+          const aWin = m.winner_team_id && m.winner_team_id === m.team_a_id;
+          const bWin = m.winner_team_id && m.winner_team_id === m.team_b_id;
+          const hasRes = matchHasResults(m);
 
-        group.appendChild(row);
-      });
+          const row = document.createElement('div');
+          row.className = 'match-row';
+          row.innerHTML =
+            '<div class="teams">' + teamLabelHtml(m.team_a_id) + '<span class="vs">vs</span>' + teamLabelHtml(m.team_b_id) + '</div>'
+            + '<div class="meta">Bo' + (m.series_length || 3) + ' · ' + escapeHtml(fmtDateTime(m.match_date)) + '</div>'
+            + (hasRes
+                ? '<div class="result"><span class="' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
+                  + '–<span class="' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>'
+                  + '<span class="badge final">Final</span>'
+                : '<span class="badge upcoming">Upcoming</span>');
 
-    el.appendChild(group);
-  });
+          const rm = document.createElement('button');
+          rm.className = 'btn btn-sm btn-danger';
+          rm.textContent = 'Remove';
+          rm.onclick = () => confirmRemoveMatch(m.id);
+          row.appendChild(rm);
+
+          group.appendChild(row);
+        });
+
+      body.appendChild(group);
+    });
+    container.appendChild(body);
+  }
+
+  el.appendChild(container);
+}
+function toggleMatchList() { matchListCollapsed = !matchListCollapsed; renderMatchList(); }
+
+function toggleScheduleSection() {
+  scheduleCollapsed = !scheduleCollapsed;
+  document.getElementById('schedule-body').hidden = scheduleCollapsed;
+  document.getElementById('schedule-caret').textContent = scheduleCollapsed ? '\u25B6' : '\u25BC';
+}
+
+// Pre-fill the add-match week with the latest week in the schedule (or 1 if empty).
+function setDefaultWeek() {
+  const wk = matches.length ? Math.max(...matches.map(m => m.week)) : 1;
+  document.getElementById('add-week').value = wk;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -619,12 +660,13 @@ async function addMatch() {
   try {
     const { error } = await sb.from('matches').insert(row);
     if (error) throw error;
-    document.getElementById('add-week').value = '';
+    await loadSeasonData(selectedSeasonId);
+    // Keep the just-entered week so the admin can add another match in the same week quickly.
+    document.getElementById('add-week').value = week;
     document.getElementById('add-team-a').value = '';
     document.getElementById('add-team-b').value = '';
     document.getElementById('add-series').value = '3';
     document.getElementById('add-date').value = '';
-    await loadSeasonData(selectedSeasonId);
     showToast('Match added.', 'ok');
   } catch (err) {
     console.error(err);
@@ -777,6 +819,7 @@ async function init() {
     await loadSeasons();
     populateSeasonDropdown();
     await loadSeasonData(selectedSeasonId);
+    setDefaultWeek();
     await initAuth();          // reveals the tool (or the gate) once admin status resolves
     banner.hidden = true;
   } catch (err) {
