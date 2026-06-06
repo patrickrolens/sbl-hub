@@ -134,11 +134,11 @@ select:focus, input:focus { border-color: var(--accent); }
 .brought-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 .brought-team { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; }
 .brought-team h4 { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.brought-slots { display: flex; flex-wrap: wrap; gap: 6px; }
-.brought-slot { position: relative; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 1px; background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; padding: 5px 3px 4px; }
-.brought-slot img { width: 40px; height: 40px; object-fit: contain; }
-.brought-slot .nm { font-size: 9px; color: var(--text2); text-align: center; line-height: 1.1; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.brought-slot .st { font-size: 9px; font-weight: 700; color: var(--text3); font-variant-numeric: tabular-nums; }
+.brought-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.brought-slot { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 4px 6px; }
+.brought-slot img { width: 64px; height: 64px; object-fit: contain; }
+.brought-slot .nm { font-size: 11px; color: var(--text2); text-align: center; line-height: 1.15; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brought-slot .st { font-size: 10px; font-weight: 700; color: var(--text3); font-variant-numeric: tabular-nums; }
 .brought-slot .rm { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: var(--red); color: #fff; border: none; font-size: 11px; line-height: 16px; cursor: pointer; padding: 0; }
 .brought-slot.empty { cursor: pointer; justify-content: center; border-style: dashed; opacity: .8; }
 .brought-slot.empty:hover { border-color: var(--accent); opacity: 1; }
@@ -435,9 +435,10 @@ async function loadPokemon() {
   try {
     const res = await fetch(POKEMON_JSON_URL);
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const arr = await res.json();
+    const data = await res.json();
+    const arr = Array.isArray(data) ? data : (data.pokemon || []);
     pokemonById = {};
-    (Array.isArray(arr) ? arr : []).forEach(p => { pokemonById[p.id] = p; });
+    arr.forEach(p => { pokemonById[p.id] = p; });
   } catch (err) {
     console.error('Could not load pokemon.json:', err);
     showToast('Pokémon data didn\u2019t load — names/sprites may be missing.', 'err');
