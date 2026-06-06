@@ -129,7 +129,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 
 /* ── NARROW: detail panel becomes a full-screen overlay ── */
 @media (max-width: 900px) {
-  .detail-col { position: static; display: block; width: 100%; max-width: none; height: auto; border-left: none; }
+  .detail-col { position: static; display: block; flex: 1 1 100%; width: 100%; max-width: none; height: auto; border-left: none; }
   .detail-head { position: sticky; top: var(--nav-h); z-index: 40; }
   .detail-body { overflow: visible; }
   body.panel-open .schedule-col { display: none; }
