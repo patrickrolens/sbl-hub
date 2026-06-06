@@ -31,13 +31,15 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .layout { display: flex; align-items: flex-start; }
 .schedule-col { flex: 1 1 auto; min-width: 0; padding: 18px 16px 60px; }
 .detail-col { flex: 0 0 44%; max-width: 44%; align-self: stretch; border-left: 1px solid var(--border);
-  position: sticky; top: var(--nav-h); height: calc(100vh - var(--nav-h)); overflow-y: auto; overscroll-behavior: contain; background: var(--bg2); }
+  position: sticky; top: var(--nav-h); height: calc(100vh - var(--nav-h)); background: var(--bg2);
+  display: flex; flex-direction: column; }
 .detail-col.collapsed { display: none; }
 
 .page-title { font-size: 19px; font-weight: 700; }
 .page-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
-.sched-head { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
-.sched-head .grow { flex: 1 1 auto; }
+.sched-head { position: relative; margin-bottom: 16px; min-height: 34px; }
+.sched-head .grow { text-align: center; }
+.sched-head #open-panel-btn { position: absolute; right: 0; top: 0; }
 
 .btn { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 12px; cursor: pointer; font-family: inherit; }
 .btn:hover { border-color: var(--accent); }
@@ -48,7 +50,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .week-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); gap: 12px; align-items: start; }
 .week-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 11px 11px; }
 .week-block.current { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.week-block h3 { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text2); margin-bottom: 8px; }
+.week-block h3 { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text2); margin-bottom: 8px; text-align: center; }
 .week-block.current h3 { color: var(--accent); }
 .stage-divider { height: 1px; background: var(--border); margin: 20px 0; }
 
@@ -57,16 +59,16 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .match-line.selected { background: var(--bg3); outline: 1px solid var(--accent); }
 .match-line .sc { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text3); flex-shrink: 0; }
 .match-line .sc.win { color: var(--blue); }
-.match-line .mu { flex: 1 1 auto; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.match-line .mu { flex: 1 1 auto; min-width: 0; font-size: 12px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .match-line .vs { color: var(--text3); margin: 0 3px; }
 .match-line .pl { color: var(--text3); }
 
 .empty-state { color: var(--text3); font-size: 13px; font-style: italic; padding: 28px 4px; }
 
 /* ── DETAIL PANEL ── */
-.detail-head { position: sticky; top: 0; z-index: 2; background: var(--bg2); border-bottom: 1px solid var(--border); padding: 9px 12px; display: flex; align-items: center; gap: 8px; }
+.detail-head { flex: 0 0 auto; z-index: 2; background: var(--bg2); border-bottom: 1px solid var(--border); padding: 9px 12px; display: flex; align-items: center; gap: 8px; }
 .detail-head .dh-title { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 700; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.detail-body { padding: 16px 16px 40px; }
+.detail-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 16px 40px; }
 .dm-loading, .dm-empty { color: var(--text3); font-size: 13px; font-style: italic; padding: 16px 2px; }
 
 .dm-score { text-align: center; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text2); }
@@ -104,17 +106,19 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 
 /* ── CHRONOLOGICAL LIST (no selection) ── */
 .chrono { display: flex; flex-direction: column; gap: 4px; }
-.chrono-week-head { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); padding: 12px 2px 5px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+.chrono-week-head { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); padding: 12px 2px 5px; border-bottom: 1px solid var(--border); margin-bottom: 2px; text-align: center; }
 .chrono-week-head:first-child { padding-top: 2px; }
 .chrono-row { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: var(--bg3); }
 .chrono-row:hover { border-color: var(--accent); }
-.chrono-row .cbadge { font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); white-space: nowrap; flex-shrink: 0; }
 .chrono-row .csc { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text3); flex-shrink: 0; }
 .chrono-row .csc.win { color: var(--blue); }
-.chrono-row .cmu { flex: 1 1 auto; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chrono-row .cmu { flex: 1 1 auto; min-width: 0; font-size: 12px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chrono-row .vs { color: var(--text3); margin: 0 3px; }
 .chrono-row .pl { color: var(--text3); }
 .chrono-row .cup { font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--text3); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+/* All-matches labels: Team (Coach) on wide, coach only on narrow */
+.mu-narrow { display: none; }
+@media (max-width: 900px) { .mu-wide { display: none; } .mu-narrow { display: inline; } }
 
 .banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
 .banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
@@ -232,6 +236,17 @@ function coachLabelText(teamId, week) { return coachAtWeek(teamId, week) || team
 function matchupCoachHtml(m) {
   return escapeHtml(coachLabelText(m.team_a_id, m.week)) + '<span class="vs">vs</span>' + escapeHtml(coachLabelText(m.team_b_id, m.week));
 }
+// All-matches matchup: renders both "Team (Coach)" and coach-only; CSS shows the right one per width.
+function chronoSideHtml(teamId, week) {
+  const coach = coachAtWeek(teamId, week);
+  const name = teamName(teamId);
+  const wide = coach ? escapeHtml(name) + ' <span class="pl">(' + escapeHtml(coach) + ')</span>' : escapeHtml(name);
+  const narrow = escapeHtml(coach || name);
+  return '<span class="mu-wide">' + wide + '</span><span class="mu-narrow">' + narrow + '</span>';
+}
+function matchupChronoHtml(m) {
+  return chronoSideHtml(m.team_a_id, m.week) + '<span class="vs">vs</span>' + chronoSideHtml(m.team_b_id, m.week);
+}
 function teamLinkHtml(id, week) {
   const t = teamById[id]; if (!t) return '<span class="dm-team">TBD</span>';
   const c = coachAtWeek(id, week);
@@ -338,10 +353,10 @@ function onViewportChange() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     if (document.getElementById('layout').hidden) return;
-    const col = document.getElementById('detail-col');
-    const st = col ? col.scrollTop : 0;
+    const body = document.getElementById('detail-body');
+    const st = body ? body.scrollTop : 0;
     render();
-    if (col) col.scrollTop = st;
+    if (body) body.scrollTop = st;
   }, 150);
 }
 window.addEventListener('resize', onViewportChange);
@@ -530,7 +545,7 @@ function renderChrono(body) {
     const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
     h += '<div class="chrono-row" data-id="' + m.id + '">'
       + '<span class="csc ' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
-      + '<span class="cmu">' + matchupCoachHtml(m) + '</span>'
+      + '<span class="cmu">' + matchupChronoHtml(m) + '</span>'
       + '<span class="csc ' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span>'
       + (matchHasResults(m) ? '' : '<span class="cup">upcoming</span>')
       + '</div>';
