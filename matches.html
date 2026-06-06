@@ -129,7 +129,10 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 
 /* ── NARROW: detail panel becomes a full-screen overlay ── */
 @media (max-width: 900px) {
-  .detail-col { position: fixed; inset: var(--nav-h) 0 0 0; max-width: none; width: 100%; height: calc(100vh - var(--nav-h)); border-left: none; z-index: 60; }
+  .detail-col { position: static; display: block; width: 100%; max-width: none; height: auto; border-left: none; }
+  .detail-head { position: sticky; top: var(--nav-h); z-index: 40; }
+  .detail-body { overflow: visible; }
+  body.panel-open .schedule-col { display: none; }
 }
 @media (max-width: 768px) {
   nav { padding: 0 8px; }
@@ -344,7 +347,10 @@ function syncFromHash() {
   if (id && matchById[id]) { selectedMatchId = id; panelOpen = true; }
   else { selectedMatchId = null; }
 }
-window.addEventListener('hashchange', () => { syncFromHash(); render(); });
+window.addEventListener('hashchange', () => { syncFromHash(); render(); if (panelOpen) scrollPanelTop(); });
+
+// On narrow screens the panel flows in the page, so jump to the top when it opens.
+function scrollPanelTop() { if (window.innerWidth <= 900) window.scrollTo({ top: 0 }); }
 
 // Re-fit when the viewport changes (e.g. rotating a phone). CSS handles the
 // responsive layout; this refreshes the rendered content and keeps panel scroll.
@@ -363,11 +369,12 @@ window.addEventListener('resize', onViewportChange);
 window.addEventListener('orientationchange', onViewportChange);
 
 function selectMatch(id) {
-  if (location.hash.slice(1) === id) { panelOpen = true; render(); return; }
+  if (location.hash.slice(1) === id) { panelOpen = true; render(); scrollPanelTop(); return; }
   location.hash = id;   // → hashchange → render
 }
 function showAllMatches() {
   panelOpen = true; selectedMatchId = null;
+  scrollPanelTop();
   if (location.hash) location.hash = ''; else render();
 }
 function closePanel() {
@@ -380,6 +387,7 @@ function closePanel() {
 // ─────────────────────────────────────────────────────────────────────────────
 function render() {
   document.getElementById('detail-col').classList.toggle('collapsed', !panelOpen);
+  document.body.classList.toggle('panel-open', panelOpen);
   document.getElementById('open-panel-btn').style.display = panelOpen ? 'none' : '';
   renderSchedule();
   if (panelOpen) renderDetail();
