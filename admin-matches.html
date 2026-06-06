@@ -112,8 +112,76 @@ select:focus, input:focus { border-color: var(--accent); }
 .cov-status.miss { background: rgba(224,85,85,.16); color: #ff9c9c; }
 .cov-missing { flex: 0 0 auto; font-size: 11px; color: var(--text3); text-align: right; min-width: 110px; }
 
-/* placeholder for the data-entry section landing in the next pass */
-.placeholder { border: 1px dashed var(--border); border-radius: 10px; padding: 20px; text-align: center; color: var(--text3); font-size: 12px; font-style: italic; }
+/* ── MATCH DATA ENTRY ── */
+.md-card { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; background: var(--bg3); }
+.md-card.dirty { border-color: var(--accent); }
+.md-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none; }
+.md-head:hover { background: rgba(255,255,255,.02); }
+.md-head .caret { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+.md-matchup { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; }
+.md-matchup .vs { color: var(--text3); margin: 0 5px; font-weight: 400; }
+.md-matchup .pl { color: var(--text3); font-weight: 400; }
+.md-tags { display: flex; gap: 5px; flex-shrink: 0; }
+.md-badge { font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; white-space: nowrap; background: var(--bg2); color: var(--text3); border: 1px solid var(--border); }
+.md-score { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
+.md-score .win { color: var(--blue); }
+.md-score .pend { font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); }
+.md-dirty-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.md-body { padding: 12px; border-top: 1px solid var(--border); background: var(--bg2); }
+.md-loading { color: var(--text3); font-size: 12px; font-style: italic; padding: 10px 2px; }
+
+/* brought six (aggregated) */
+.brought-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.brought-team { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; }
+.brought-team h4 { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brought-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.brought-slot { position: relative; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 1px; background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; padding: 5px 3px 4px; }
+.brought-slot img { width: 40px; height: 40px; object-fit: contain; }
+.brought-slot .nm { font-size: 9px; color: var(--text2); text-align: center; line-height: 1.1; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brought-slot .st { font-size: 9px; font-weight: 700; color: var(--text3); font-variant-numeric: tabular-nums; }
+.brought-slot .rm { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: var(--red); color: #fff; border: none; font-size: 11px; line-height: 16px; cursor: pointer; padding: 0; }
+.brought-slot.empty { cursor: pointer; justify-content: center; border-style: dashed; opacity: .8; }
+.brought-slot.empty:hover { border-color: var(--accent); opacity: 1; }
+.brought-slot.empty img { opacity: .35; }
+.brought-slot.empty .nm { color: var(--text3); }
+
+/* game cards */
+.game-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+.game-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.game-card-head .gn { font-size: 12px; font-weight: 700; }
+.game-card-head .spacer { flex: 1 1 auto; }
+.game-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.game-team { min-width: 0; }
+.win-row { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; font-size: 12px; font-weight: 600; }
+.win-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; min-width: 0; }
+.win-row .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.win-row input { width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; }
+.win-row .won-tag { font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--blue); }
+.pick-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+.pick-row select { flex: 1 1 auto; min-width: 0; padding: 5px 6px; font-size: 12px; }
+.pick-row .kf { width: 38px; flex-shrink: 0; }
+.pick-row input { padding: 5px 4px; font-size: 12px; text-align: center; }
+.pick-head { display: flex; gap: 5px; margin-bottom: 4px; }
+.pick-head .ph-mon { flex: 1 1 auto; }
+.pick-head span { font-size: 9px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); }
+.pick-head .ph-kf { width: 38px; text-align: center; flex-shrink: 0; }
+.replay-row { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+.replay-row label { font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); flex-shrink: 0; }
+.replay-row input { flex: 1 1 auto; min-width: 0; padding: 6px 8px; font-size: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+
+.md-foot { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.md-foot .spacer { flex: 1 1 auto; }
+
+/* roster picker modal */
+.rp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 6px; max-height: 50vh; overflow-y: auto; margin-bottom: 14px; }
+.rp-item { display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 6px 3px; cursor: pointer; }
+.rp-item:hover { border-color: var(--accent); }
+.rp-item img { width: 40px; height: 40px; object-fit: contain; }
+.rp-item .nm { font-size: 10px; color: var(--text2); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 78px; }
+
+@media (max-width: 640px) {
+  .brought-wrap, .game-teams { grid-template-columns: 1fr; }
+}
 
 /* ── MODAL ── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -240,11 +308,16 @@ select:focus, input:focus { border-color: var(--accent); }
     </div>
   </div>
 
-  <!-- ── MATCH DATA ENTRY (increment 3 — lands here next pass) ── -->
+  <!-- ── MATCH DATA ENTRY ── -->
   <div class="section">
-    <div class="section-title">Match &amp; Game Results</div>
-    <div class="section-sub">Select a match to enter the series result, per-game winners and stats, and each team's six brought.</div>
-    <div class="placeholder">Result entry is being built in the next pass. Verify the schedule above first.</div>
+    <div class="section-head" onclick="toggleDataSection()">
+      <span class="caret" id="data-caret">▼</span>
+      <span class="section-title">Match &amp; Game Results</span>
+    </div>
+    <div id="data-body">
+      <div class="section-sub">Expand a match to enter per-game winners, Pokémon and KO/Faint stats, replay links, and each team's brought six. Scores are derived from game wins automatically.</div>
+      <div id="match-data-list"></div>
+    </div>
   </div>
 </div>
 
@@ -275,6 +348,16 @@ let coverageCollapsed = true;       // schedule-coverage panel starts collapsed
 let scheduleCollapsed = false;      // whole schedule section starts expanded
 let matchListCollapsed = true;      // individual-match list starts collapsed
 
+// ── match-data-entry state ──
+let pokemonById  = {};              // pokemon.json id -> entry
+let rosterByTeam = {};              // team_id -> [{pokemon_id, acquired_week, released_week}]
+let expandedMatches = new Set();    // match ids whose data-entry card is expanded
+let matchModels = {};               // match_id -> editable model {loaded, loading, dirty, games[], manualBrought{a,b}}
+
+const POKEMON_JSON_URL = "https://patrickrolens.github.io/vgc-draft-planner/pokemon.json";
+const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
+const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
+
 // ── HELPERS ──
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '—'; }
@@ -304,6 +387,40 @@ function sortedTeams() {
   return [...teams].sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name));
 }
 
+// ── pokemon / sprite helpers (mirrors the planner + team page) ──
+function monName(id) { const p = pokemonById[id]; return p ? p.name : id; }
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/);
+  if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(id)   { return id ? ASSET_BASE + 'icons/'   + localId(id) + '.png' : ''; }
+function spriteUrl(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
+function attachIconFallback(img, id) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/')) { this.src = spriteUrl(id); }
+    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+function attachSpriteFallback(img, id) {
+  img.onerror = function () {
+    if (this.src.includes('/sprites/')) { this.src = iconUrl(id); }
+    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+
+// Pokemon ids on a team's active roster during a given week, sorted by name.
+function activeRoster(teamId, week) {
+  const seen = new Set();
+  return (rosterByTeam[teamId] || [])
+    .filter(r => r.acquired_week <= week && (r.released_week == null || r.released_week > week))
+    .map(r => r.pokemon_id)
+    .filter(id => { if (seen.has(id)) return false; seen.add(id); return true; })
+    .sort((a, b) => monName(a).localeCompare(monName(b)));
+}
+function stageLabel(stage) { return ({ regular: 'Regular', playoffs: 'Playoffs', cup: 'Cup' })[stage] || (stage || 'Regular'); }
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA LOAD
 // ─────────────────────────────────────────────────────────────────────────────
@@ -311,6 +428,20 @@ async function loadSeasons() {
   const { data, error } = await sb.from('seasons').select('*').order('slug', { ascending: false });
   if (error) throw error;
   seasons = data || [];
+}
+
+// pokemon.json powers roster dropdowns + sprites. Non-fatal: ids fall back to themselves.
+async function loadPokemon() {
+  try {
+    const res = await fetch(POKEMON_JSON_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const arr = await res.json();
+    pokemonById = {};
+    (Array.isArray(arr) ? arr : []).forEach(p => { pokemonById[p.id] = p; });
+  } catch (err) {
+    console.error('Could not load pokemon.json:', err);
+    showToast('Pokémon data didn\u2019t load — names/sprites may be missing.', 'err');
+  }
 }
 
 function populateSeasonDropdown() {
@@ -328,17 +459,18 @@ function populateSeasonDropdown() {
 
 async function loadSeasonData(seasonId) {
   teams = []; teamById = {}; coachByTeam = {}; nameToTeam = {}; ambiguousNames = new Set();
-  matches = []; gamesCountByMatch = {};
+  matches = []; gamesCountByMatch = {}; rosterByTeam = {};
   if (!seasonId) { renderTool(); return; }
 
-  const [teamsRes, ownersRes, matchRes] = await Promise.all([
+  const [teamsRes, ownersRes, matchRes, rosterRes] = await Promise.all([
     sb.from('teams').select('id, name, slug, initial_seed').eq('season_id', seasonId),
     sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('matches')
-      .select('id, week, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id')
+      .select('id, week, stage, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id')
       .eq('season_id', seasonId).eq('stage', 'regular'),
+    sb.from('team_pokemon').select('team_id, pokemon_id, acquired_week, released_week'),
   ]);
-  for (const r of [teamsRes, ownersRes, matchRes]) if (r.error) throw r.error;
+  for (const r of [teamsRes, ownersRes, matchRes, rosterRes]) if (r.error) throw r.error;
 
   teams = teamsRes.data || [];
   teams.forEach(t => { teamById[t.id] = t; });
@@ -352,6 +484,10 @@ async function loadSeasonData(seasonId) {
     const key = nm.trim().toLowerCase();
     if (nameToTeam[key] && nameToTeam[key] !== o.team_id) ambiguousNames.add(key);
     nameToTeam[key] = o.team_id;
+  });
+
+  (rosterRes.data || []).filter(r => teamIds.has(r.team_id)).forEach(r => {
+    (rosterByTeam[r.team_id] = rosterByTeam[r.team_id] || []).push(r);
   });
 
   matches = matchRes.data || [];
@@ -379,6 +515,7 @@ function renderTool() {
   populateTeamSelects();
   renderCoverage();
   renderMatchList();
+  renderMatchData();
 }
 
 // Per-team schedule completeness across every week that appears in the schedule.
@@ -506,6 +643,476 @@ function toggleScheduleSection() {
 function setDefaultWeek() {
   const wk = matches.length ? Math.max(...matches.map(m => m.week)) : 1;
   document.getElementById('add-week').value = wk;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MATCH & GAME DATA ENTRY
+// ─────────────────────────────────────────────────────────────────────────────
+let dataSectionCollapsed = false;
+function toggleDataSection() {
+  dataSectionCollapsed = !dataSectionCollapsed;
+  document.getElementById('data-body').hidden = dataSectionCollapsed;
+  document.getElementById('data-caret').textContent = dataSectionCollapsed ? '\u25B6' : '\u25BC';
+}
+
+// ── model helpers ──  side 'a' = team_a, 'b' = team_b
+function emptySlot() { return { pokemon_id: '', kills: 0, deaths: 0 }; }
+function emptyGame(n) {
+  return { game_number: n, winner: null, replay_url: '', game_date: null,
+    picks: { a: [emptySlot(), emptySlot(), emptySlot(), emptySlot()], b: [emptySlot(), emptySlot(), emptySlot(), emptySlot()] } };
+}
+function ensureModel(matchId) {
+  if (!matchModels[matchId]) matchModels[matchId] = { loaded: false, loading: false, dirty: false, games: [], manualBrought: { a: [], b: [] } };
+  return matchModels[matchId];
+}
+function sideTeam(m, side) { return side === 'a' ? m.team_a_id : m.team_b_id; }
+function detectedBrought(model, side) {
+  const seen = new Set(), out = [];
+  model.games.forEach(g => g.picks[side].forEach(s => { if (s.pokemon_id && !seen.has(s.pokemon_id)) { seen.add(s.pokemon_id); out.push(s.pokemon_id); } }));
+  return out;
+}
+function broughtList(model, side) {
+  const detected = detectedBrought(model, side);
+  const detSet = new Set(detected);
+  const manual = model.manualBrought[side].filter(id => !detSet.has(id));
+  return { detected, manual, all: detected.concat(manual).slice(0, 6) };
+}
+function aggStat(model, side, pokemonId) {
+  let k = 0, d = 0;
+  model.games.forEach(g => g.picks[side].forEach(s => { if (s.pokemon_id === pokemonId) { k += (+s.kills || 0); d += (+s.deaths || 0); } }));
+  return { k, d };
+}
+function scoreFromModel(model) {
+  let a = 0, b = 0;
+  model.games.forEach(g => { if (g.winner === 'a') a++; else if (g.winner === 'b') b++; });
+  return { a, b };
+}
+
+async function loadMatchChildren(matchId) {
+  const m = matches.find(x => x.id === matchId); if (!m) return;
+  const model = ensureModel(matchId);
+  model.loading = true; renderMatchData();
+  try {
+    const { data: games, error: gErr } = await sb.from('games')
+      .select('id, game_number, winner_team_id, replay_url, game_date').eq('match_id', matchId).order('game_number');
+    if (gErr) throw gErr;
+    const gameIds = (games || []).map(g => g.id);
+    let stats = [];
+    if (gameIds.length) {
+      const { data, error } = await sb.from('game_pokemon_stats').select('game_id, team_id, pokemon_id, kills, deaths').in('game_id', gameIds);
+      if (error) throw error; stats = data || [];
+    }
+    const { data: mp, error: mpErr } = await sb.from('match_pokemon').select('team_id, pokemon_id').eq('match_id', matchId);
+    if (mpErr) throw mpErr;
+
+    model.games = (games || []).map(g => {
+      const game = emptyGame(g.game_number);
+      game.winner = g.winner_team_id === m.team_a_id ? 'a' : g.winner_team_id === m.team_b_id ? 'b' : null;
+      game.replay_url = g.replay_url || '';
+      game.game_date = g.game_date || null;
+      ['a', 'b'].forEach(side => {
+        const teamId = sideTeam(m, side);
+        stats.filter(s => s.game_id === g.id && s.team_id === teamId).slice(0, 4)
+          .forEach((s, i) => { game.picks[side][i] = { pokemon_id: s.pokemon_id, kills: s.kills || 0, deaths: s.deaths || 0 }; });
+      });
+      return game;
+    });
+    ['a', 'b'].forEach(side => {
+      const teamId = sideTeam(m, side);
+      const det = new Set(detectedBrought(model, side));
+      model.manualBrought[side] = (mp || []).filter(r => r.team_id === teamId && !det.has(r.pokemon_id)).map(r => r.pokemon_id);
+    });
+    model.loaded = true; model.dirty = false;
+  } catch (err) {
+    console.error(err); showToast('Could not load match data: ' + (err.message || err), 'err');
+  } finally {
+    model.loading = false; renderMatchData();
+  }
+}
+
+function toggleMatchCard(matchId) {
+  if (expandedMatches.has(matchId)) {
+    expandedMatches.delete(matchId);
+  } else {
+    expandedMatches.add(matchId);
+    const model = ensureModel(matchId);
+    if (!model.loaded && !model.loading) loadMatchChildren(matchId);   // async; re-renders when done
+  }
+  renderMatchData();
+}
+
+function renderMatchData() {
+  const el = document.getElementById('match-data-list');
+  if (!el) return;
+  if (!matches.length) { el.innerHTML = '<div class="empty-state">No matches yet — add a schedule above.</div>'; return; }
+  const stageOrder = { regular: 0, playoffs: 1, cup: 2 };
+  const ordered = [...matches].sort((a, b) =>
+    (stageOrder[a.stage] ?? 0) - (stageOrder[b.stage] ?? 0) || a.week - b.week
+    || teamLabelText(a.team_a_id).localeCompare(teamLabelText(b.team_a_id)));
+  el.innerHTML = '';
+  ordered.forEach(m => el.appendChild(renderMatchCard(m)));
+}
+
+function renderMatchCard(m) {
+  const model = matchModels[m.id];
+  const expanded = expandedMatches.has(m.id);
+  const card = document.createElement('div');
+  card.className = 'md-card' + (model && model.dirty ? ' dirty' : '');
+  card.setAttribute('data-mid', m.id);
+
+  // score: prefer the live model when loaded, else the stored match row
+  let aScore, bScore, decided, aWin, bWin, hasAny;
+  if (model && model.loaded) {
+    const sc = scoreFromModel(model); aScore = sc.a; bScore = sc.b;
+    const need = Math.floor((m.series_length || 3) / 2) + 1;
+    decided = aScore >= need || bScore >= need;
+    aWin = decided && aScore > bScore; bWin = decided && bScore > aScore;
+    hasAny = model.games.length > 0;
+  } else {
+    aScore = m.team_a_score || 0; bScore = m.team_b_score || 0;
+    decided = !!m.winner_team_id; aWin = m.winner_team_id === m.team_a_id; bWin = m.winner_team_id === m.team_b_id;
+    hasAny = matchHasResults(m);
+  }
+  const scoreHtml = hasAny
+    ? '<span class="' + (aWin ? 'win' : '') + '">' + aScore + '</span>\u2013<span class="' + (bWin ? 'win' : '') + '">' + bScore + '</span>'
+      + (decided ? '' : ' <span class="pend">live</span>')
+    : '<span class="pend">no data</span>';
+
+  const head = document.createElement('div');
+  head.className = 'md-head';
+  head.onclick = () => toggleMatchCard(m.id);
+  head.innerHTML =
+    '<span class="caret">' + (expanded ? '\u25BC' : '\u25B6') + '</span>'
+    + (model && model.dirty ? '<span class="md-dirty-dot" title="Unsaved changes"></span>' : '')
+    + '<span class="md-matchup">' + teamLabelHtml(m.team_a_id) + '<span class="vs">vs</span>' + teamLabelHtml(m.team_b_id) + '</span>'
+    + '<span class="md-tags"><span class="md-badge">' + escapeHtml(stageLabel(m.stage)) + '</span><span class="md-badge">Wk ' + m.week + '</span></span>'
+    + '<span class="md-score">' + scoreHtml + '</span>';
+  card.appendChild(head);
+
+  if (expanded) {
+    const body = document.createElement('div');
+    body.className = 'md-body';
+    if (!model || model.loading) {
+      body.innerHTML = '<div class="md-loading">Loading match data\u2026</div>';
+    } else {
+      buildMatchBody(body, m, model);
+    }
+    card.appendChild(body);
+  }
+  return card;
+}
+
+function buildMatchBody(body, m, model) {
+  const broughtWrap = document.createElement('div');
+  broughtWrap.className = 'brought-wrap';
+  ['a', 'b'].forEach(side => broughtWrap.appendChild(renderBroughtTeam(m, model, side)));
+  body.appendChild(broughtWrap);
+
+  model.games.forEach((g, gi) => body.appendChild(renderGameCard(m, model, g, gi)));
+
+  const addG = document.createElement('button');
+  addG.className = 'btn btn-sm';
+  addG.textContent = '+ Add game';
+  addG.style.marginBottom = '10px';
+  addG.onclick = () => { model.games.push(emptyGame(model.games.length + 1)); markDirty(m.id); };
+  body.appendChild(addG);
+
+  const foot = document.createElement('div');
+  foot.className = 'md-foot';
+  const save = document.createElement('button');
+  save.className = 'btn btn-accent btn-sm';
+  save.textContent = 'Save changes';
+  save.disabled = !model.dirty;
+  save.onclick = () => confirmSaveMatch(m.id);
+  const sp = document.createElement('div'); sp.className = 'spacer';
+  const clear = document.createElement('button');
+  clear.className = 'btn btn-sm btn-danger';
+  clear.textContent = 'Clear match data';
+  clear.onclick = () => confirmClearMatch(m.id);
+  foot.appendChild(save); foot.appendChild(sp); foot.appendChild(clear);
+  body.appendChild(foot);
+}
+
+function renderBroughtTeam(m, model, side) {
+  const teamId = sideTeam(m, side);
+  const div = document.createElement('div');
+  div.className = 'brought-team';
+  div.innerHTML = '<h4>' + teamLabelHtml(teamId) + '</h4>';
+  const slots = document.createElement('div'); slots.className = 'brought-slots';
+  const { detected, all } = broughtList(model, side);
+  const detSet = new Set(detected);
+
+  all.forEach(id => {
+    const slot = document.createElement('div'); slot.className = 'brought-slot';
+    const st = aggStat(model, side, id);
+    const img = document.createElement('img'); img.src = spriteUrl(id); img.alt = monName(id); attachSpriteFallback(img, id);
+    slot.appendChild(img);
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = monName(id); slot.appendChild(nm);
+    const stt = document.createElement('div'); stt.className = 'st'; stt.textContent = st.k + 'K / ' + st.d + 'F'; slot.appendChild(stt);
+    if (!detSet.has(id)) {   // manually added (not from a game) → removable
+      const rm = document.createElement('button'); rm.className = 'rm'; rm.textContent = '\u00D7'; rm.title = 'Remove';
+      rm.onclick = (e) => { e.stopPropagation(); model.manualBrought[side] = model.manualBrought[side].filter(x => x !== id); markDirty(m.id); };
+      slot.appendChild(rm);
+    }
+    slots.appendChild(slot);
+  });
+  for (let i = all.length; i < 6; i++) {
+    const slot = document.createElement('div'); slot.className = 'brought-slot empty'; slot.title = 'Add a brought Pokémon';
+    const img = document.createElement('img'); img.src = POKEBALL_FALLBACK; slot.appendChild(img);
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = 'Add'; slot.appendChild(nm);
+    slot.onclick = () => openBroughtPicker(m, model, side);
+    slots.appendChild(slot);
+  }
+  div.appendChild(slots);
+  return div;
+}
+
+function openBroughtPicker(m, model, side) {
+  const teamId = sideTeam(m, side);
+  const roster = activeRoster(teamId, m.week);
+  if (!roster.length) {
+    openModal('<h3>No roster found</h3><p>No active Pokémon for ' + escapeHtml(teamLabelText(teamId)) + ' in week ' + m.week + '. Roster/draft data may be missing for this team.</p><div class="modal-actions"><button class="btn" onclick="closeModal()">Close</button></div>');
+    return;
+  }
+  const broughtSet = new Set(broughtList(model, side).all);
+  const avail = roster.filter(id => !broughtSet.has(id));
+  if (!avail.length) {
+    openModal('<h3>Nothing to add</h3><p>Every active roster Pokémon is already in the brought six.</p><div class="modal-actions"><button class="btn" onclick="closeModal()">Close</button></div>');
+    return;
+  }
+  const grid = avail.map(id =>
+    '<div class="rp-item" data-id="' + escapeHtml(id) + '"><img src="' + spriteUrl(id) + '" alt=""><div class="nm">' + escapeHtml(monName(id)) + '</div></div>'
+  ).join('');
+  openModal('<h3>Add brought Pokémon</h3><p>' + escapeHtml(teamLabelText(teamId)) + ' — week ' + m.week + ' roster.</p><div class="rp-grid">' + grid + '</div><div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>');
+  document.querySelectorAll('#modal .rp-item').forEach(it => {
+    const id = it.getAttribute('data-id');
+    attachSpriteFallback(it.querySelector('img'), id);
+    it.onclick = () => { model.manualBrought[side].push(id); closeModal(); markDirty(m.id); };
+  });
+}
+
+function renderGameCard(m, model, g, gi) {
+  const card = document.createElement('div'); card.className = 'game-card';
+  const head = document.createElement('div'); head.className = 'game-card-head';
+  head.innerHTML = '<span class="gn">Game ' + g.game_number + '</span><span class="spacer"></span>';
+  const rm = document.createElement('button'); rm.className = 'btn btn-sm btn-danger'; rm.textContent = 'Remove game';
+  rm.onclick = () => { model.games.splice(gi, 1); model.games.forEach((gg, i) => gg.game_number = i + 1); markDirty(m.id); };
+  head.appendChild(rm);
+  card.appendChild(head);
+
+  const teamsWrap = document.createElement('div'); teamsWrap.className = 'game-teams';
+  ['a', 'b'].forEach(side => teamsWrap.appendChild(renderGameTeam(m, model, g, side)));
+  card.appendChild(teamsWrap);
+
+  const rr = document.createElement('div'); rr.className = 'replay-row';
+  rr.innerHTML = '<label>Replay</label>';
+  const inp = document.createElement('input'); inp.type = 'url'; inp.placeholder = 'https://replay.pokemonshowdown.com/...'; inp.value = g.replay_url || '';
+  inp.oninput = () => { g.replay_url = inp.value.trim(); setDirtyLight(m.id); };
+  rr.appendChild(inp);
+  card.appendChild(rr);
+  return card;
+}
+
+function renderGameTeam(m, model, g, side) {
+  const teamId = sideTeam(m, side);
+  const wrap = document.createElement('div'); wrap.className = 'game-team';
+
+  const winRow = document.createElement('div'); winRow.className = 'win-row';
+  const label = document.createElement('label');
+  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = g.winner === side;
+  cb.onchange = () => { g.winner = cb.checked ? side : null; markDirty(m.id); };
+  label.appendChild(cb);
+  const tn = document.createElement('span'); tn.className = 'tn'; tn.innerHTML = teamLabelHtml(teamId);
+  label.appendChild(tn);
+  winRow.appendChild(label);
+  if (g.winner === side) { const wt = document.createElement('span'); wt.className = 'won-tag'; wt.textContent = 'Won'; winRow.appendChild(wt); }
+  wrap.appendChild(winRow);
+
+  const ph = document.createElement('div'); ph.className = 'pick-head';
+  ph.innerHTML = '<span class="ph-mon">Pokémon</span><span class="ph-kf">KO</span><span class="ph-kf">F</span>';
+  wrap.appendChild(ph);
+
+  const roster = activeRoster(teamId, m.week);
+  const pickedThisGame = new Set(g.picks[side].map(s => s.pokemon_id).filter(Boolean));
+
+  g.picks[side].forEach(slot => {
+    const row = document.createElement('div'); row.className = 'pick-row';
+    const sel = document.createElement('select');
+    let opts = '<option value="">—</option>';
+    roster.forEach(id => {
+      const dis = pickedThisGame.has(id) && id !== slot.pokemon_id;
+      opts += '<option value="' + escapeHtml(id) + '"' + (dis ? ' disabled' : '') + (id === slot.pokemon_id ? ' selected' : '') + '>' + escapeHtml(monName(id)) + '</option>';
+    });
+    if (slot.pokemon_id && !roster.includes(slot.pokemon_id)) {
+      opts += '<option value="' + escapeHtml(slot.pokemon_id) + '" selected>' + escapeHtml(monName(slot.pokemon_id)) + ' (off-roster)</option>';
+    }
+    sel.innerHTML = opts;
+    sel.onchange = () => { slot.pokemon_id = sel.value; if (!sel.value) { slot.kills = 0; slot.deaths = 0; } markDirty(m.id); };
+    row.appendChild(sel);
+
+    const ko = document.createElement('input'); ko.type = 'number'; ko.className = 'kf'; ko.min = '0'; ko.value = slot.kills || 0; ko.disabled = !slot.pokemon_id;
+    ko.oninput = () => { slot.kills = Math.max(0, parseInt(ko.value, 10) || 0); setDirtyLight(m.id); };
+    const fa = document.createElement('input'); fa.type = 'number'; fa.className = 'kf'; fa.min = '0'; fa.max = '1'; fa.value = slot.deaths || 0; fa.disabled = !slot.pokemon_id;
+    fa.oninput = () => { slot.deaths = Math.min(1, Math.max(0, parseInt(fa.value, 10) || 0)); setDirtyLight(m.id); };
+    fa.onchange = () => { fa.value = slot.deaths; };   // normalize display after a clamp
+    row.appendChild(ko); row.appendChild(fa);
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+
+function markDirty(matchId) { const model = matchModels[matchId]; if (model) model.dirty = true; renderMatchData(); }
+
+// Flip dirty state without a full re-render (used by text/number inputs so we don't
+// rebuild — and destroy — the controls the admin is actively typing into).
+function setDirtyLight(matchId) {
+  const model = matchModels[matchId]; if (!model) return;
+  model.dirty = true;
+  const card = document.querySelector('.md-card[data-mid="' + matchId + '"]');
+  if (!card) return;
+  card.classList.add('dirty');
+  const saveBtn = card.querySelector('.md-foot .btn-accent'); if (saveBtn) saveBtn.disabled = false;
+  const head = card.querySelector('.md-head');
+  if (head && !head.querySelector('.md-dirty-dot')) {
+    const dot = document.createElement('span'); dot.className = 'md-dirty-dot'; dot.title = 'Unsaved changes';
+    head.insertBefore(dot, head.children[1] || null);
+  }
+}
+
+function validateModel(m, model) {
+  const errs = [];
+  model.games.forEach(g => {
+    ['a', 'b'].forEach(side => {
+      const ids = g.picks[side].map(s => s.pokemon_id).filter(Boolean);
+      const dup = ids.find((id, i) => ids.indexOf(id) !== i);
+      if (dup) errs.push('Game ' + g.game_number + ' (' + teamLabelText(sideTeam(m, side)) + '): ' + monName(dup) + ' is picked twice.');
+    });
+  });
+  ['a', 'b'].forEach(side => {
+    const distinct = new Set(detectedBrought(model, side).concat(model.manualBrought[side]));
+    if (distinct.size > 6) errs.push(teamLabelText(sideTeam(m, side)) + ' has ' + distinct.size + ' distinct Pokémon across the match (max 6).');
+  });
+  return errs;
+}
+
+function confirmSaveMatch(matchId) {
+  const m = matches.find(x => x.id === matchId), model = matchModels[matchId];
+  if (!m || !model) return;
+  const errs = validateModel(m, model);
+  if (errs.length) {
+    openModal('<h3>Can\u2019t save yet</h3><p>Please fix the following:</p><div class="skiplist">' + errs.map(escapeHtml).join('<br>') + '</div><div class="modal-actions"><button class="btn" onclick="closeModal()">OK</button></div>');
+    return;
+  }
+  const sc = scoreFromModel(model);
+  const incomplete = model.games.filter(g => !g.winner).length;
+  openModal('<h3>Save match data?</h3>'
+    + '<p>' + escapeHtml(teamLabelText(m.team_a_id)) + ' vs ' + escapeHtml(teamLabelText(m.team_b_id)) + ' — '
+    + model.games.length + ' game' + (model.games.length === 1 ? '' : 's') + ', score <b>' + sc.a + '\u2013' + sc.b + '</b>.</p>'
+    + (incomplete ? '<p class="warn">' + incomplete + ' game(s) have no winner yet and won\u2019t count toward the score.</p>' : '')
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-accent" id="confirm-save-btn">Save</button></div>');
+  document.getElementById('confirm-save-btn').onclick = () => { closeModal(); saveMatch(matchId); };
+}
+
+async function saveMatch(matchId) {
+  const m = matches.find(x => x.id === matchId), model = matchModels[matchId];
+  if (!m || !model) return;
+  try {
+    const gameRows = model.games.map(g => ({
+      match_id: matchId, game_number: g.game_number,
+      winner_team_id: g.winner === 'a' ? m.team_a_id : g.winner === 'b' ? m.team_b_id : null,
+      replay_url: g.replay_url || null,
+      game_date: g.game_date || new Date().toISOString(),
+    }));
+
+    // Clean replace of this match's children.
+    const { data: oldGames, error: ogErr } = await sb.from('games').select('id').eq('match_id', matchId);
+    if (ogErr) throw ogErr;
+    const oldIds = (oldGames || []).map(g => g.id);
+    if (oldIds.length) {
+      const { error: e1 } = await sb.from('game_pokemon_stats').delete().in('game_id', oldIds); if (e1) throw e1;
+      const { error: e2 } = await sb.from('games').delete().eq('match_id', matchId); if (e2) throw e2;
+    }
+    const { error: e3 } = await sb.from('match_pokemon').delete().eq('match_id', matchId); if (e3) throw e3;
+
+    let newGames = [];
+    if (gameRows.length) {
+      const { data, error } = await sb.from('games').insert(gameRows).select('id, game_number');
+      if (error) throw error; newGames = data || [];
+    }
+    const gameIdByNum = {}; newGames.forEach(g => { gameIdByNum[g.game_number] = g.id; });
+
+    const statRows = [];
+    model.games.forEach(g => {
+      const gid = gameIdByNum[g.game_number]; if (!gid) return;
+      ['a', 'b'].forEach(side => {
+        const teamId = sideTeam(m, side);
+        g.picks[side].forEach(s => {
+          if (!s.pokemon_id) return;
+          statRows.push({ game_id: gid, team_id: teamId, pokemon_id: s.pokemon_id,
+            kills: Math.max(0, s.kills || 0), deaths: Math.min(1, Math.max(0, s.deaths || 0)) });
+        });
+      });
+    });
+    if (statRows.length) { const { error } = await sb.from('game_pokemon_stats').insert(statRows); if (error) throw error; }
+
+    const mpRows = [];
+    ['a', 'b'].forEach(side => {
+      const teamId = sideTeam(m, side);
+      broughtList(model, side).all.forEach(id => mpRows.push({ match_id: matchId, team_id: teamId, pokemon_id: id }));
+    });
+    if (mpRows.length) { const { error } = await sb.from('match_pokemon').insert(mpRows); if (error) throw error; }
+
+    const sc = scoreFromModel(model);
+    const { error: msErr } = await sb.from('matches').update({ team_a_score: sc.a, team_b_score: sc.b }).eq('id', matchId);
+    if (msErr) throw msErr;
+
+    await refreshMatchRow(matchId);
+    await loadMatchChildren(matchId);   // reload from DB → clears dirty
+    showToast('Match data saved.', 'ok');
+  } catch (err) {
+    console.error(err); showToast('Save failed: ' + (err.message || err), 'err');
+  }
+}
+
+async function refreshMatchRow(matchId) {
+  const { data, error } = await sb.from('matches').select('id, team_a_score, team_b_score, winner_team_id').eq('id', matchId).maybeSingle();
+  if (!error && data) {
+    const m = matches.find(x => x.id === matchId);
+    if (m) { m.team_a_score = data.team_a_score; m.team_b_score = data.team_b_score; m.winner_team_id = data.winner_team_id; }
+  }
+  const { data: gc } = await sb.from('games').select('id').eq('match_id', matchId);
+  gamesCountByMatch[matchId] = (gc || []).length;
+  renderMatchList();
+}
+
+function confirmClearMatch(matchId) {
+  const m = matches.find(x => x.id === matchId); if (!m) return;
+  openModal('<h3>Clear match data?</h3>'
+    + '<p>This permanently deletes all games, stats, and brought-Pokémon records for <b>'
+    + escapeHtml(teamLabelText(m.team_a_id)) + ' vs ' + escapeHtml(teamLabelText(m.team_b_id))
+    + '</b> and resets the score to 0\u20130. Are you sure?</p>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-accent btn-danger" id="confirm-clear-btn">Clear</button></div>');
+  document.getElementById('confirm-clear-btn').onclick = () => { closeModal(); clearMatch(matchId); };
+}
+
+async function clearMatch(matchId) {
+  try {
+    const { data: oldGames } = await sb.from('games').select('id').eq('match_id', matchId);
+    const oldIds = (oldGames || []).map(g => g.id);
+    if (oldIds.length) {
+      const { error: e1 } = await sb.from('game_pokemon_stats').delete().in('game_id', oldIds); if (e1) throw e1;
+      const { error: e2 } = await sb.from('games').delete().eq('match_id', matchId); if (e2) throw e2;
+    }
+    const { error: e3 } = await sb.from('match_pokemon').delete().eq('match_id', matchId); if (e3) throw e3;
+    const { error: e4 } = await sb.from('matches').update({ team_a_score: 0, team_b_score: 0 }).eq('id', matchId); if (e4) throw e4;
+
+    matchModels[matchId] = { loaded: true, loading: false, dirty: false, games: [], manualBrought: { a: [], b: [] } };
+    await refreshMatchRow(matchId);
+    renderMatchData();
+    showToast('Match data cleared.', 'ok');
+  } catch (err) {
+    console.error(err); showToast('Clear failed: ' + (err.message || err), 'err');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -818,6 +1425,7 @@ async function init() {
   try {
     await loadSeasons();
     populateSeasonDropdown();
+    await loadPokemon();
     await loadSeasonData(selectedSeasonId);
     setDefaultWeek();
     await initAuth();          // reveals the tool (or the gate) once admin status resolves
