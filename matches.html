@@ -31,7 +31,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .layout { display: flex; align-items: flex-start; }
 .schedule-col { flex: 1 1 auto; min-width: 0; padding: 18px 16px 60px; }
 .detail-col { flex: 0 0 44%; max-width: 44%; align-self: stretch; border-left: 1px solid var(--border);
-  position: sticky; top: var(--nav-h); height: calc(100vh - var(--nav-h)); overflow-y: auto; background: var(--bg2); }
+  position: sticky; top: var(--nav-h); height: calc(100vh - var(--nav-h)); overflow-y: auto; overscroll-behavior: contain; background: var(--bg2); }
 .detail-col.collapsed { display: none; }
 
 .page-title { font-size: 19px; font-weight: 700; }
@@ -41,11 +41,11 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 
 .btn { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 12px; cursor: pointer; font-family: inherit; }
 .btn:hover { border-color: var(--accent); }
-.btn-icon { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; font-family: inherit; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+.btn-icon { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; font-family: inherit; padding: 6px 10px; border-radius: 6px; font-weight: 600; flex-shrink: 0; }
 .btn-icon:hover { background: var(--bg3); color: var(--text); }
 
 /* ── SCHEDULE GRID ── */
-.week-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 12px; align-items: start; }
+.week-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); gap: 12px; align-items: start; }
 .week-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 11px 11px; }
 .week-block.current { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .week-block h3 { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text2); margin-bottom: 8px; }
@@ -57,7 +57,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .match-line.selected { background: var(--bg3); outline: 1px solid var(--accent); }
 .match-line .sc { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text3); flex-shrink: 0; }
 .match-line .sc.win { color: var(--blue); }
-.match-line .mu { flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 1.35; }
+.match-line .mu { flex: 1 1 auto; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .match-line .vs { color: var(--text3); margin: 0 3px; }
 .match-line .pl { color: var(--text3); }
 
@@ -65,7 +65,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 
 /* ── DETAIL PANEL ── */
 .detail-head { position: sticky; top: 0; z-index: 2; background: var(--bg2); border-bottom: 1px solid var(--border); padding: 9px 12px; display: flex; align-items: center; gap: 8px; }
-.detail-head .dh-title { flex: 1 1 auto; font-size: 13px; font-weight: 700; text-align: center; }
+.detail-head .dh-title { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 700; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-body { padding: 16px 16px 40px; }
 .dm-loading, .dm-empty { color: var(--text3); font-size: 13px; font-style: italic; padding: 16px 2px; }
 
@@ -131,6 +131,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
   .nav-tabs { overflow-x: auto; scrollbar-width: none; }
   .nav-tabs::-webkit-scrollbar { display: none; }
   .nav-tab { padding: 0 11px; }
+  .week-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
