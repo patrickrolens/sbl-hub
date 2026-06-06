@@ -104,6 +104,8 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 
 /* ── CHRONOLOGICAL LIST (no selection) ── */
 .chrono { display: flex; flex-direction: column; gap: 4px; }
+.chrono-week-head { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); padding: 12px 2px 5px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+.chrono-week-head:first-child { padding-top: 2px; }
 .chrono-row { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: var(--bg3); }
 .chrono-row:hover { border-color: var(--accent); }
 .chrono-row .cbadge { font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); white-space: nowrap; flex-shrink: 0; }
@@ -186,7 +188,7 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 
 // ── STATE ──
 let season = null;
-let teams = [], teamById = {}, coachByTeam = {};
+let teams = [], teamById = {}, ownersByTeam = {};
 let matches = [], matchById = {};
 let pokemonById = {};
 let panelOpen = false;
@@ -219,15 +221,20 @@ function attachIconFallback(img, id) {
   };
 }
 function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
-function teamShortText(id) { const t = teamById[id]; if (!t) return 'TBD'; const c = coachByTeam[id]; return t.name + (c ? ' (' + c + ')' : ''); }
-function teamShortHtml(id) {
-  const t = teamById[id]; if (!t) return 'TBD';
-  const c = coachByTeam[id];
-  return escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '');
+// Coach (owner) active for a team during a given week — falls back to the current owner, then the team name.
+function coachAtWeek(teamId, week) {
+  const stints = ownersByTeam[teamId] || [];
+  let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
+  if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
+  return s ? s.name : null;
 }
-function teamLinkHtml(id) {
+function coachLabelText(teamId, week) { return coachAtWeek(teamId, week) || teamName(teamId); }
+function matchupCoachHtml(m) {
+  return escapeHtml(coachLabelText(m.team_a_id, m.week)) + '<span class="vs">vs</span>' + escapeHtml(coachLabelText(m.team_b_id, m.week));
+}
+function teamLinkHtml(id, week) {
   const t = teamById[id]; if (!t) return '<span class="dm-team">TBD</span>';
-  const c = coachByTeam[id];
+  const c = coachAtWeek(id, week);
   return '<a class="dm-team" href="team.html#' + encodeURIComponent(t.slug) + '">'
     + escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '') + '</a>';
 }
@@ -256,7 +263,7 @@ async function init() {
 
     const [teamsRes, ownersRes, matchRes] = await Promise.all([
       sb.from('teams').select('id, name, slug, initial_seed').eq('season_id', season.id),
-      sb.from('team_owners').select('team_id, ended_week, players(display_name)'),
+      sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
       sb.from('matches').select('id, stage, week, postseason_round, series_length, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id').eq('season_id', season.id),
     ]);
     for (const r of [teamsRes, ownersRes, matchRes]) if (r.error) throw r.error;
@@ -264,9 +271,10 @@ async function init() {
     teams = teamsRes.data || [];
     teams.forEach(t => { teamById[t.id] = t; });
     const teamIds = new Set(teams.map(t => t.id));
-    (ownersRes.data || []).filter(o => teamIds.has(o.team_id) && o.ended_week == null).forEach(o => {
-      if (o.players) coachByTeam[o.team_id] = o.players.display_name;
+    (ownersRes.data || []).filter(o => teamIds.has(o.team_id) && o.players).forEach(o => {
+      (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
     });
+    Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
     matches = matchRes.data || [];
     matches.forEach(m => { matchById[m.id] = m; });
 
@@ -322,6 +330,22 @@ function syncFromHash() {
   else { selectedMatchId = null; }
 }
 window.addEventListener('hashchange', () => { syncFromHash(); render(); });
+
+// Re-fit when the viewport changes (e.g. rotating a phone). CSS handles the
+// responsive layout; this refreshes the rendered content and keeps panel scroll.
+let resizeTimer = null;
+function onViewportChange() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (document.getElementById('layout').hidden) return;
+    const col = document.getElementById('detail-col');
+    const st = col ? col.scrollTop : 0;
+    render();
+    if (col) col.scrollTop = st;
+  }, 150);
+}
+window.addEventListener('resize', onViewportChange);
+window.addEventListener('orientationchange', onViewportChange);
 
 function selectMatch(id) {
   if (location.hash.slice(1) === id) { panelOpen = true; render(); return; }
@@ -381,13 +405,13 @@ function renderSchedule() {
 
 function weekBlockHtml(label, week, mlist, cw) {
   const lines = [...mlist]
-    .sort((a, b) => teamShortText(a.team_a_id).localeCompare(teamShortText(b.team_a_id)))
+    .sort((a, b) => coachLabelText(a.team_a_id, a.week).localeCompare(coachLabelText(b.team_a_id, b.week)))
     .map(m => {
       const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
       const sel = m.id === selectedMatchId ? ' selected' : '';
       return '<div class="match-line' + sel + '" data-id="' + m.id + '">'
         + '<span class="sc ' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
-        + '<span class="mu">' + teamShortHtml(m.team_a_id) + '<span class="vs">vs</span>' + teamShortHtml(m.team_b_id) + '</span>'
+        + '<span class="mu">' + matchupCoachHtml(m) + '</span>'
         + '<span class="sc ' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>';
     }).join('');
   return '<div class="week-block' + (week === cw ? ' current' : '') + '"><h3>' + escapeHtml(label) + '</h3>' + lines + '</div>';
@@ -473,7 +497,7 @@ function renderMatchDetail(body, m, d) {
 
   h.push('<div class="dm-sides dm-top">');
   [m.team_a_id, m.team_b_id].forEach(teamId => {
-    h.push('<div class="dm-side">' + teamLinkHtml(teamId) + '<div class="brought-row">' + broughtIconsHtml(broughtIds(m.id, teamId)) + '</div></div>');
+    h.push('<div class="dm-side">' + teamLinkHtml(teamId, m.week) + '<div class="brought-row">' + broughtIconsHtml(broughtIds(m.id, teamId)) + '</div></div>');
   });
   h.push('</div>');
 
@@ -493,14 +517,20 @@ function renderMatchDetail(body, m, d) {
 
 function renderChrono(body) {
   const ordered = [...matches].sort((a, b) =>
-    a.week - b.week || dateKey(a) - dateKey(b) || teamShortText(a.team_a_id).localeCompare(teamShortText(b.team_a_id)));
+    a.week - b.week || stageRank(a.stage) - stageRank(b.stage) || dateKey(a) - dateKey(b)
+    || coachLabelText(a.team_a_id, a.week).localeCompare(coachLabelText(b.team_a_id, b.week)));
   let h = '<div class="chrono">';
+  let lastKey = null;
   ordered.forEach(m => {
+    const key = m.stage + '|' + m.week;
+    if (key !== lastKey) {
+      h += '<div class="chrono-week-head">Week ' + m.week + ' — ' + escapeHtml(stageLabel(m.stage)) + '</div>';
+      lastKey = key;
+    }
     const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
     h += '<div class="chrono-row" data-id="' + m.id + '">'
-      + '<span class="cbadge">' + escapeHtml(stageLabel(m.stage).replace(' Season', '')) + ' · Wk ' + m.week + '</span>'
       + '<span class="csc ' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
-      + '<span class="cmu">' + teamShortHtml(m.team_a_id) + '<span class="vs">vs</span>' + teamShortHtml(m.team_b_id) + '</span>'
+      + '<span class="cmu">' + matchupCoachHtml(m) + '</span>'
       + '<span class="csc ' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span>'
       + (matchHasResults(m) ? '' : '<span class="cup">upcoming</span>')
       + '</div>';
