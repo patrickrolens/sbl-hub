@@ -80,6 +80,7 @@ drafts                                    -- one per season
   current_pick_number integer nullable    -- whose turn it is during live drafting
   started_at          timestamptz nullable
   completed_at        timestamptz nullable
+  draft_date          date nullable       -- Added for Standings display when draft is pending or in progress
 
 players
   id                  uuid pk
@@ -187,6 +188,13 @@ potw                                      -- Pokemon of the Week
   team_id             uuid fk teams
   player_id           uuid fk players
   notes               text nullable
+
+match_pokemon                            -- Added to handle which Pokemon were brought to a given match for Standings and Match displays
+  id          uuid pk
+  match_id    uuid fk matches on delete cascade
+  team_id     uuid fk teams
+  pokemon_id  text not null          -- references pokemon.json id
+  unique (match_id, team_id, pokemon_id)
 
 profiles                                  -- linked to Supabase auth users; needed for RLS policies. Don't try adding those until this table is created or else bad things will happen!
   id                  uuid not null references auth.users(id) on delete cascade pk
@@ -349,20 +357,18 @@ URLs below show the eventual clean structure (`/teams/shrug`). In vanilla v1, th
 
 | Eventual Path | v1 Implementation | Purpose | Source data |
 |------|------|---------|-------------|
-| `/` | `index.html` | Landing / current standings snippet, links to everything | standings view |
-| `/standings` | `standings.html` | Full standings table for the current season | standings view |
-| `/teams` | `teams.html` | Team grid: all teams with logos and records | teams + standings |
-| `/teams/[slug]` | `team.html#slug` | Single team page with selector dropdown | team_pokemon + games + matches |
+| `/standings` | `standings.html` | Full standings table for the current season; also serves as main landing page | standings view |
+| `/team/[slug]` | `team.html#slug` | Single team page with selector dropdown | team_pokemon + games + matches |
 | `/schedule` | `schedule.html` | Week-by-week schedule with results | matches (stage=regular) |
 | `/matches/[id]` | `match.html#id` | Single match detail: each game, replays, per-Pokemon stats | match + games + stats |
-| `/leaders` | `leaders.html` | Kill leaders + KD leaders, with toggle | aggregated stats |
+| `/statistics` | `statistics.html` | KOs, Faints, and all other stats brought together | aggregated stats |
 | `/transactions` | `transactions.html` | Chronological feed of free agency moves and trades | free_agency_moves ∪ trades |
 | `/playoffs` | `playoffs.html` | Single-elimination bracket view for the season | matches (stage=playoffs) |
 | `/cup` | `cup.html` | Same renderer, different data | matches (stage=cup) |
 | `/potw` | `potw.html` | Pokemon of the Week gallery | potw |
 | `/draft` | `draft.html` | Live draft view if active, final draft results if complete | drafts + team_pokemon |
 | `/rules` | `rules.html` | Static rules and resources page | markdown in repo |
-| `planner.sbl.gg` | (separate deployment) | The existing draft planner, untouched, on its own subdomain | static |
+| `planner.springfieldbattleleague.com` | (separate deployment) | The existing draft planner, untouched, on its own subdomain | static |
 | `/admin` | `admin.html` | Admin landing page (after login) | — |
 | `/admin/draft` | `admin-draft.html` | Draft operator tool (click-to-pick during live draft) | — |
 | `/admin/tiers` | `admin-tiers.html` | Per-season tier list editor (set legal Pokemon and point costs) | — |
@@ -457,56 +463,54 @@ Idempotent on `replay_url`. The parser developer adapts their existing script to
 - Set up RLS policies on every table.
 - Create the static frontend repo. Copy the planner's CSS variables and base styles.
 - Stand up a "Hello World" page that reads from Supabase to validate the connection.
-- Decide where `pokemon.json` lives canonically. Update planner to fetch it from the new location if needed.
+- Decide where `pokemon.json` lives canonically. Update planner to fetch it from the new location if needed - planner lives in Planner repository
 
 ### Phase 2: Draft
 
 The draft itself is the first league event the hub needs to support. Build the operator tool and a basic public view so the draft can run on the new system.
 
-- Tier list admin page (`/admin/tiers`): bulk-set legal Pokemon and point costs for the season.
-- Draft operator page (`/admin/draft`): teams panel, draft pool panel, click-to-pick.
+- Tier list admin page (`/admin/tiers`): bulk-ingest tier list for selected season
+- Draft operator page (`/admin/draft`): teams panel, draft pool panel, click-to-pick - merged into /draft
 - Public draft page (`/draft`): read-only view of current draft state.
-- Magic-link auth flow (needed for admin pages — bring it forward from later in the plan).
-- Realtime subscription on `team_pokemon` so the public draft view updates live (optional polish; defer if time-pressed).
+- Magic-link auth flow (needed for admin pages).
+- Realtime subscription on `team_pokemon` and 'drafts' so the public draft view updates live (optional polish; defer if time-pressed).
 
 ### Phase 3: Read Values
 
-Goal: visitors can see teams, standings, and the kill leaderboard. The most-trafficked pages.
-
-- Single team page — highest-information page on the site; getting this right de-risks the rest. With the draft complete, real roster data exists.
-- Teams index page.
-- Standings page (empty until matches happen, but the page exists).
-- Kill Leaders page (also empty initially).
-- Apply planner styling consistently (type badges, color tokens, sprite handling).
+- Single team page - highest-information page on the site; getting this right de-risks the rest. With the draft complete, real roster data exists.
+- Teams index page - possibly redundant thanks to draft and team pages
+- Standings page - Became main landing page with standings, stat leaderboards, and recent/upcoming matches displayed
+- Kill Leaders page - Rebranded to Statistics page with plans to add more visualizations over time
+- Apply planner styling consistently (type badges, color tokens, sprite handling)
 
 ### Phase 4: Schedule and Matches
 
-- Schedule + Results page.
+- Schedule + Results page. - Merged Schedule and Match Details
 - Single match detail page (drill-down from schedule).
-- Admin forms: enter match result, enter per-game stats. These are the highest-frequency admin actions and need to be smooth — players will be entering Season 10 results into this every week.
+- Admin forms: enter match result, enter per-game stats. While it will ideally be automated in the future, the manual entry should be as frictionless as possible.
 - Schedule entry (one-time bulk insert of all regular season matches before the season starts).
 
-### Phase 5: Playoffs/Cup Bracket, Transactions
+### Phase 5: Transactions and Domain
+
+- Admin forms: record trade, record free agency move.
+- Transactions page.
+- Mobile responsive check.
+- Domain configuration (if a domain has been chosen).
+
+### Phase 6: Final Pieces and Polish
 
 - Playoffs bracket renderer (won't have data yet, but the page exists for testing).
 - Cup bracket (same renderer).
-- Transactions page.
-- Admin forms: record trade, record free agency move.
-- POTW page.
-- Rules and Resources (static markdown rendered).
-- Mobile responsive check.
-
-### Phase 6: Migration and Launch
-
 - Final visual pass across all pages.
-- Domain configuration (if a domain has been chosen).
-- Migrate any test data out, prepare clean Season 10 state.
-- Soft launch to league members for feedback before draft day.
+- Rules and Resources (static markdown rendered).
 - Document admin workflows.
 
 ---
 
 ## 7. Open Questions and Deferred Work
+- POTW page.
+- Migrate any test data out, prepare clean Season 10 state.
+- Soft launch to league members for feedback before draft day.
 
 Things explicitly punted from v1, recorded so they don't get lost.
 
@@ -535,13 +539,13 @@ Things explicitly punted from v1, recorded so they don't get lost.
 
 ## 8. Credits
 
-## Patrick Rolens (Shrug)
+#### Patrick Rolens (Shrug)
 - Discord @callmeshrug
 - Main developer; SBL Staff
 
-## Jdawgin13
+#### Jdawgin13
 - SBL Commissioner
 
-## Ulico
+#### Ulico
 - Replay Analyzer developer
 - Discord bot developer
