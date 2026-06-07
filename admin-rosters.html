@@ -320,6 +320,7 @@ select:disabled { opacity: .5; }
         </div>
         <button class="btn btn-accent" id="add-btn" onclick="addRosterRow()" disabled>+ Add</button>
       </div>
+      <div id="add-warn"></div>
     </div>
 
     <div id="editor-warn"></div>
@@ -847,6 +848,14 @@ function buildWorkFromRows() {
 
 function workByKey(key) { return editorWork.find(r => r.key === key); }
 
+// Another team (not excludeTeamId) whose committed active roster holds this mon, or null.
+function activeOwnerOf(pokemonId, excludeTeamId) {
+  for (const tid of Object.keys(rosterByTeam)) {
+    if (tid !== excludeTeamId && (rosterByTeam[tid] || []).includes(pokemonId)) return tid;
+  }
+  return null;
+}
+
 function viaOptionsHtml(selected) {
   return ['draft', 'free_agency', 'trade']
     .map(v => '<option value="' + v + '"' + (selected === v ? ' selected' : '') + '>' + v + '</option>').join('');
@@ -1010,10 +1019,21 @@ function refreshEditorFooter() {
   const changed = hasChanges();
   document.getElementById('confirm-changes-btn').disabled = !changed;
   document.getElementById('discard-btn').disabled = !changed;
+
+  const activeWork = editorWork.filter(r => !r.isDeleted && r.released_week == null);
   const cap = activeCap();
-  const activeCount = editorWork.filter(r => !r.isDeleted && r.released_week == null).length;
-  document.getElementById('editor-warn').innerHTML = (activeCount > cap)
-    ? '<div class="budget-warn">\u26A0 Active roster has <b>' + activeCount + '</b> Pokémon — over the season maximum of <b>' + cap + '</b>.</div>'
+  const limit = pointLimit();
+  const activeCost = activeWork.reduce((s, r) => s + costOf(r.pokemon_id), 0);
+
+  const lines = [];
+  if (activeWork.length > cap) {
+    lines.push('Active roster has <b>' + activeWork.length + '</b> Pokémon — over the season maximum of <b>' + cap + '</b>.');
+  }
+  if (limit > 0 && activeCost > limit) {
+    lines.push('Active roster costs <b>' + activeCost + '</b> points — over the <b>' + limit + '</b>-point budget by <b>' + (activeCost - limit) + '</b>.');
+  }
+  document.getElementById('editor-warn').innerHTML = lines.length
+    ? '<div class="budget-warn">\u26A0 ' + lines.join('<br>\u26A0 ') + '</div>'
     : '';
 }
 
@@ -1046,18 +1066,28 @@ function openConfirmChanges() {
   if (!inserts.length && !deletes.length && !updates.length) { showToast('No changes to confirm.', 'err'); return; }
 
   const cap = activeCap();
-  const activeCount = editorWork.filter(r => !r.isDeleted && r.released_week == null).length;
+  const activeWork = editorWork.filter(r => !r.isDeleted && r.released_week == null);
+  const activeCount = activeWork.length;
+  const limit = pointLimit();
+  const activeCost = activeWork.reduce((s, r) => s + costOf(r.pokemon_id), 0);
 
   const parts = [];
   if (inserts.length) parts.push(inserts.length + ' to add');
   if (updates.length) parts.push(updates.length + ' to update');
   if (deletes.length) parts.push(deletes.length + ' to remove');
 
+  // Staged adds that are currently on another team's active roster.
+  const conflicts = inserts
+    .map(r => ({ mon: r.pokemon_id, owner: activeOwnerOf(r.pokemon_id, editorTeamId) }))
+    .filter(c => c.owner);
+
   openModal(
     '<h3>Confirm roster changes</h3>'
     + '<div class="swap">' + escapeHtml(teamName(editorTeamId)) + '<div style="margin-top:6px;color:var(--text3)">' + parts.join(' \u00B7 ') + '</div></div>'
     + (deletes.length ? '<p class="warn">' + deletes.length + ' row' + (deletes.length === 1 ? '' : 's') + ' will be permanently deleted. Any already-recorded game stats are stored separately and are not removed.</p>' : '')
     + (activeCount > cap ? '<p class="warn">\u26A0 Active roster will have ' + activeCount + ' Pokémon — over the season maximum of ' + cap + '.</p>' : '')
+    + (limit > 0 && activeCost > limit ? '<p class="warn">\u26A0 Active roster will cost ' + activeCost + ' points — over the ' + limit + '-point budget by ' + (activeCost - limit) + '.</p>' : '')
+    + (conflicts.length ? '<p class="warn">\u26A0 ' + conflicts.map(c => escapeHtml(monName(c.mon)) + ' is on ' + escapeHtml(teamName(c.owner)) + '\u2019s active roster').join('<br>\u26A0 ') + '.<br><span style="color:var(--text2)">If a trade is intended, the recorder above keeps both sides and the log consistent.</span></p>' : '')
     + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
     + '<button class="btn btn-accent" id="confirm-changes-go" onclick="applyEditorChanges()">Confirm</button></div>'
   );
@@ -1148,6 +1178,15 @@ function updateAddBtn() {
   const w = wkEl ? parseInt(wkEl.value, 10) : NaN;
   const btn = document.getElementById('add-btn');
   if (btn) btn.disabled = !(editorTeamId && addSelected && Number.isInteger(w) && w >= 1);
+
+  const warnEl = document.getElementById('add-warn');
+  if (!warnEl) return;
+  const owner = addSelected ? activeOwnerOf(addSelected, editorTeamId) : null;
+  warnEl.innerHTML = owner
+    ? '<div class="budget-warn">\u26A0 <b>' + escapeHtml(monName(addSelected)) + '</b> is currently on <b>' + escapeHtml(teamName(owner)) + '</b>\u2019s active roster. '
+      + 'If this is a trade, the recorder above will move it and keep both rosters and the transaction log consistent. '
+      + '<span style="color:var(--text2)">You can still add it here for a manual correction.</span></div>'
+    : '';
 }
 
 function addRosterRow() {
