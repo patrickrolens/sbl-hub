@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SBL Hub — Transactions</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+  --nav-h: 49px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+a { color: inherit; }
+
+/* ── NAV ── */
+nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1rem; position: sticky; top: 0; z-index: 100; height: var(--nav-h); }
+.nav-logo { font-size: 15px; font-weight: 700; color: var(--accent); padding-right: 16px; margin-right: 8px; border-right: 1px solid var(--border); white-space: nowrap; }
+.nav-tabs { display: flex; align-items: stretch; height: 100%; }
+.nav-tab { display: flex; align-items: center; padding: 0 16px; font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; border-bottom: 2px solid transparent; }
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── PAGE ── */
+.wrap { max-width: 720px; margin: 0 auto; padding: 18px 16px 60px; }
+.page-title { font-size: 19px; font-weight: 700; }
+.page-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.summary { font-size: 12px; color: var(--text2); margin: 14px 0 4px; }
+.summary b { color: var(--text); }
+.summary .chip { color: var(--text3); }
+
+/* ── WEEK DIVIDER ── */
+.txn-week-head { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); padding: 18px 2px 9px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+
+/* ── TRANSACTION CARD ── */
+.txn-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; margin-bottom: 8px; }
+.txn-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.badge { font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
+.badge.trade { background: rgba(124,111,247,.16); color: var(--accent); }
+.badge.fa { background: rgba(76,175,125,.16); color: var(--green); }
+.txn-when { font-size: 11px; color: var(--text3); margin-left: auto; white-space: nowrap; }
+
+.txn-line { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; flex-wrap: wrap; }
+.txn-line .team { font-weight: 700; text-decoration: none; }
+.txn-line .team:hover { color: var(--accent); }
+.txn-line .team .pl { color: var(--text3); font-weight: 400; }
+.txn-line .verb { color: var(--text3); }
+.mon { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.mon img { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
+.mon .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mon.add { color: var(--green); font-weight: 600; }
+.mon.drop { color: var(--text2); }
+.mon.drop img { opacity: .55; }
+.txn-notes { font-size: 11px; color: var(--text3); font-style: italic; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); }
+
+.empty-state { color: var(--text3); font-size: 13px; font-style: italic; text-align: center; padding: 44px 10px; }
+
+.banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
+.banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
+
+#toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 300; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.toast { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 13px; color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,.4); max-width: 90vw; }
+.toast.err { border-color: rgba(224,85,85,.55); color: #ff9c9c; }
+
+@media (max-width: 768px) {
+  nav { padding: 0 8px; }
+  .nav-logo { padding-right: 10px; margin-right: 6px; font-size: 14px; }
+  .nav-tabs { overflow-x: auto; scrollbar-width: none; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tab { padding: 0 11px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">SBL Hub</div>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="standings.html">Standings</a>
+    <a class="nav-tab" href="team.html">Teams</a>
+    <a class="nav-tab" href="statistics.html">Stats</a>
+    <a class="nav-tab" href="draft.html">Draft</a>
+    <a class="nav-tab" href="matches.html">Schedule</a>
+    <a class="nav-tab active" href="transactions.html">Transactions</a>
+  </div>
+</nav>
+
+<div id="boot-banner" class="banner">Loading…</div>
+
+<div class="wrap" id="wrap" hidden>
+  <div class="page-title">Transactions</div>
+  <div class="page-sub" id="season-sub"></div>
+  <div class="summary" id="summary"></div>
+  <div id="feed"></div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+// ── CONFIG ──
+const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const POKEMON_JSON_URL = "https://patrickrolens.github.io/vgc-draft-planner/pokemon.json";
+const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
+const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
+
+// ── STATE ──
+let season = null;
+let teams = [], teamById = {}, ownersByTeam = {};
+let pokemonById = {};
+let feed = [];
+
+// ── HELPERS ──
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function monName(id) { const p = pokemonById[id]; return p ? p.name : id; }
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/); if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(id) { return id ? ASSET_BASE + 'icons/' + localId(id) + '.png' : ''; }
+function spriteUrl(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
+function attachIconFallback(img, id) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/')) { this.src = spriteUrl(id); }
+    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
+function fmtDate(s) {
+  if (!s) return '';
+  const d = new Date(s); if (isNaN(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear();
+}
+
+// Coach active for a team during a given week — falls back to current owner, then nothing.
+function coachAtWeek(teamId, week) {
+  const stints = ownersByTeam[teamId] || [];
+  let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
+  if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
+  return s ? s.name : null;
+}
+function teamLinkHtml(teamId, week) {
+  const t = teamById[teamId];
+  if (!t) return '<span class="team">TBD</span>';
+  const c = coachAtWeek(teamId, week);
+  return '<a class="team" href="team.html#' + encodeURIComponent(t.slug) + '">'
+    + escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '') + '</a>';
+}
+function monChipHtml(id, cls, prefix) {
+  return '<span class="mon ' + (cls || '') + '"><img src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="">'
+    + '<span class="nm">' + (prefix || '') + escapeHtml(monName(id)) + '</span></span>';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOAD
+// ─────────────────────────────────────────────────────────────────────────────
+async function init() {
+  const banner = document.getElementById('boot-banner');
+  try {
+    const pjPromise = fetch(POKEMON_JSON_URL).then(r => r.ok ? r.json() : Promise.reject(new Error('pokemon.json ' + r.status)));
+
+    const { data: seasonRow, error: sErr } = await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
+    if (sErr) throw sErr;
+    if (!seasonRow) throw new Error('No current season found.');
+    season = seasonRow;
+
+    const [teamsRes, ownersRes, tradeRes, faRes] = await Promise.all([
+      sb.from('teams').select('id, name, slug').eq('season_id', season.id),
+      sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
+      sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at, notes').eq('season_id', season.id),
+      sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at, notes').eq('season_id', season.id),
+    ]);
+    for (const r of [teamsRes, ownersRes, tradeRes, faRes]) if (r.error) throw r.error;
+
+    teams = teamsRes.data || [];
+    teams.forEach(t => { teamById[t.id] = t; });
+    const teamIds = new Set(teams.map(t => t.id));
+    (ownersRes.data || []).filter(o => teamIds.has(o.team_id) && o.players).forEach(o => {
+      (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
+    });
+    Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
+
+    // Unified feed.
+    (tradeRes.data || []).forEach(t => feed.push({
+      kind: 'trade', week: t.effective_week, when: t.occurred_at, notes: t.notes,
+      teamA: t.team_a_id, monA: t.pokemon_a_id, teamB: t.team_b_id, monB: t.pokemon_b_id,
+    }));
+    (faRes.data || []).forEach(f => feed.push({
+      kind: 'fa', week: f.effective_week, when: f.occurred_at, notes: f.notes,
+      team: f.team_id, added: f.pokemon_added_id, dropped: f.pokemon_dropped_id,
+    }));
+
+    try {
+      const pj = await pjPromise;
+      const arr = Array.isArray(pj) ? pj : (pj.pokemon || []);
+      arr.forEach(p => { pokemonById[p.id] = p; });
+    } catch (e) { console.error('pokemon.json:', e); showToast('Pokémon data didn\u2019t load — names/icons may be missing.', 'err'); }
+
+    document.getElementById('season-sub').textContent = season.name;
+    banner.hidden = true;
+    document.getElementById('wrap').hidden = false;
+    render();
+  } catch (err) {
+    console.error(err);
+    banner.className = 'banner err';
+    banner.textContent = 'Could not load: ' + (err.message || err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function render() {
+  const tradeCount = feed.filter(x => x.kind === 'trade').length;
+  const faCount = feed.filter(x => x.kind === 'fa').length;
+  document.getElementById('summary').innerHTML = feed.length
+    ? '<b>' + feed.length + '</b> transaction' + (feed.length === 1 ? '' : 's') + ' this season '
+      + '<span class="chip">· ' + tradeCount + ' trade' + (tradeCount === 1 ? '' : 's')
+      + ' · ' + faCount + ' free-agency move' + (faCount === 1 ? '' : 's') + '</span>'
+    : '';
+
+  const el = document.getElementById('feed');
+  if (!feed.length) {
+    el.innerHTML = '<div class="empty-state">No transactions recorded yet this season. Trades and free-agency moves will appear here as they happen.</div>';
+    return;
+  }
+
+  // Newest first: by week desc, then by timestamp desc.
+  const ordered = [...feed].sort((a, b) =>
+    (b.week || 0) - (a.week || 0) || String(b.when || '').localeCompare(String(a.when || '')));
+
+  let h = '';
+  let lastWeek = null;
+  ordered.forEach(x => {
+    if (x.week !== lastWeek) {
+      h += '<div class="txn-week-head">Week ' + x.week + '</div>';
+      lastWeek = x.week;
+    }
+    h += (x.kind === 'trade') ? tradeCardHtml(x) : faCardHtml(x);
+  });
+  el.innerHTML = h;
+  el.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
+}
+
+function tradeCardHtml(x) {
+  // Each team is shown next to what it RECEIVED (A gets B's mon, B gets A's mon).
+  return '<div class="txn-card">'
+    + '<div class="txn-head"><span class="badge trade">Trade</span>'
+    +   '<span class="txn-when">Week ' + x.week + (x.when ? ' · ' + escapeHtml(fmtDate(x.when)) : '') + '</span></div>'
+    + '<div class="txn-line">' + teamLinkHtml(x.teamA, x.week) + '<span class="verb">received</span>' + monChipHtml(x.monB) + '</div>'
+    + '<div class="txn-line">' + teamLinkHtml(x.teamB, x.week) + '<span class="verb">received</span>' + monChipHtml(x.monA) + '</div>'
+    + (x.notes ? '<div class="txn-notes">' + escapeHtml(x.notes) + '</div>' : '')
+  + '</div>';
+}
+
+function faCardHtml(x) {
+  return '<div class="txn-card">'
+    + '<div class="txn-head"><span class="badge fa">Free Agency</span>'
+    +   '<span class="txn-when">Week ' + x.week + (x.when ? ' · ' + escapeHtml(fmtDate(x.when)) : '') + '</span></div>'
+    + '<div class="txn-line">' + teamLinkHtml(x.team, x.week)
+    +   monChipHtml(x.added, 'add', '+ ') + monChipHtml(x.dropped, 'drop', '\u2212 ') + '</div>'
+    + (x.notes ? '<div class="txn-notes">' + escapeHtml(x.notes) + '</div>' : '')
+  + '</div>';
+}
+
+function showToast(msg, kind) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind ? ' ' + kind : '');
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3400);
+}
+
+init();
+</script>
+</body>
+</html>
