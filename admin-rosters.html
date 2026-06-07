@@ -38,6 +38,9 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-accent:hover { filter: brightness(1.08); border-color: var(--accent); }
 .btn-accent:disabled:hover { filter: none; }
+.btn-sm { padding: 4px 9px; font-size: 11px; }
+.btn-danger { color: #ff9c9c; }
+.btn-danger:hover { border-color: var(--red); }
 
 /* ── PAGE ── */
 .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
@@ -108,6 +111,38 @@ select:disabled { opacity: .5; }
 .notes-row { margin-top: 12px; }
 .notes-row label { display: block; font-size: 10px; font-weight: 700; letter-spacing: .4px; color: var(--text3); text-transform: uppercase; margin-bottom: 5px; }
 .notes-row input { width: 100%; }
+
+/* ── MANUAL ROSTER EDITOR ── */
+.editor-empty { color: var(--text3); font-style: italic; font-size: 13px; padding: 16px 4px; text-align: center; }
+.er-group-head { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin: 16px 0 8px; }
+.er-row { display: flex; align-items: center; gap: 11px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; margin-bottom: 7px; }
+.er-row.dirty { border-color: var(--accent); }
+.er-row.inactive { opacity: .82; }
+.er-icon { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+.er-main { flex: 1 1 auto; min-width: 0; }
+.er-name { font-size: 13px; font-weight: 700; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.er-name .er-cost { color: var(--text3); font-weight: 400; font-size: 11px; }
+.er-fields { display: flex; flex-wrap: wrap; gap: 7px 12px; align-items: center; }
+.er-fields label { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); }
+.er-fields input, .er-fields select { font-size: 12px; padding: 4px 6px; }
+.er-fields .er-aw { width: 52px; }
+.er-fields .er-notes { width: 150px; text-transform: none; }
+.er-actions { display: flex; flex-wrap: wrap; gap: 5px; flex-shrink: 0; justify-content: flex-end; }
+
+.add-head { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); margin-bottom: 10px; }
+.add-grid { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.add-fld { display: flex; flex-direction: column; gap: 4px; }
+.add-fld label { font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); }
+.add-fld.grow { flex: 1 1 220px; min-width: 180px; }
+.add-fld.grow .fa-box { width: 100%; }
+#add-week { width: 72px; }
+.editor-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+.editor-foot .spacer { flex: 1 1 auto; }
+.er-row.removing { opacity: .6; }
+.er-name.struck { text-decoration: line-through; }
+.er-tag { font-size: 9px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+.er-tag.new { background: rgba(124,111,247,.18); color: var(--accent); }
+.er-group-head.removing { color: #ff9c9c; }
 
 /* ── MODAL ── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -246,6 +281,54 @@ select:disabled { opacity: .5; }
       <button class="btn btn-accent" id="apply-btn" onclick="openConfirm()" disabled>Apply Transaction</button>
     </div>
   </div>
+
+  <!-- ── EDIT TEAM ROSTER (manual cleanup) ── -->
+  <div class="section">
+    <div class="section-title">Edit Team Roster</div>
+    <div class="section-sub">Direct corrections the recorder can't express — fix a stint's week or acquired-via, move a Pokémon in or out of the active roster, add a missed pick, or remove a row entirely. Edits here write straight to the roster.</div>
+
+    <div class="controls">
+      <div class="group">
+        <label for="editor-team">Team</label>
+        <select id="editor-team" onchange="onEditorTeamChange()"></select>
+      </div>
+    </div>
+
+    <div id="editor-body"><div class="editor-empty">Select a team to edit its roster.</div></div>
+
+    <div id="editor-add" hidden>
+      <div class="add-head">Add a Pokémon</div>
+      <div class="add-grid">
+        <div class="add-fld grow">
+          <label for="add-input">Pokémon (legal pool)</label>
+          <div class="fa-box">
+            <input type="text" id="add-input" placeholder="Search legal Pokémon…" autocomplete="off">
+            <div class="fa-results" id="add-results"></div>
+          </div>
+        </div>
+        <div class="add-fld">
+          <label for="add-week">Week added</label>
+          <input type="number" id="add-week" min="1" step="1" value="1" oninput="updateAddBtn()">
+        </div>
+        <div class="add-fld">
+          <label for="add-via">Acquired via</label>
+          <select id="add-via">
+            <option value="draft">draft</option>
+            <option value="free_agency">free_agency</option>
+            <option value="trade">trade</option>
+          </select>
+        </div>
+        <button class="btn btn-accent" id="add-btn" onclick="addRosterRow()" disabled>+ Add</button>
+      </div>
+    </div>
+
+    <div id="editor-warn"></div>
+    <div class="editor-foot" id="editor-foot" hidden>
+      <span class="spacer"></span>
+      <button class="btn" id="discard-btn" onclick="discardEditorChanges()" disabled>Discard changes</button>
+      <button class="btn btn-accent" id="confirm-changes-btn" onclick="openConfirmChanges()" disabled>Confirm Changes</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="modal-overlay" hidden onclick="if(event.target===this)closeModal()">
@@ -275,12 +358,24 @@ let coachByTeam      = {};          // team_id -> active owner display name
 let rosterByTeam     = {};          // team_id -> [pokemon_id] currently active
 let tierCost         = {};          // pokemon_id -> point_cost (null treated as 0)
 let faPool           = [];          // [{id, name, cost}] legal + unowned, sorted by name
+let legalPool        = [];          // [{id, name, cost}] every legal mon this season (for manual add)
 let pokemonById      = {};
 
 // FA search state
 let faResults = [];
 let faHighlight = -1;
 let faSelected = null;              // chosen free-agent pokemon_id
+
+// ── MANUAL ROSTER EDITOR state ──
+let editorTeamId  = null;
+let editorRows    = [];             // original team_pokemon rows from the DB (diff baseline)
+let editorWork    = [];             // staged working copy (edits not yet committed)
+let origById      = {};             // id -> original row, for diffing on confirm
+let editorKeySeq  = 0;              // unique keys for staged new rows
+// add-row search state
+let addResults = [];
+let addHighlight = -1;
+let addSelected = null;             // chosen pokemon_id to add
 
 // ── HELPERS ──
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
@@ -402,6 +497,11 @@ async function loadSeasonData(seasonId) {
     .map(id => ({ id, name: monName(id), cost: costOf(id) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Manual-add pool: every legal mon this season (ownership not filtered — cleanup may re-add).
+  legalPool = Object.keys(tierCost)
+    .map(id => ({ id, name: monName(id), cost: costOf(id) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   renderTool();
 }
 
@@ -422,6 +522,8 @@ function renderTool() {
   faSelected = null;
   syncSecondSideVisibility();
   updateReadouts();
+  populateEditorTeamSelect();
+  renderEditor();
 }
 
 function teamOptionsHtml(includeFA, excludeId) {
@@ -693,7 +795,394 @@ function resetSelectionsKeepContext() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AUTH (same magic-link pattern as the other admin pages)
+// MANUAL ROSTER EDITOR  (staged: edits batch until "Confirm Changes")
+// ─────────────────────────────────────────────────────────────────────────────
+function populateEditorTeamSelect() {
+  const sel = document.getElementById('editor-team');
+  const prev = editorTeamId;
+  let h = '<option value="">—</option>';
+  sortedTeams().forEach(t => { h += '<option value="' + t.id + '">' + escapeHtml(teamLabelText(t.id)) + '</option>'; });
+  sel.innerHTML = h;
+  if (prev && teamById[prev]) { sel.value = prev; editorTeamId = prev; }
+  else { sel.value = ''; editorTeamId = null; editorRows = []; editorWork = []; origById = {}; }
+}
+
+function onEditorTeamChange() {
+  editorTeamId = document.getElementById('editor-team').value || null;
+  resetAddPicker();
+  if (!editorTeamId) { editorRows = []; editorWork = []; origById = {}; renderEditor(); return; }
+  loadEditorTeam(editorTeamId);
+}
+
+async function loadEditorTeam(teamId) {
+  try {
+    const { data, error } = await sb.from('team_pokemon')
+      .select('id, pokemon_id, acquired_week, released_week, acquired_via, notes')
+      .eq('team_id', teamId);
+    if (error) throw error;
+    editorRows = data || [];
+  } catch (err) {
+    console.error(err);
+    showToast('Could not load roster: ' + (err.message || err), 'err');
+    editorRows = [];
+  }
+  origById = {};
+  editorRows.forEach(r => { origById[r.id] = r; });
+  buildWorkFromRows();
+  renderEditor();
+}
+
+// Reset the staged working copy to a fresh clone of the DB rows.
+function buildWorkFromRows() {
+  editorWork = editorRows.map(o => ({
+    key: o.id, id: o.id,
+    pokemon_id: o.pokemon_id,
+    acquired_week: o.acquired_week,
+    released_week: o.released_week,
+    acquired_via: o.acquired_via,
+    notes: o.notes,
+    isNew: false, isDeleted: false,
+  }));
+}
+
+function workByKey(key) { return editorWork.find(r => r.key === key); }
+
+function viaOptionsHtml(selected) {
+  return ['draft', 'free_agency', 'trade']
+    .map(v => '<option value="' + v + '"' + (selected === v ? ' selected' : '') + '>' + v + '</option>').join('');
+}
+
+function editorRowHtml(r) {
+  if (r.isDeleted) {
+    return '<div class="er-row removing" data-key="' + r.key + '">'
+      + '<img class="er-icon" src="' + iconUrl(r.pokemon_id) + '" data-mon="' + escapeHtml(r.pokemon_id) + '" alt="">'
+      + '<div class="er-main"><div class="er-name struck">' + escapeHtml(monName(r.pokemon_id))
+      +   ' <span class="er-cost">marked for removal</span></div></div>'
+      + '<div class="er-actions"><button class="btn btn-sm er-undo">Undo</button></div>'
+    + '</div>';
+  }
+  const active = r.released_week == null;
+  return '<div class="er-row' + (active ? '' : ' inactive') + '" data-key="' + r.key + '">'
+    + '<img class="er-icon" src="' + iconUrl(r.pokemon_id) + '" data-mon="' + escapeHtml(r.pokemon_id) + '" alt="">'
+    + '<div class="er-main">'
+    +   '<div class="er-name">' + escapeHtml(monName(r.pokemon_id))
+    +     (r.isNew ? '<span class="er-tag new">new</span>' : '')
+    +     ' <span class="er-cost">' + costOf(r.pokemon_id) + ' pts' + (active ? '' : ' \u00B7 dropped wk ' + r.released_week) + '</span></div>'
+    +   '<div class="er-fields">'
+    +     '<label>Wk added <input type="number" class="er-aw" min="1" step="1" value="' + (r.acquired_week == null ? '' : r.acquired_week) + '"></label>'
+    +     '<label>Via <select class="er-via">' + viaOptionsHtml(r.acquired_via) + '</select></label>'
+    +     '<label>Notes <input type="text" class="er-notes" value="' + escapeHtml(r.notes || '') + '"></label>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="er-actions">'
+    +   '<button class="btn btn-sm er-toggle">' + (active ? 'Move to Inactive' : 'Move to Active') + '</button>'
+    +   '<button class="btn btn-sm btn-danger er-remove">Remove</button>'
+    + '</div>'
+  + '</div>';
+}
+
+function renderEditor() {
+  const body = document.getElementById('editor-body');
+  const addPanel = document.getElementById('editor-add');
+  const foot = document.getElementById('editor-foot');
+  if (!editorTeamId) {
+    body.innerHTML = '<div class="editor-empty">Select a team to edit its roster.</div>';
+    addPanel.hidden = true; foot.hidden = true;
+    document.getElementById('editor-warn').innerHTML = '';
+    return;
+  }
+  addPanel.hidden = false; foot.hidden = false;
+
+  const active = editorWork.filter(r => !r.isDeleted && r.released_week == null)
+    .sort((a, b) => monName(a.pokemon_id).localeCompare(monName(b.pokemon_id)));
+  const inactive = editorWork.filter(r => !r.isDeleted && r.released_week != null)
+    .sort((a, b) => (b.released_week || 0) - (a.released_week || 0) || monName(a.pokemon_id).localeCompare(monName(b.pokemon_id)));
+  const removed = editorWork.filter(r => r.isDeleted);
+
+  let h = '<div class="er-group-head">Active Pokémon (' + active.length + ')</div>';
+  h += active.length ? active.map(editorRowHtml).join('') : '<div class="editor-empty">No active Pokémon.</div>';
+  h += '<div class="er-group-head">Inactive Pokémon (' + inactive.length + ')</div>';
+  h += inactive.length ? inactive.map(editorRowHtml).join('') : '<div class="editor-empty">No inactive Pokémon.</div>';
+  if (removed.length) {
+    h += '<div class="er-group-head removing">Marked for removal (' + removed.length + ')</div>';
+    h += removed.map(editorRowHtml).join('');
+  }
+  body.innerHTML = h;
+
+  body.querySelectorAll('.er-row').forEach(row => {
+    const key = row.getAttribute('data-key');
+    row.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
+    const undo = row.querySelector('.er-undo');
+    if (undo) { undo.addEventListener('click', () => undoRemove(key)); return; }
+    row.querySelector('.er-aw').addEventListener('input', e => onFieldInput(key, 'acquired_week', e.target.value));
+    row.querySelector('.er-via').addEventListener('change', e => onFieldInput(key, 'acquired_via', e.target.value));
+    row.querySelector('.er-notes').addEventListener('input', e => onFieldInput(key, 'notes', e.target.value));
+    row.querySelector('.er-toggle').addEventListener('click', () => toggleWork(key));
+    row.querySelector('.er-remove').addEventListener('click', () => removeWork(key));
+  });
+
+  refreshEditorFooter();
+}
+
+// Field edits update the working copy in place (no re-render → keeps input focus).
+function onFieldInput(key, field, value) {
+  const r = workByKey(key);
+  if (!r) return;
+  if (field === 'acquired_week') r.acquired_week = (value === '' ? null : parseInt(value, 10));
+  else if (field === 'acquired_via') r.acquired_via = value;
+  else if (field === 'notes') r.notes = (value.trim() === '' ? null : value);
+  refreshEditorFooter();
+}
+
+function toggleWork(key) {
+  const r = workByKey(key);
+  if (!r) return;
+  if (r.released_week == null) openMoveToInactive(key);
+  else { r.released_week = null; renderEditor(); }
+}
+
+function openMoveToInactive(key) {
+  const r = workByKey(key);
+  if (!r) return;
+  const aw = r.acquired_week || 1;
+  let def = effWeek();
+  if (!Number.isInteger(def) || def <= aw) def = aw + 1;
+  openModal(
+    '<h3>Move to Inactive</h3>'
+    + '<p>Set the week ' + escapeHtml(monName(r.pokemon_id)) + ' was dropped. It stays in the inactive roster and keeps contributing its game stats to this team. (Staged until you Confirm Changes.)</p>'
+    + '<label style="display:block;font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Dropped week</label>'
+    + '<input type="number" id="mti-week" min="1" step="1" value="' + def + '" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:14px">'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" onclick="confirmMoveToInactive(\'' + key + '\')">Set week</button></div>'
+  );
+  setTimeout(() => { const el = document.getElementById('mti-week'); if (el) { el.focus(); el.select(); } }, 30);
+}
+
+function confirmMoveToInactive(key) {
+  const r = workByKey(key);
+  if (!r) return;
+  const aw = r.acquired_week || 1;
+  const w = parseInt(document.getElementById('mti-week').value, 10);
+  if (!Number.isInteger(w) || w < 1) { showToast('Enter a valid week.', 'err'); return; }
+  if (w <= aw) { showToast('Dropped week must be after the week added (' + aw + ').', 'err'); return; }
+  r.released_week = w;
+  closeModal();
+  renderEditor();
+}
+
+function removeWork(key) {
+  const r = workByKey(key);
+  if (!r) return;
+  if (r.isNew) { editorWork = editorWork.filter(x => x.key !== key); }  // staged add → just drop it
+  else { r.isDeleted = true; }
+  renderEditor();
+}
+
+function undoRemove(key) {
+  const r = workByKey(key);
+  if (r) r.isDeleted = false;
+  renderEditor();
+}
+
+function rowChanged(r) {
+  const o = origById[r.id];
+  if (!o) return true;
+  return (o.acquired_week ?? null) !== (r.acquired_week ?? null)
+      || (o.released_week ?? null) !== (r.released_week ?? null)
+      || (o.acquired_via ?? null) !== (r.acquired_via ?? null)
+      || (o.notes || null) !== (r.notes || null);
+}
+
+function hasChanges() {
+  for (const r of editorWork) {
+    if (r.isNew && !r.isDeleted) return true;
+    if (r.isNew && r.isDeleted) continue;
+    if (r.isDeleted) return true;
+    if (rowChanged(r)) return true;
+  }
+  return false;
+}
+
+function activeCap() { const s = seasonById[selectedSeasonId]; return (s && s.team_size) || 10; }
+
+function refreshEditorFooter() {
+  if (!editorTeamId) return;
+  const changed = hasChanges();
+  document.getElementById('confirm-changes-btn').disabled = !changed;
+  document.getElementById('discard-btn').disabled = !changed;
+  const cap = activeCap();
+  const activeCount = editorWork.filter(r => !r.isDeleted && r.released_week == null).length;
+  document.getElementById('editor-warn').innerHTML = (activeCount > cap)
+    ? '<div class="budget-warn">\u26A0 Active roster has <b>' + activeCount + '</b> Pokémon — over the season maximum of <b>' + cap + '</b>.</div>'
+    : '';
+}
+
+function discardEditorChanges() {
+  buildWorkFromRows();
+  resetAddPicker();
+  renderEditor();
+}
+
+function editorValidationError() {
+  for (const r of editorWork) {
+    if (r.isDeleted) continue;
+    if (!Number.isInteger(r.acquired_week) || r.acquired_week < 1) {
+      return monName(r.pokemon_id) + ': week added must be 1 or greater.';
+    }
+    if (r.released_week != null && r.released_week <= r.acquired_week) {
+      return monName(r.pokemon_id) + ': dropped week must be after the week added.';
+    }
+  }
+  return null;
+}
+
+function openConfirmChanges() {
+  const bad = editorValidationError();
+  if (bad) { showToast(bad, 'err'); return; }
+
+  const inserts = editorWork.filter(r => r.isNew && !r.isDeleted);
+  const deletes = editorWork.filter(r => !r.isNew && r.isDeleted);
+  const updates = editorWork.filter(r => !r.isNew && !r.isDeleted && rowChanged(r));
+  if (!inserts.length && !deletes.length && !updates.length) { showToast('No changes to confirm.', 'err'); return; }
+
+  const cap = activeCap();
+  const activeCount = editorWork.filter(r => !r.isDeleted && r.released_week == null).length;
+
+  const parts = [];
+  if (inserts.length) parts.push(inserts.length + ' to add');
+  if (updates.length) parts.push(updates.length + ' to update');
+  if (deletes.length) parts.push(deletes.length + ' to remove');
+
+  openModal(
+    '<h3>Confirm roster changes</h3>'
+    + '<div class="swap">' + escapeHtml(teamName(editorTeamId)) + '<div style="margin-top:6px;color:var(--text3)">' + parts.join(' \u00B7 ') + '</div></div>'
+    + (deletes.length ? '<p class="warn">' + deletes.length + ' row' + (deletes.length === 1 ? '' : 's') + ' will be permanently deleted. Any already-recorded game stats are stored separately and are not removed.</p>' : '')
+    + (activeCount > cap ? '<p class="warn">\u26A0 Active roster will have ' + activeCount + ' Pokémon — over the season maximum of ' + cap + '.</p>' : '')
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" id="confirm-changes-go" onclick="applyEditorChanges()">Confirm</button></div>'
+  );
+}
+
+async function applyEditorChanges() {
+  const btn = document.getElementById('confirm-changes-go');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  const inserts = editorWork.filter(r => r.isNew && !r.isDeleted);
+  const deletes = editorWork.filter(r => !r.isNew && r.isDeleted);
+  const updates = editorWork.filter(r => !r.isNew && !r.isDeleted && rowChanged(r));
+
+  try {
+    for (const r of deletes) {
+      const { error } = await sb.from('team_pokemon').delete().eq('id', r.id);
+      if (error) throw error;
+    }
+    for (const r of updates) {
+      const { error } = await sb.from('team_pokemon')
+        .update({ acquired_week: r.acquired_week, released_week: r.released_week, acquired_via: r.acquired_via, notes: r.notes })
+        .eq('id', r.id);
+      if (error) throw error;
+    }
+    for (const r of inserts) {
+      const { error } = await sb.from('team_pokemon').insert({
+        team_id: editorTeamId, pokemon_id: r.pokemon_id,
+        acquired_week: r.acquired_week, released_week: r.released_week,
+        acquired_via: r.acquired_via, draft_pick_number: null, notes: r.notes,
+      });
+      if (error) throw error;
+    }
+    closeModal();
+    showToast('Roster changes saved.', 'ok');
+    await refreshAfterEdit();
+  } catch (err) {
+    console.error(err);
+    showToast('Some changes may not have been saved: ' + (err.message || err), 'err');
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirm'; }
+    await refreshAfterEdit();   // resync to whatever actually committed
+  }
+}
+
+// ── add a Pokémon to the selected team (stages a new active row) ──
+function doAddSearch(q) {
+  q = q.trim().toLowerCase();
+  addSelected = null;
+  updateAddBtn();
+  if (!q) { closeAddResults(); return; }
+  addResults = legalPool.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().startsWith(q)).slice(0, 18);
+  const el = document.getElementById('add-results');
+  if (!addResults.length) { el.innerHTML = '<div class="fa-empty">No legal Pokémon match.</div>'; el.classList.add('open'); addHighlight = -1; return; }
+  addHighlight = 0;
+  el.innerHTML = addResults.map((p, i) =>
+    '<div class="fa-item' + (i === 0 ? ' highlighted' : '') + '" data-i="' + i + '">'
+    + '<img src="' + iconUrl(p.id) + '" data-mon="' + escapeHtml(p.id) + '" alt="">'
+    + '<span class="nm">' + escapeHtml(p.name) + '</span>'
+    + '<span class="pts">' + p.cost + ' pts</span></div>'
+  ).join('');
+  el.classList.add('open');
+  el.querySelectorAll('.fa-item').forEach(item => {
+    const i = +item.getAttribute('data-i');
+    item.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
+    item.addEventListener('mousedown', e => { e.preventDefault(); pickAdd(i); });
+  });
+}
+function updateAddHighlight() {
+  document.querySelectorAll('#add-results .fa-item').forEach((el, i) => el.classList.toggle('highlighted', i === addHighlight));
+}
+function pickAdd(i) {
+  const p = addResults[i];
+  if (!p) return;
+  addSelected = p.id;
+  document.getElementById('add-input').value = p.name;
+  closeAddResults();
+  updateAddBtn();
+}
+function closeAddResults() { document.getElementById('add-results').classList.remove('open'); addHighlight = -1; }
+function resetAddPicker() {
+  const inp = document.getElementById('add-input');
+  if (inp) inp.value = '';
+  addSelected = null;
+  closeAddResults();
+  updateAddBtn();
+}
+function updateAddBtn() {
+  const wkEl = document.getElementById('add-week');
+  const w = wkEl ? parseInt(wkEl.value, 10) : NaN;
+  const btn = document.getElementById('add-btn');
+  if (btn) btn.disabled = !(editorTeamId && addSelected && Number.isInteger(w) && w >= 1);
+}
+
+function addRosterRow() {
+  if (!editorTeamId || !addSelected) { showToast('Pick a team and a Pokémon first.', 'err'); return; }
+  const w = parseInt(document.getElementById('add-week').value, 10);
+  const via = document.getElementById('add-via').value;
+  if (!Number.isInteger(w) || w < 1) { showToast('Week added must be 1 or greater.', 'err'); return; }
+  editorWork.push({
+    key: 'new-' + (++editorKeySeq), id: null,
+    pokemon_id: addSelected, acquired_week: w, released_week: null,
+    acquired_via: via, notes: null, isNew: true, isDeleted: false,
+  });
+  resetAddPicker();
+  renderEditor();
+}
+
+function wireAddInput() {
+  const input = document.getElementById('add-input');
+  input.addEventListener('input', e => doAddSearch(e.target.value));
+  input.addEventListener('keydown', e => {
+    const n = addResults.length;
+    if (e.key === 'ArrowDown') { e.preventDefault(); addHighlight = Math.min(addHighlight + 1, n - 1); updateAddHighlight(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); addHighlight = Math.max(addHighlight - 1, 0); updateAddHighlight(); }
+    else if (e.key === 'Enter') { e.preventDefault(); pickAdd(addHighlight >= 0 ? addHighlight : 0); }
+    else if (e.key === 'Escape') { closeAddResults(); }
+  });
+  input.addEventListener('blur', () => setTimeout(closeAddResults, 150));
+}
+
+// Re-pull recorder data (rosters/pool) and reset the staged editor after a commit.
+async function refreshAfterEdit() {
+  await loadSeasonData(selectedSeasonId);
+  if (editorTeamId) await loadEditorTeam(editorTeamId);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 async function initAuth() {
   const { data: { session } } = await sb.auth.getSession();
@@ -783,6 +1272,7 @@ async function init() {
     await loadPokemon();
     await loadSeasonData(selectedSeasonId);
     wireFaInput();
+    wireAddInput();
     await initAuth();          // reveals the tool (or the gate) once admin status resolves
     banner.hidden = true;
   } catch (err) {
