@@ -426,11 +426,11 @@ function renderTool() {
 
 function teamOptionsHtml(includeFA, excludeId) {
   let h = '<option value="">—</option>';
+  if (includeFA) h += '<option value="FA">Free Agency</option>';
   sortedTeams().forEach(t => {
     if (t.id === excludeId) return;
     h += '<option value="' + t.id + '">' + escapeHtml(teamLabelText(t.id)) + '</option>';
   });
-  if (includeFA) h += '<option value="FA">Free Agency</option>';
   return h;
 }
 
