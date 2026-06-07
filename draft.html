@@ -94,6 +94,61 @@ nav {
 .sidebar-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
 .sidebar.collapsed .sidebar-body { display: none; }
 
+/* ── ACTIVITY PANEL (right): draft + transaction log, mirrors the sidebar ── */
+.activity {
+  width: 320px; flex-shrink: 0; border-left: 1px solid var(--border);
+  background: var(--bg); min-height: calc(100vh - var(--nav-h));
+  display: flex; flex-direction: column; transition: width .18s ease;
+}
+.activity.collapsed { width: 44px; }
+.activity-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  position: sticky; top: var(--nav-h); background: var(--bg); z-index: 5;
+}
+.activity.collapsed .activity-head { justify-content: center; padding-left: 0; padding-right: 0; }
+.activity-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; white-space: nowrap; }
+.activity.collapsed .activity-title { display: none; }
+.activity-toggle {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text2); cursor: pointer; font-size: 13px; line-height: 1; padding: 5px 8px;
+}
+.activity-toggle:hover { color: var(--text); border-color: var(--accent); }
+.activity-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.activity.collapsed .activity-body { display: none; }
+
+/* accordion sections */
+.log-sec { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.log-sec-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg2); cursor: pointer; user-select: none; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text2); }
+.log-sec-head:hover { color: var(--text); }
+.log-sec-head .chev { color: var(--text3); font-size: 9px; transition: transform .15s; }
+.log-sec.collapsed .chev { transform: rotate(-90deg); }
+.log-sec-head .count { margin-left: auto; color: var(--text3); font-weight: 600; }
+.log-sec-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.log-sec.collapsed .log-sec-body { display: none; }
+
+/* log entries */
+.log-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; font-size: 12px; }
+.log-item .li-head { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.li-badge { font-size: 8px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.li-badge.trade { background: rgba(124,111,247,.16); color: var(--accent); }
+.li-badge.fa { background: rgba(76,175,125,.16); color: var(--green); }
+.li-when { margin-left: auto; color: var(--text3); font-size: 10px; }
+.li-line { display: flex; align-items: center; gap: 5px; padding: 1px 0; flex-wrap: wrap; }
+.li-pickno { color: var(--text3); font-variant-numeric: tabular-nums; font-weight: 700; flex-shrink: 0; }
+.li-team { font-weight: 700; color: var(--text); text-decoration: none; }
+.li-team:hover { color: var(--accent); }
+.li-team .pl { color: var(--text3); font-weight: 400; }
+.li-verb { color: var(--text3); }
+.li-mon { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.li-mon img { width: 24px; height: 24px; image-rendering: pixelated; object-fit: contain; flex-shrink: 0; }
+.li-mon .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.li-mon.add { color: var(--green); font-weight: 600; }
+.li-mon.drop { color: var(--text2); }
+.li-mon.drop img { opacity: .55; }
+.li-notes { font-size: 10px; color: var(--text3); font-style: italic; margin-top: 4px; }
+.log-empty { color: var(--text3); font-style: italic; font-size: 12px; text-align: center; padding: 24px 8px; }
+
 /* ── TEAM CARD (sidebar) ── */
 .team-card {
   background: var(--bg2); border: 2px solid var(--border); border-radius: 10px;
@@ -264,6 +319,7 @@ nav {
 
 /* Mobile-only control; hidden on desktop. */
 #mobile-teams-btn { display: none; }
+#mobile-activity-btn { display: none; }
 
 /* ── MOBILE (≤768px) ──
    The sidebar leaves the column and becomes a full-screen overlay, so the pool
@@ -300,6 +356,17 @@ nav {
 
   /* Reveal the open-overlay button (lives in the toolbar, shown in lanes view). */
   #mobile-teams-btn { display: inline-flex; }
+  #mobile-activity-btn { display: inline-flex; }
+
+  /* Activity panel mirrors the sidebar overlay, sliding in from the right. */
+  .activity {
+    position: fixed; top: var(--nav-h); right: 0; bottom: 0; left: auto; width: 100%;
+    min-height: 0; z-index: 60; border-left: none;
+    transform: translateX(0); transition: transform .2s ease;
+  }
+  .activity.collapsed { width: 100%; transform: translateX(100%); }
+  .activity.collapsed .activity-head { justify-content: flex-start; padding: 10px 12px; }
+  .activity-head { position: static; }
 }
 </style>
 </head>
@@ -309,7 +376,7 @@ nav {
   <div class="nav-logo">SBL Hub</div>
   <div class="nav-tabs">
     <a class="nav-tab" href="standings.html">Standings</a>
-    <a class="nav-tab active" href="draft.html">Draft</a>
+    <a class="nav-tab active" href="draft.html">Draft Board</a>
     <a class="nav-tab" href="schedule.html">Schedule</a>
     <a class="nav-tab" href="schedule.html">Matches</a>
   </div>
@@ -356,6 +423,7 @@ nav {
 
     <div class="toolbar">
       <button class="btn" id="mobile-teams-btn" onclick="toggleSidebar()">☰ Teams</button>
+      <button class="btn" id="mobile-activity-btn" onclick="toggleActivity()">📋 Log</button>
       <div class="toolbar-search">
         <span class="si">🔍</span>
         <input type="text" id="search-input" placeholder="Search Pokémon…"
@@ -366,6 +434,15 @@ nav {
 
     <div class="pool" id="pool"></div>
   </div>
+
+  <!-- ── ACTIVITY LOG: draft picks (by round) + transactions (by week) ── -->
+  <aside class="activity" id="activity">
+    <div class="activity-head">
+      <button class="activity-toggle" id="activity-toggle" title="Collapse activity log" onclick="toggleActivity()">⟩</button>
+      <span class="activity-title">Activity</span>
+    </div>
+    <div class="activity-body" id="activity-body"></div>
+  </aside>
 </div>
 
 <!-- Reusable modal (login + draft confirmation) -->
@@ -397,7 +474,9 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 // ── STATE ──
 let season       = null;            // current seasons row
 let teams        = [];              // teams rows for the season
-let coachByTeam  = {};              // team_id -> coach display_name
+let coachByTeam  = {};              // team_id -> current coach display_name
+let ownersByTeam = {};              // team_id -> [{started_week, ended_week, name}] stints
+let txns         = [];              // unified transaction feed for the activity log
 let tierCost     = {};              // pokemon_id -> point_cost (this season's legal set)
 let draft        = null;            // drafts row (may be null until Patrick seeds it)
 let picksByTeam  = {};              // team_id -> [pokemon_id, …] in draft order
@@ -474,21 +553,27 @@ async function loadData() {
   if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
   season = seasonRow;
 
-  const [teamsRes, ownersRes, tiersRes, draftRes] = await Promise.all([
+  const [teamsRes, ownersRes, tiersRes, draftRes, tradeRes, faRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
-    sb.from('team_owners').select('team_id, ended_week, players(display_name)').is('ended_week', null),
+    sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', season.id),
     sb.from('drafts').select('draft_order, current_pick_number, status').eq('season_id', season.id).maybeSingle(),
+    sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at, notes').eq('season_id', season.id),
+    sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at, notes').eq('season_id', season.id),
   ]);
-  for (const r of [teamsRes, ownersRes, tiersRes, draftRes]) if (r.error) throw r.error;
+  for (const r of [teamsRes, ownersRes, tiersRes, draftRes, tradeRes, faRes]) if (r.error) throw r.error;
 
   teams = teamsRes.data || [];
   const teamIds = teams.map(t => t.id);
 
-  coachByTeam = {};
+  // Owner stints (for coach-as-of-week) + current coach (existing usage).
+  coachByTeam = {}; ownersByTeam = {};
   (ownersRes.data || []).forEach(o => {
-    if (teamIds.includes(o.team_id) && o.players) coachByTeam[o.team_id] = o.players.display_name;
+    if (!teamIds.includes(o.team_id) || !o.players) return;
+    (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
+    if (o.ended_week == null) coachByTeam[o.team_id] = o.players.display_name;
   });
+  Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
 
   tierCost = {};
   (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; });
@@ -512,6 +597,8 @@ async function loadData() {
         draftPicks.push({ pick_number: p.draft_pick_number, team_id: p.team_id, pokemon_id: p.pokemon_id });
       });
   }
+
+  buildTxns(tradeRes.data, faRes.data);
 
   // Sidebar / draft order: prefer drafts.draft_order, else initial_seed, else name.
   if (draft && Array.isArray(draft.draft_order) && draft.draft_order.length) {
@@ -1070,6 +1157,131 @@ function escapeHtml(s) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ACTIVITY LOG (right panel) — draft picks grouped by round + transactions by week,
+// newest first. Accordion sections; only the most recent is open by default.
+// Function declarations are hoisted, so refreshDraftState/init can call these.
+// ─────────────────────────────────────────────────────────────────────────────
+let activityOpen = {};   // section key -> bool (user toggles survive a re-render)
+
+function buildTxns(tradeRows, faRows) {
+  txns = [];
+  (tradeRows || []).forEach(t => txns.push({
+    kind: 'trade', week: t.effective_week, when: t.occurred_at, notes: t.notes,
+    teamA: t.team_a_id, monA: t.pokemon_a_id, teamB: t.team_b_id, monB: t.pokemon_b_id,
+  }));
+  (faRows || []).forEach(f => txns.push({
+    kind: 'fa', week: f.effective_week, when: f.occurred_at, notes: f.notes,
+    team: f.team_id, added: f.pokemon_added_id, dropped: f.pokemon_dropped_id,
+  }));
+}
+
+function coachAtWeek(teamId, week) {
+  const stints = ownersByTeam[teamId] || [];
+  let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
+  if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
+  return s ? s.name : (coachByTeam[teamId] || null);
+}
+
+function monNm(id) { const m = pokemonById[id]; return m ? m.name : id; }
+function teamSlug(id) { const t = teams.find(x => x.id === id); return t ? t.slug : ''; }
+function fmtDateShort(s) {
+  if (!s) return '';
+  const d = new Date(s); if (isNaN(d.getTime())) return '';
+  return (d.getMonth() + 1) + '/' + d.getDate();
+}
+function logTeamHtml(teamId, week) {
+  const slug = teamSlug(teamId);
+  const c = coachAtWeek(teamId, week);
+  const label = escapeHtml(teamName(teamId)) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '');
+  return slug ? '<a class="li-team" href="team.html#' + encodeURIComponent(slug) + '">' + label + '</a>'
+              : '<span class="li-team">' + label + '</span>';
+}
+function logMonHtml(id, cls, prefix) {
+  const m = pokemonById[id];
+  return '<span class="li-mon ' + (cls || '') + '"><img src="' + iconUrl(m) + '" data-monid="' + escapeHtml(id) + '" alt="">'
+    + '<span class="nm">' + (prefix || '') + escapeHtml(monNm(id)) + '</span></span>';
+}
+
+function txnItemHtml(x) {
+  if (x.kind === 'trade') {
+    return '<div class="log-item">'
+      + '<div class="li-head"><span class="li-badge trade">Trade</span><span class="li-when">' + escapeHtml(fmtDateShort(x.when)) + '</span></div>'
+      + '<div class="li-line">' + logTeamHtml(x.teamA, x.week) + '<span class="li-verb">got</span>' + logMonHtml(x.monB) + '</div>'
+      + '<div class="li-line">' + logTeamHtml(x.teamB, x.week) + '<span class="li-verb">got</span>' + logMonHtml(x.monA) + '</div>'
+      + (x.notes ? '<div class="li-notes">' + escapeHtml(x.notes) + '</div>' : '')
+    + '</div>';
+  }
+  return '<div class="log-item">'
+    + '<div class="li-head"><span class="li-badge fa">Free Agency</span><span class="li-when">' + escapeHtml(fmtDateShort(x.when)) + '</span></div>'
+    + '<div class="li-line">' + logTeamHtml(x.team, x.week) + logMonHtml(x.added, 'add', '+ ') + logMonHtml(x.dropped, 'drop', '\u2212 ') + '</div>'
+    + (x.notes ? '<div class="li-notes">' + escapeHtml(x.notes) + '</div>' : '')
+  + '</div>';
+}
+
+function pickItemHtml(p) {
+  return '<div class="log-item">'
+    + '<div class="li-line"><span class="li-pickno">#' + p.pick_number + '</span>'
+    +   logMonHtml(p.pokemon_id) + '<span class="li-verb">\u2192</span>' + logTeamHtml(p.team_id, 1) + '</div>'
+  + '</div>';
+}
+
+function buildActivitySections() {
+  const sections = [];
+
+  // Transactions grouped by week, newest week first.
+  const byWeek = {};
+  txns.forEach(x => { (byWeek[x.week] = byWeek[x.week] || []).push(x); });
+  Object.keys(byWeek).map(Number).sort((a, b) => b - a).forEach(w => {
+    const items = byWeek[w].slice().sort((a, b) => String(b.when || '').localeCompare(String(a.when || '')));
+    sections.push({ key: 'week-' + w, label: 'Week ' + w, count: items.length, body: items.map(txnItemHtml).join('') });
+  });
+
+  // Draft picks grouped into rounds of (team count), newest round first.
+  const per = Math.max(1, teams.length);
+  const byRound = {};
+  draftPicks.forEach(p => {
+    const rd = Math.floor(((p.pick_number || 1) - 1) / per) + 1;
+    (byRound[rd] = byRound[rd] || []).push(p);
+  });
+  Object.keys(byRound).map(Number).sort((a, b) => b - a).forEach(rd => {
+    const items = byRound[rd].slice().sort((a, b) => (b.pick_number || 0) - (a.pick_number || 0));
+    sections.push({ key: 'round-' + rd, label: 'Round ' + rd, count: items.length, body: items.map(pickItemHtml).join('') });
+  });
+
+  return sections;
+}
+
+function renderActivity() {
+  const body = document.getElementById('activity-body');
+  if (!body) return;
+  const sections = buildActivitySections();
+  if (!sections.length) {
+    body.innerHTML = '<div class="log-empty">No draft picks or transactions yet.</div>';
+    return;
+  }
+  // Most-recent (first) section open by default; honor any section the user has toggled.
+  const isOpen = (key, i) => (key in activityOpen) ? activityOpen[key] : (i === 0);
+
+  body.innerHTML = sections.map((s, i) =>
+    '<div class="log-sec' + (isOpen(s.key, i) ? '' : ' collapsed') + '" data-key="' + s.key + '">'
+    + '<div class="log-sec-head"><span class="chev">\u25BC</span>' + escapeHtml(s.label) + '<span class="count">' + s.count + '</span></div>'
+    + '<div class="log-sec-body">' + s.body + '</div>'
+  + '</div>').join('');
+
+  body.querySelectorAll('.log-sec').forEach(sec => {
+    const key = sec.getAttribute('data-key');
+    sec.querySelector('.log-sec-head').addEventListener('click', () => {
+      const collapsed = sec.classList.toggle('collapsed');
+      activityOpen[key] = !collapsed;
+    });
+  });
+  body.querySelectorAll('img[data-monid]').forEach(img => attachIconFallback(img, pokemonById[img.getAttribute('data-monid')]));
+}
+
+function setActivityCollapsed(collapsed) { document.getElementById('activity').classList.toggle('collapsed', collapsed); }
+function toggleActivity() { document.getElementById('activity').classList.toggle('collapsed'); }
+
+// ─────────────────────────────────────────────────────────────────────────────
 // REALTIME — subscribe to draft picks + the draft row. On any change, re-fetch the
 // small slice of state and re-render. Re-fetching (rather than diffing the event
 // payload) keeps inserts/updates/deletes uniform and sidesteps the thin DELETE
@@ -1083,6 +1295,8 @@ function initRealtime() {
   liveChannel = sb.channel('draft-live')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'team_pokemon' }, scheduleRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'drafts' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'free_agency_moves' }, scheduleRefresh)
     .subscribe(status => updateLiveBadge(status));
 }
 
@@ -1106,14 +1320,18 @@ async function refreshDraftState() {
   try {
     const teamIds = teams.map(t => t.id);
 
-    const [draftRes, picksRes] = await Promise.all([
+    const [draftRes, picksRes, tradeRes, faRes] = await Promise.all([
       sb.from('drafts').select('draft_order, current_pick_number, status').eq('season_id', season.id).maybeSingle(),
       teamIds.length
         ? sb.from('team_pokemon').select('team_id, pokemon_id, draft_pick_number').eq('acquired_via', 'draft').in('team_id', teamIds)
         : Promise.resolve({ data: [], error: null }),
+      sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at, notes').eq('season_id', season.id),
+      sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at, notes').eq('season_id', season.id),
     ]);
     if (draftRes.error) throw draftRes.error;
     if (picksRes.error) throw picksRes.error;
+    if (tradeRes.error) throw tradeRes.error;
+    if (faRes.error) throw faRes.error;
 
     draft = draftRes.data || null;
 
@@ -1139,10 +1357,13 @@ async function refreshDraftState() {
         .map(t => t.id);
     }
 
+    buildTxns(tradeRes.data, faRes.data);
+
     renderSidebar();
     renderStatus();
     refreshPoolColors();
     updateUndoButton();
+    renderActivity();
   } catch (err) {
     console.error('Realtime refresh failed:', err);
   }
@@ -1166,8 +1387,9 @@ async function init() {
     renderSidebar();
     renderStatus();
     renderPool();
+    renderActivity();
     setNavHeight();
-    if (isMobile()) setSidebarCollapsed(true);   // phones open to the tier-lanes view
+    if (isMobile()) { setSidebarCollapsed(true); setActivityCollapsed(true); }   // phones open to the tier-lanes view
     banner.hidden = true;
     document.getElementById('layout').hidden = false;
     initAuth();       // non-blocking; reveals admin controls once the session resolves
