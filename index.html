@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SBL Hub — Standings</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* ─── TOKENS (shared verbatim with the rest of the hub) ─── */
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+  --nav-h: 49px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ─── NAV (identical header + Teams dropdown to the other hub pages) ─── */
+nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1rem; position: sticky; top: 0; z-index: 100; }
+.nav-logo { font-size: 15px; font-weight: 700; color: var(--accent); padding: 14px 16px 14px 0; margin-right: 8px; border-right: 1px solid var(--border); white-space: nowrap; }
+.nav-tabs { display: flex; align-items: stretch; }
+.nav-tab { padding: 14px 16px; font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; border-bottom: 2px solid transparent; transition: color .15s, border-color .15s; }
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; padding-left: 12px; }
+
+.nav-tab-wrap { position: relative; display: flex; align-items: stretch; }
+button.nav-tab { background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.nav-trigger .caret { font-size: 10px; transition: transform .15s; }
+.nav-trigger[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.team-menu { position: fixed; z-index: 150; width: 280px; max-width: calc(100vw - 16px); max-height: min(60vh, 460px); display: flex; flex-direction: column; overflow: hidden; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 14px 34px rgba(0,0,0,.5); }
+.team-menu[hidden] { display: none; }
+.team-menu-search { padding: 8px; border-bottom: 1px solid var(--border); }
+.team-menu-search input { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; color: var(--text); font-size: 13px; outline: none; }
+.team-menu-search input:focus { border-color: var(--accent); }
+.team-menu-search input::placeholder { color: var(--text3); }
+.team-menu-list { overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.team-menu-item { display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 6px; padding: 8px 10px; color: var(--text); font-size: 13px; cursor: pointer; font-family: inherit; }
+.team-menu-item:hover, .team-menu-item.kbd { background: var(--bg3); }
+.team-menu-item .pl { color: var(--text3); font-weight: 400; }
+.team-menu-empty { font-size: 12px; color: var(--text3); padding: 8px 10px; font-style: italic; }
+
+.btn { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 14px; cursor: pointer; font-family: inherit; transition: border-color .15s, background .15s; }
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-accent:hover { filter: brightness(1.08); border-color: var(--accent); }
+.user-chip { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
+.user-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.user-chip .email { color: var(--text); font-weight: 600; }
+
+/* ─── PAGE GRID: leaders | logo+standings | feed ─── */
+.layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.18fr) minmax(0,1fr); gap: 12px; padding: 12px; align-items: start; }
+.col { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.card-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; margin-bottom: 10px; }
+.card-title.center { text-align: center; }
+.empty { font-size: 11px; color: var(--text3); font-style: italic; padding: 4px 0; }
+
+/* ─── LARGE LOGO + SEASON NAME ─── */
+.hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 18px 14px; }
+.hero .logo-img { max-width: 200px; max-height: 160px; object-fit: contain; }
+.hero .logo-fallback { width: 150px; height: 150px; border-radius: 18px; background: var(--bg3); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 800; letter-spacing: 2px; color: var(--accent); }
+.hero .season-name { font-size: 22px; font-weight: 800; line-height: 1.2; }
+
+/* ─── TABLES (standings + leaders) ─── */
+table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.tbl td { padding: 6px 6px; border-bottom: 1px solid var(--bg3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl .rank { color: var(--text3); font-weight: 700; width: 1%; padding-right: 4px; }
+.tbl .pl { color: var(--text3); font-weight: 400; }
+.tbl .pos { color: var(--green); } .tbl .neg { color: var(--red); }
+.tbl .dim { opacity: .42; }
+.lead-mon { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lead-mon img { width: 26px; height: 26px; image-rendering: pixelated; flex-shrink: 0; }
+.lead-mon span { overflow: hidden; text-overflow: ellipsis; }
+.tbl td.team-cell { max-width: 0; }    /* let team names ellipsis instead of forcing width */
+
+.kf-note { font-size: 10px; color: var(--text3); margin-top: 8px; line-height: 1.4; }
+
+/* ─── DRAFT / UPCOMING ─── */
+.draft-status { font-size: 15px; font-weight: 700; text-align: center; padding: 6px 0 4px; }
+.draft-sub { font-size: 12px; color: var(--text2); text-align: center; }
+.match-row { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; }
+.match-list { display: flex; flex-direction: column; gap: 8px; }
+.match-teams { font-size: 12px; line-height: 1.45; }
+.match-teams .vs { color: var(--text3); }
+.match-teams .pl { color: var(--text3); font-weight: 400; }
+.match-date { font-size: 10px; font-weight: 700; letter-spacing: .3px; color: var(--text3); text-transform: uppercase; margin-top: 3px; }
+
+/* ─── RECENTLY COMPLETED ─── */
+.done-row { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 11px; }
+.done-side { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.done-side .who { font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.done-side .who.win { font-weight: 700; color: var(--blue); }
+.done-side .sc { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.done-side .sc.win { color: var(--blue); }
+.brought { display: flex; gap: 2px; margin: 3px 0 7px; flex-wrap: wrap; }
+.brought img { width: 22px; height: 22px; image-rendering: pixelated; }
+.done-mid { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .3px; text-align: center; margin: 2px 0; }
+.done-date { font-size: 10px; color: var(--text3); text-align: right; margin-top: 4px; }
+
+/* ─── TRANSACTIONS ─── */
+.txn-list { display: flex; flex-direction: column; gap: 8px; }
+.txn { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.txn .with { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+.txn .swap { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.txn .swap .drop { color: var(--red); } .txn .swap .gain { color: var(--green); }
+.txn .swap img { width: 22px; height: 22px; image-rendering: pixelated; vertical-align: middle; }
+
+/* ─── BANNER / MODAL / TOAST ─── */
+.banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
+.banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay[hidden] { display: none; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: 100%; max-width: 380px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.modal p { font-size: 13px; color: var(--text2); line-height: 1.5; margin-bottom: 14px; }
+.modal input[type=email] { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; margin-bottom: 14px; }
+.modal input[type=email]:focus { border-color: var(--accent); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+#toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 300; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.toast { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 13px; color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,.4); animation: toast-in .18s ease; max-width: 90vw; }
+.toast.ok { border-color: rgba(76,175,125,.5); } .toast.err { border-color: rgba(224,85,85,.55); color: #ff9c9c; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ─── RESPONSIVE (coarse for now; full pass is Phase 5) ─── */
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 1fr; }
+  /* Logo + standings lead on narrow screens; leaders and feed follow. */
+  .col-center { order: -1; }
+}
+@media (max-width: 820px) {
+  nav { padding: 0 8px; overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  .nav-logo { padding: 12px 10px 12px 0; margin-right: 6px; font-size: 14px; flex-shrink: 0; }
+  .nav-tabs { flex-shrink: 0; }
+  .nav-tab { padding: 12px 10px; white-space: nowrap; flex-shrink: 0; }
+  .nav-right { flex-shrink: 0; padding-left: 8px; gap: 8px; }
+  .user-chip .email { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn { padding: 6px 10px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">SBL Hub</div>
+  <div class="nav-tabs">
+    <a class="nav-tab active" href="standings.html">Standings</a>
+    <div class="nav-tab-wrap">
+      <button class="nav-tab nav-trigger" id="teams-tab" onclick="toggleTeamMenu(event)" aria-haspopup="true" aria-expanded="false">Teams <span class="caret">▾</span></button>
+      <div class="team-menu" id="team-menu" hidden>
+        <div class="team-menu-search">
+          <input type="text" id="team-search" placeholder="Search teams…" autocomplete="off" oninput="filterTeamMenu()" onkeydown="onTeamSearchKey(event)">
+        </div>
+        <div class="team-menu-list" id="team-menu-list"></div>
+      </div>
+    </div>
+    <a class="nav-tab" href="draft.html">Draft</a>
+    <a class="nav-tab" href="schedule.html">Schedule</a>
+  </div>
+  <div class="nav-right">
+    <button class="btn" id="login-btn" onclick="openLogin()" hidden>Admin Login</button>
+    <span class="user-chip" id="user-chip" hidden>
+      <span class="dot"></span><span class="email" id="user-email"></span>
+      <button class="btn" onclick="doLogout()">Log out</button>
+    </span>
+  </div>
+</nav>
+
+<div id="boot-banner" class="banner">Loading standings…</div>
+
+<div class="layout" id="layout" hidden>
+
+  <!-- ── LEFT: leader boards ── -->
+  <div class="col col-left">
+    <div class="card">
+      <div class="card-title center">KO Leaders · Top 10</div>
+      <div id="ko-leaders"></div>
+    </div>
+    <div class="card">
+      <div class="card-title center">KF Δ Leaders · Top 10</div>
+      <div id="kfd-leaders"></div>
+    </div>
+    <div class="card">
+      <div class="card-title center">K/F Leaders · Top 10</div>
+      <div id="kf-leaders"></div>
+      <div class="kf-note">Pokémon with 4 or fewer games played are dimmed and ranked below qualified Pokémon.</div>
+    </div>
+  </div>
+
+  <!-- ── CENTER: logo + season standings ── -->
+  <div class="col col-center">
+    <div class="card">
+      <div class="hero" id="hero"></div>
+    </div>
+    <div class="card">
+      <div class="card-title center">Season Standings</div>
+      <div id="standings"></div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: draft/upcoming, completed, transactions ── -->
+  <div class="col col-right">
+    <div class="card">
+      <div class="card-title" id="draft-card-title">Up Next</div>
+      <div id="draft-panel"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Recently Completed</div>
+      <div id="completed"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Recent Transactions</div>
+      <div id="transactions"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="modal-overlay" hidden onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
+const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
+
+// League logo: set this once the asset path exists in the repo. Empty → text mark.
+const SBL_LOGO_URL = "";
+
+const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
+
+// ── STATE ──
+let season       = null;
+let allTeams     = [];
+let teamById     = {};
+let allOwners    = [];
+let coachByTeam  = {};
+let draftRow     = null;
+let matches      = [];     // all matches for the season (any stage)
+let gamesByMatch = {};     // match_id -> [game rows]
+let gameToMatch  = {};     // game_id -> match_id
+let statRows     = [];     // all game_pokemon_stats rows for the season
+let txns         = [];
+let pokemonById  = {};
+let currentUser  = null;
+let isAdmin      = false;
+
+// ── ID / URL HELPERS (mirror the rest of the hub) ──
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/);
+  if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(mon)   { return mon && mon.id ? ASSET_BASE + 'icons/'   + localId(mon.id) + '.png' : ''; }
+function spriteUrl(mon) { return mon && mon.id ? ASSET_BASE + 'sprites/' + localId(mon.id) + '.png' : ''; }
+function attachIconFallback(img, mon) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/')) { this.src = spriteUrl(mon); }
+    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+
+// ── FORMAT HELPERS ──
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function signed(n) { return (n > 0 ? '+' : '') + n; }
+function deltaClass(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
+function kfRatio(kos, faints) { if (faints === 0) return kos === 0 ? '—' : '∞'; return (kos / faints).toFixed(2); }
+function kfSortValue(kos, faints) { return faints > 0 ? kos / faints : (kos > 0 ? Infinity : 0); }
+function fmtRate(r) { return r == null ? '—' : (r * 100).toFixed(0) + '%'; }
+function fmtDateTime(s) {
+  if (!s) return 'TBD';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return 'TBD';
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function monName(id) { const m = pokemonById[id]; return m ? m.name : id; }
+function monFor(id)  { return pokemonById[id] || { id: id, name: id }; }
+// "Team Name (Coach)" as HTML, coach dimmed.
+function teamLabelHtml(id) {
+  const t = teamById[id];
+  if (!t) return 'TBD';
+  const c = coachByTeam[id];
+  return escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA LOAD
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadData() {
+  const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
+    const ct = res.headers.get('content-type') || '';
+    if (!res.ok || !ct.includes('json')) throw new Error('pokemon.json not found at "' + POKEMON_JSON_URL + '" (got ' + res.status + ').');
+    return res.json();
+  });
+
+  const { data: seasonRow, error: seasonErr } = await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
+  if (seasonErr) throw seasonErr;
+  if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
+  season = seasonRow;
+
+  const [teamsRes, ownersRes, draftRes, matchRes, faRes, tradeRes] = await Promise.all([
+    sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
+    sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
+    sb.from('drafts').select('status, started_at, completed_at').eq('season_id', season.id).maybeSingle(),
+    sb.from('matches').select('id, stage, week, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id').eq('season_id', season.id),
+    sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at').eq('season_id', season.id),
+    sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at').eq('season_id', season.id),
+  ]);
+  for (const r of [teamsRes, ownersRes, draftRes, matchRes, faRes, tradeRes]) if (r.error) throw r.error;
+
+  allTeams = teamsRes.data || [];
+  teamById = {};
+  allTeams.forEach(t => { teamById[t.id] = t; });
+  const teamIds = allTeams.map(t => t.id);
+
+  allOwners = (ownersRes.data || []).filter(o => teamIds.includes(o.team_id));
+  coachByTeam = {};
+  allOwners.filter(o => o.ended_week == null).forEach(o => { if (o.players) coachByTeam[o.team_id] = o.players.display_name; });
+
+  draftRow = draftRes.data || null;
+  matches  = matchRes.data || [];
+
+  // Games + per-Pokémon stats across the whole season (drives leaders, KD, "brought").
+  gamesByMatch = {}; gameToMatch = {}; statRows = [];
+  const matchIds = matches.map(m => m.id);
+  if (matchIds.length) {
+    const { data: games, error: gErr } = await sb.from('games').select('id, match_id').in('match_id', matchIds);
+    if (gErr) throw gErr;
+    (games || []).forEach(g => { (gamesByMatch[g.match_id] = gamesByMatch[g.match_id] || []).push(g); gameToMatch[g.id] = g.match_id; });
+    const gameIds = (games || []).map(g => g.id);
+    if (gameIds.length) {
+      const { data: stats, error: sErr } = await sb.from('game_pokemon_stats').select('game_id, team_id, pokemon_id, kills, deaths').in('game_id', gameIds);
+      if (sErr) throw sErr;
+      statRows = stats || [];
+    }
+  }
+
+  txns = buildTransactions(faRes.data || [], tradeRes.data || []);
+
+  const pj = await pjPromise;
+  const arr = Array.isArray(pj) ? pj : pj.pokemon;
+  pokemonById = {};
+  arr.forEach(p => { pokemonById[p.id] = p; });
+}
+
+function buildTransactions(faMoves, trades) {
+  const feed = [];
+  faMoves.forEach(m => feed.push({ kind: 'fa', week: m.effective_week, when: m.occurred_at, added: m.pokemon_added_id, dropped: m.pokemon_dropped_id, teams: [m.team_id] }));
+  trades.forEach(t => feed.push({ kind: 'trade', week: t.effective_week, when: t.occurred_at, aTeam: t.team_a_id, aMon: t.pokemon_a_id, bTeam: t.team_b_id, bMon: t.pokemon_b_id, teams: [t.team_a_id, t.team_b_id] }));
+  return feed.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AGGREGATION
+// ─────────────────────────────────────────────────────────────────────────────
+let _matchIndex = null;
+function matchById(id) { if (!_matchIndex) { _matchIndex = {}; matches.forEach(m => { _matchIndex[m.id] = m; }); } return _matchIndex[id]; }
+
+// Per (pokemon, team) totals across all stages — drives the three leader boards.
+function buildLeaders() {
+  const map = {};
+  statRows.forEach(s => {
+    const key = s.pokemon_id + '|' + s.team_id;
+    let e = map[key];
+    if (!e) e = map[key] = { pokemon_id: s.pokemon_id, team_id: s.team_id, kos: 0, faints: 0, games: new Set(), matchesSet: new Set() };
+    e.kos += s.kills || 0; e.faints += s.deaths || 0;
+    e.games.add(s.game_id);
+    const mid = gameToMatch[s.game_id]; if (mid) e.matchesSet.add(mid);
+  });
+  return Object.values(map).map(e => ({
+    pokemon_id: e.pokemon_id, team_id: e.team_id,
+    kos: e.kos, faints: e.faints, kfDelta: e.kos - e.faints,
+    gp: e.games.size, mp: e.matchesSet.size,
+  }));
+}
+
+// Regular-season standings rows with SoS / SoSoS.
+function buildStandings() {
+  const reg = matches.filter(m => m.stage === 'regular');
+
+  // Win/loss + game differential per team.
+  const rec = {};
+  allTeams.forEach(t => { rec[t.id] = { wins: 0, losses: 0, gameDiff: 0 }; });
+  reg.forEach(m => {
+    if (rec[m.team_a_id]) rec[m.team_a_id].gameDiff += (m.team_a_score || 0) - (m.team_b_score || 0);
+    if (rec[m.team_b_id]) rec[m.team_b_id].gameDiff += (m.team_b_score || 0) - (m.team_a_score || 0);
+    if (!m.winner_team_id) return;
+    [m.team_a_id, m.team_b_id].forEach(tid => { if (rec[tid]) (tid === m.winner_team_id ? rec[tid].wins++ : rec[tid].losses++); });
+  });
+
+  // KF Δ (KD) over regular stage only.
+  const kd = {}; allTeams.forEach(t => { kd[t.id] = 0; });
+  statRows.forEach(s => {
+    const m = matchById(gameToMatch[s.game_id]);
+    if (m && m.stage === 'regular' && kd[s.team_id] != null) kd[s.team_id] += (s.kills || 0) - (s.deaths || 0);
+  });
+
+  // Win rates + opponent map for SoS / SoSoS.
+  const winRate = {};
+  allTeams.forEach(t => { const r = rec[t.id]; const dec = r.wins + r.losses; winRate[t.id] = dec > 0 ? r.wins / dec : null; });
+  const opps = {}; allTeams.forEach(t => { opps[t.id] = []; });
+  reg.forEach(m => {
+    if (opps[m.team_a_id]) opps[m.team_a_id].push(m.team_b_id);
+    if (opps[m.team_b_id]) opps[m.team_b_id].push(m.team_a_id);
+  });
+  const avg = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const sos = {}, sosos = {};
+  allTeams.forEach(t => {
+    sos[t.id] = avg(opps[t.id].map(o => winRate[o]));
+    const second = []; opps[t.id].forEach(o => opps[o].forEach(oo => second.push(winRate[oo])));
+    sosos[t.id] = avg(second);
+  });
+
+  return allTeams.map(t => ({
+    id: t.id, name: t.name, seed: t.initial_seed,
+    wins: rec[t.id].wins, losses: rec[t.id].losses, gameDiff: rec[t.id].gameDiff,
+    kd: kd[t.id], sos: sos[t.id], sosos: sosos[t.id],
+  })).sort((a, b) =>
+    b.wins - a.wins
+    || b.gameDiff - a.gameDiff
+    || b.kd - a.kd
+    || (b.sos ?? -1) - (a.sos ?? -1)
+    || (b.sosos ?? -1) - (a.sosos ?? -1)
+    || (a.seed ?? 999) - (b.seed ?? 999)
+    || a.name.localeCompare(b.name)
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function render() {
+  renderHero();
+  renderStandings();
+  renderLeaders();
+  renderDraftPanel();
+  renderCompleted();
+  renderTransactions();
+}
+
+function renderHero() {
+  const el = document.getElementById('hero');
+  el.innerHTML = '';
+  if (SBL_LOGO_URL) {
+    const img = document.createElement('img');
+    img.className = 'logo-img'; img.src = SBL_LOGO_URL; img.alt = 'SBL logo';
+    img.onerror = function () { this.replaceWith(logoFallback()); };
+    el.appendChild(img);
+  } else {
+    el.appendChild(logoFallback());
+  }
+  const nm = document.createElement('div');
+  nm.className = 'season-name';
+  nm.textContent = season.name || 'Season';
+  el.appendChild(nm);
+}
+function logoFallback() { const d = document.createElement('div'); d.className = 'logo-fallback'; d.textContent = 'SBL'; return d; }
+
+function renderStandings() {
+  const rows = buildStandings();
+  const el = document.getElementById('standings');
+  if (!rows.length) { el.innerHTML = '<div class="empty">No teams in this season yet.</div>'; return; }
+  let html = '<table class="tbl"><thead><tr>'
+    + '<th class="rank">#</th><th>Team</th>'
+    + '<th class="num">Match W</th><th class="num">Match L</th>'
+    + '<th class="num">SOS</th><th class="num">SOSOS</th>'
+    + '<th class="num">Game Diff</th><th class="num">KF Δ</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    html += '<tr>'
+      + '<td class="rank">' + (i + 1) + '</td>'
+      + '<td class="team-cell">' + teamLabelHtml(r.id) + '</td>'
+      + '<td class="num">' + r.wins + '</td>'
+      + '<td class="num">' + r.losses + '</td>'
+      + '<td class="num">' + fmtRate(r.sos) + '</td>'
+      + '<td class="num">' + fmtRate(r.sosos) + '</td>'
+      + '<td class="num ' + deltaClass(r.gameDiff) + '">' + signed(r.gameDiff) + '</td>'
+      + '<td class="num ' + deltaClass(r.kd) + '">' + signed(r.kd) + '</td>'
+      + '</tr>';
+  });
+  el.innerHTML = html + '</tbody></table>';
+}
+
+// One leader board. `metric` picks the value column; `sortKf` applies the
+// participation gate (GP>4 first, GP<=4 dimmed below).
+function renderLeaderBoard(elId, metricLabel, valueFn, sorter, opts) {
+  opts = opts || {};
+  const el = document.getElementById(elId);
+  let rows = buildLeaders();
+  if (!rows.length) { el.innerHTML = '<div class="empty">No game data yet.</div>'; return; }
+  rows = sorter(rows).slice(0, 10);
+
+  let html = '<table class="tbl"><thead><tr>'
+    + '<th class="rank">#</th><th>Pokémon</th><th>Team</th>'
+    + '<th class="num">' + metricLabel + '</th>'
+    + '<th class="num" title="Match Participation Count">MP</th>'
+    + '<th class="num" title="Game Participation Count">GP</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    const mon = monFor(r.pokemon_id);
+    const dim = opts.gate && r.gp <= 4 ? ' dim' : '';
+    html += '<tr class="' + dim.trim() + '">'
+      + '<td class="rank">' + (i + 1) + '</td>'
+      + '<td><div class="lead-mon"><img src="' + iconUrl(mon) + '" alt="" data-mid="' + escapeHtml(r.pokemon_id) + '"><span>' + escapeHtml(mon.name) + '</span></div></td>'
+      + '<td class="team-cell">' + teamLabelHtml(r.team_id) + '</td>'
+      + '<td class="num">' + valueFn(r) + '</td>'
+      + '<td class="num">' + r.mp + '</td>'
+      + '<td class="num">' + r.gp + '</td>'
+      + '</tr>';
+  });
+  el.innerHTML = html + '</tbody></table>';
+  el.querySelectorAll('img[data-mid]').forEach(img => attachIconFallback(img, monFor(img.dataset.mid)));
+}
+
+function renderLeaders() {
+  renderLeaderBoard('ko-leaders', 'KOs', r => r.kos,
+    rows => rows.slice().sort((a, b) => b.kos - a.kos || b.kfDelta - a.kfDelta));
+  renderLeaderBoard('kfd-leaders', 'KF Δ', r => signed(r.kfDelta),
+    rows => rows.slice().sort((a, b) => b.kfDelta - a.kfDelta || b.kos - a.kos));
+  renderLeaderBoard('kf-leaders', 'K/F', r => kfRatio(r.kos, r.faints),
+    rows => rows.slice().sort((a, b) =>
+      ((b.gp > 4) - (a.gp > 4))                                  // qualified first
+      || kfSortValue(b.kos, b.faints) - kfSortValue(a.kos, a.faints)
+      || b.kos - a.kos),
+    { gate: true });
+}
+
+function renderDraftPanel() {
+  const el = document.getElementById('draft-panel');
+  const title = document.getElementById('draft-card-title');
+  const status = draftRow ? draftRow.status : 'pending';
+
+  if (status === 'pending') {
+    title.textContent = 'Draft';
+    // No draft-date field yet — show TBD; wire the real date here once it exists.
+    el.innerHTML = '<div class="draft-status">Draft Day</div><div class="draft-sub">TBD</div>';
+    return;
+  }
+  if (status === 'in_progress') {
+    title.textContent = 'Draft';
+    el.innerHTML = '<div class="draft-status">Drafting in Progress</div>';
+    return;
+  }
+
+  // Draft complete → upcoming scheduled matches.
+  title.textContent = 'Upcoming Matches';
+  const upcoming = matches
+    .filter(m => m.match_date && !m.winner_team_id)
+    .sort((a, b) => new Date(a.match_date) - new Date(b.match_date));
+  if (!upcoming.length) { el.innerHTML = '<div class="empty">No upcoming matches scheduled.</div>'; return; }
+
+  const list = document.createElement('div');
+  list.className = 'match-list';
+  upcoming.forEach(m => {
+    const row = document.createElement('div');
+    row.className = 'match-row';
+    row.innerHTML =
+      '<div class="match-teams">' + teamLabelHtml(m.team_a_id) + ' <span class="vs">vs</span> ' + teamLabelHtml(m.team_b_id) + '</div>'
+      + '<div class="match-date">' + fmtDateTime(m.match_date) + '</div>';
+    list.appendChild(row);
+  });
+  el.innerHTML = ''; el.appendChild(list);
+}
+
+// Up to 6 distinct Pokémon a team sent out across a match's games.
+function broughtIconsHtml(matchId, teamId) {
+  const gameIds = (gamesByMatch[matchId] || []).map(g => g.id);
+  const seen = [];
+  statRows.forEach(s => { if (s.team_id === teamId && gameIds.includes(s.game_id) && !seen.includes(s.pokemon_id)) seen.push(s.pokemon_id); });
+  if (!seen.length) return '';
+  return '<div class="brought">' + seen.slice(0, 6).map(pid =>
+    '<img src="' + iconUrl(monFor(pid)) + '" alt="" title="' + escapeHtml(monName(pid)) + '" data-mid="' + escapeHtml(pid) + '">').join('') + '</div>';
+}
+
+function renderCompleted() {
+  const el = document.getElementById('completed');
+  const done = matches
+    .filter(m => m.winner_team_id)
+    .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0));
+  if (!done.length) { el.innerHTML = '<div class="empty">No completed matches yet.</div>'; return; }
+
+  const list = document.createElement('div');
+  list.className = 'match-list';
+  done.forEach(m => {
+    const aWin = m.winner_team_id === m.team_a_id;
+    const bWin = m.winner_team_id === m.team_b_id;
+    const row = document.createElement('div');
+    row.className = 'done-row';
+    row.innerHTML =
+      '<div class="done-side"><span class="who' + (aWin ? ' win' : '') + '">' + teamLabelHtml(m.team_a_id) + '</span>'
+      + '<span class="sc' + (aWin ? ' win' : '') + '">' + (m.team_a_score || 0) + '</span></div>'
+      + broughtIconsHtml(m.id, m.team_a_id)
+      + '<div class="done-mid">vs</div>'
+      + '<div class="done-side"><span class="who' + (bWin ? ' win' : '') + '">' + teamLabelHtml(m.team_b_id) + '</span>'
+      + '<span class="sc' + (bWin ? ' win' : '') + '">' + (m.team_b_score || 0) + '</span></div>'
+      + broughtIconsHtml(m.id, m.team_b_id)
+      + '<div class="done-date">' + fmtDateTime(m.match_date) + '</div>';
+    list.appendChild(row);
+  });
+  el.innerHTML = ''; el.appendChild(list);
+  el.querySelectorAll('img[data-mid]').forEach(img => attachIconFallback(img, monFor(img.dataset.mid)));
+}
+
+function renderTransactions() {
+  const el = document.getElementById('transactions');
+  el.innerHTML = '';
+  if (!txns.length) { el.innerHTML = '<div class="empty">No transactions yet.</div>'; return; }
+
+  const list = document.createElement('div');
+  list.className = 'txn-list';
+  txns.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'txn';
+    if (t.kind === 'fa') {
+      const dropped = monFor(t.dropped), added = monFor(t.added);
+      row.innerHTML =
+        '<div class="with">' + teamLabelHtml(t.teams[0]) + ' · Free Agency</div>'
+        + '<div class="swap"><span class="drop"><img src="' + iconUrl(dropped) + '" data-mid="' + escapeHtml(t.dropped) + '"> ' + escapeHtml(dropped.name) + '</span>'
+        + '<span>⇄</span><span class="gain"><img src="' + iconUrl(added) + '" data-mid="' + escapeHtml(t.added) + '"> ' + escapeHtml(added.name) + '</span></div>';
+    } else {
+      const aMon = monFor(t.aMon), bMon = monFor(t.bMon);
+      row.innerHTML =
+        '<div class="with">' + teamLabelHtml(t.aTeam) + ' ⇄ ' + teamLabelHtml(t.bTeam) + '</div>'
+        + '<div class="swap"><span class="gain"><img src="' + iconUrl(aMon) + '" data-mid="' + escapeHtml(t.aMon) + '"> ' + escapeHtml(aMon.name) + '</span>'
+        + '<span>⇄</span><span class="gain"><img src="' + iconUrl(bMon) + '" data-mid="' + escapeHtml(t.bMon) + '"> ' + escapeHtml(bMon.name) + '</span></div>';
+    }
+    list.appendChild(row);
+  });
+  el.appendChild(list);
+  el.querySelectorAll('img[data-mid]').forEach(img => attachIconFallback(img, monFor(img.dataset.mid)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEAM SELECTOR — same searchable dropdown as the rest of the hub. On non-team
+// pages, choosing a team navigates to its page.
+// ─────────────────────────────────────────────────────────────────────────────
+let teamMenuKbdIndex = -1;
+function teamMenuEntries() {
+  return [...allTeams]
+    .sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name))
+    .map(t => ({ t, coach: coachByTeam[t.id] || '', hay: (t.name + ' ' + (coachByTeam[t.id] || '')).toLowerCase() }));
+}
+function positionTeamMenu() {
+  const menu = document.getElementById('team-menu');
+  if (!menu || menu.hidden) return;
+  const r = document.getElementById('teams-tab').getBoundingClientRect();
+  const w = menu.offsetWidth;
+  menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+  menu.style.top = r.bottom + 'px';
+}
+function toggleTeamMenu(e) { if (e) e.stopPropagation(); const m = document.getElementById('team-menu'); m.hidden ? openTeamMenu() : closeTeamMenu(); }
+function openTeamMenu() {
+  const menu = document.getElementById('team-menu');
+  menu.hidden = false;
+  document.getElementById('teams-tab').setAttribute('aria-expanded', 'true');
+  positionTeamMenu();
+  const search = document.getElementById('team-search');
+  search.value = ''; teamMenuKbdIndex = -1; filterTeamMenu();
+  setTimeout(() => search.focus(), 20);
+}
+function closeTeamMenu() { document.getElementById('team-menu').hidden = true; document.getElementById('teams-tab').setAttribute('aria-expanded', 'false'); }
+function filterTeamMenu() {
+  const q = (document.getElementById('team-search').value || '').trim().toLowerCase();
+  const list = document.getElementById('team-menu-list');
+  const rows = teamMenuEntries().filter(e => !q || e.hay.includes(q));
+  teamMenuKbdIndex = -1;
+  if (!rows.length) { list.innerHTML = '<div class="team-menu-empty">No teams match “' + escapeHtml(q) + '”.</div>'; return; }
+  list.innerHTML = '';
+  rows.forEach(e => {
+    const btn = document.createElement('button');
+    btn.className = 'team-menu-item';
+    btn.dataset.slug = e.t.slug || '';
+    btn.innerHTML = escapeHtml(e.t.name) + (e.coach ? ' <span class="pl">(' + escapeHtml(e.coach) + ')</span>' : '');
+    btn.onclick = () => gotoTeam(e.t.slug);
+    list.appendChild(btn);
+  });
+}
+function onTeamSearchKey(e) {
+  const items = [...document.querySelectorAll('.team-menu-item')];
+  if (e.key === 'Escape') { closeTeamMenu(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); const pick = items[teamMenuKbdIndex] || items[0]; if (pick) gotoTeam(pick.dataset.slug); return; }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault(); if (!items.length) return;
+    teamMenuKbdIndex = e.key === 'ArrowDown' ? Math.min(items.length - 1, teamMenuKbdIndex + 1) : Math.max(0, teamMenuKbdIndex - 1);
+    items.forEach((it, i) => it.classList.toggle('kbd', i === teamMenuKbdIndex));
+    items[teamMenuKbdIndex].scrollIntoView({ block: 'nearest' });
+  }
+}
+function gotoTeam(slug) { if (slug) location.href = 'team.html#' + slug; }
+document.addEventListener('click', e => { if (!e.target.closest('.nav-tab-wrap')) closeTeamMenu(); });
+window.addEventListener('resize', () => { setNavHeight(); positionTeamMenu(); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH (admin session continuity)
+// ─────────────────────────────────────────────────────────────────────────────
+async function initAuth() {
+  const { data: { session } } = await sb.auth.getSession();
+  await applySession(session);
+  sb.auth.onAuthStateChange((_e, s) => applySession(s));
+}
+async function applySession(session) {
+  currentUser = session ? session.user : null;
+  const loginBtn = document.getElementById('login-btn'), chip = document.getElementById('user-chip');
+  if (currentUser) {
+    const { data: prof } = await sb.from('profiles').select('is_admin').eq('id', currentUser.id).maybeSingle();
+    isAdmin = !!(prof && prof.is_admin);
+    loginBtn.hidden = true; chip.hidden = false;
+    document.getElementById('user-email').textContent = currentUser.email || 'admin';
+  } else { isAdmin = false; loginBtn.hidden = false; chip.hidden = true; }
+}
+function openLogin() {
+  openModal('<h3>Admin Login</h3><p>Enter your admin email and we\u2019ll send a magic sign-in link.</p>'
+    + '<input type="email" id="login-email" placeholder="you@example.com" autocomplete="email">'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" id="send-link-btn" onclick="sendMagicLink()">Send link</button></div>');
+  setTimeout(() => document.getElementById('login-email').focus(), 30);
+  document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') sendMagicLink(); });
+}
+async function sendMagicLink() {
+  const email = (document.getElementById('login-email').value || '').trim();
+  if (!email) { showToast('Enter an email first.', 'err'); return; }
+  const btn = document.getElementById('send-link-btn'); btn.disabled = true; btn.textContent = 'Sending…';
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + window.location.pathname } });
+  if (error) { showToast('Could not send link: ' + error.message, 'err'); btn.disabled = false; btn.textContent = 'Send link'; return; }
+  closeModal(); showToast('Magic link sent to ' + email + '.', 'ok');
+}
+async function doLogout() { await sb.auth.signOut(); showToast('Logged out.', 'ok'); }
+function openModal(html) { document.getElementById('modal').innerHTML = html; document.getElementById('modal-overlay').hidden = false; }
+function closeModal() { document.getElementById('modal-overlay').hidden = true; }
+function showToast(msg, kind) {
+  const t = document.createElement('div'); t.className = 'toast' + (kind ? ' ' + kind : ''); t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3200);
+}
+function setNavHeight() { const nav = document.querySelector('nav'); if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px'); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+async function init() {
+  const banner = document.getElementById('boot-banner');
+  try {
+    await loadData();
+    render();
+    setNavHeight();
+    banner.hidden = true;
+    document.getElementById('layout').hidden = false;
+    initAuth();
+  } catch (err) {
+    console.error(err);
+    banner.className = 'banner err';
+    banner.textContent = 'Could not load the standings page: ' + (err.message || err);
+  }
+}
+init();
+</script>
+</body>
+</html>

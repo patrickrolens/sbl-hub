@@ -465,7 +465,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // the same (planner) repo, so ASSET_BASE is derived by stripping the filename —
 // one URL drives the data and the art. To move everything into the hub repo later,
 // set this back to "./pokemon.json".
-const POKEMON_JSON_URL = "https://patrickrolens.github.io/vgc-draft-planner/pokemon.json";
+const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');  // ".../vgc-draft-planner/"
 
 // Pokéball fallback — identical to the Planner / Tier Editor.
