@@ -314,6 +314,14 @@ function sizeInner(rounds, inner, innerW, champ) {
 function drawConnectors(svg, rounds) {
   const NS = 'http://www.w3.org/2000/svg';
   while (svg.firstChild) svg.removeChild(svg.firstChild);
+  // Size the SVG viewport to the bracket; relying on CSS inset:0 alone lets it
+  // fall back to the intrinsic 300x150 default and clip most connectors.
+  const inner = svg.parentNode;
+  const W = parseFloat(inner.style.width) || inner.clientWidth;
+  const H = parseFloat(inner.style.height) || inner.clientHeight;
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
   for (let r = 1; r < rounds.length; r++) {
     rounds[r].forEach(parent => {
       const px = parent._left != null ? parent._left : parseFloat(parent.el.style.left);
