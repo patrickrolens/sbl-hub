@@ -30,6 +30,8 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* ─── PAGE HEAD ─── */
+.preview-note { margin: 12px 16px 0; padding: 9px 13px; border: 1px solid var(--yellow); border-radius: 8px; background: rgba(240,192,96,.08); color: var(--yellow); font-size: 12px; font-weight: 600; }
+.preview-note[hidden] { display: none; }
 .page-head { padding: 18px 16px 4px; }
 .page-title { font-size: 19px; font-weight: 700; }
 .page-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
@@ -177,6 +179,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 <div id="boot-banner" class="banner">Loading…</div>
 
 <div id="layout" hidden>
+  <div id="preview-note" class="preview-note" hidden>Preview — this postseason isn’t published yet, so it’s only visible to admins. Publish it from the Matches admin page when you’re ready.</div>
   <div class="page-head">
     <div class="grow">
       <div class="page-title">Postseason</div>
@@ -241,6 +244,7 @@ let expandableKeys = [];           // all expandable keys from the last render
 let matchById = {};                // postseason match id -> match row
 let matchDetailCache = {};         // match id -> { games, stats }
 let detailLoading = {};            // match id -> bool
+let isAdmin = false;               // logged-in admin (for previewing before publish)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS (mirror the rest of the hub)
@@ -765,15 +769,36 @@ function showToast(msg, kind) {
   setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3400);
 }
 
+// Reuses the Supabase session shared across the hub (same origin); no login UI here.
+async function detectAdmin() {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session && session.user) {
+      const { data: prof } = await sb.from('profiles').select('is_admin').eq('id', session.user.id).maybeSingle();
+      isAdmin = !!(prof && prof.is_admin);
+    }
+  } catch (e) { /* treat as anonymous */ }
+}
+
 async function init() {
   const banner = document.getElementById('boot-banner');
   try {
-    const pjPromise = fetch(POKEMON_JSON_URL).then(r => r.ok ? r.json() : Promise.reject(new Error('pokemon.json ' + r.status)));
-
     const { data: seasonRow, error: sErr } = await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
     if (sErr) throw sErr;
     if (!seasonRow) throw new Error('No current season found.');
     season = seasonRow;
+
+    // Visibility gate: hidden from the public until published; admins can always preview.
+    const published = !!season.postseason_published;
+    await detectAdmin();
+    if (!published && !isAdmin) {
+      banner.className = 'banner';
+      banner.textContent = 'The postseason hasn\u2019t started yet — check back when the brackets go live.';
+      banner.hidden = false;
+      return;
+    }
+
+    const pjPromise = fetch(POKEMON_JSON_URL).then(r => r.ok ? r.json() : Promise.reject(new Error('pokemon.json ' + r.status)));
 
     const [teamsRes, ownersRes, matchRes] = await Promise.all([
       sb.from('teams').select('id, name, slug, logo_url, playoff_seed, cup_seed').eq('season_id', season.id),
@@ -811,6 +836,7 @@ async function init() {
     } catch (e) { console.error('pokemon.json:', e); showToast('Pokémon data didn\u2019t load — names/icons may be missing.', 'err'); }
 
     document.getElementById('season-sub').textContent = season.name;
+    if (!season.postseason_published && isAdmin) document.getElementById('preview-note').hidden = false;
     banner.hidden = true;
     document.getElementById('layout').hidden = false;
     renderAll();
