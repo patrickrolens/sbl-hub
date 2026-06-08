@@ -105,7 +105,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 /* ─── MATCH DETAIL PANEL (content ported from matches.html, shown as a right drawer) ─── */
 .panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200; display: flex; justify-content: flex-end; }
 .panel-overlay[hidden] { display: none; }
-.panel { width: min(480px, 100%); height: 100%; background: var(--bg2); border-left: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,.4); }
+.panel { width: 44%; height: 100%; background: var(--bg2); border-left: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,.4); }
 .panel-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); }
 .panel-title { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 700; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn-icon { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; font-family: inherit; padding: 6px 10px; border-radius: 6px; font-weight: 600; flex-shrink: 0; }
@@ -142,7 +142,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .game-mon .gmn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .game-mon.fainted { opacity: .42; }
 .dm-loading, .dm-empty { color: var(--text3); font-size: 13px; font-style: italic; padding: 12px 2px; }
-@media (max-width: 600px) { .panel { width: 100%; border-left: none; } }
+@media (max-width: 900px) { .panel { width: 100%; border-left: none; } }
 
 .banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
 .banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
