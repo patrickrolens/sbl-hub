@@ -19,14 +19,6 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 a { color: inherit; }
 
-/* ── NAV ── */
-nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1rem; position: sticky; top: 0; z-index: 100; height: var(--nav-h); }
-.nav-logo { font-size: 15px; font-weight: 700; color: var(--accent); padding-right: 16px; margin-right: 8px; border-right: 1px solid var(--border); white-space: nowrap; }
-.nav-tabs { display: flex; align-items: stretch; height: 100%; }
-.nav-tab { display: flex; align-items: center; padding: 0 16px; font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; border-bottom: 2px solid transparent; }
-.nav-tab:hover { color: var(--text); }
-.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
 /* ── LAYOUT ── */
 .layout { display: flex; align-items: flex-start; }
 .schedule-col { flex: 1 1 auto; min-width: 0; padding: 18px 16px 60px; }
@@ -135,27 +127,13 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
   body.panel-open .schedule-col { display: none; }
 }
 @media (max-width: 768px) {
-  nav { padding: 0 8px; }
-  .nav-logo { padding-right: 10px; margin-right: 6px; font-size: 14px; }
-  .nav-tabs { overflow-x: auto; scrollbar-width: none; }
-  .nav-tabs::-webkit-scrollbar { display: none; }
-  .nav-tab { padding: 0 11px; }
   .week-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
 <body>
 
-<nav>
-  <div class="nav-logo">SBL Hub</div>
-  <div class="nav-tabs">
-    <a class="nav-tab" href="standings.html">Standings</a>
-    <a class="nav-tab" href="team.html">Teams</a>
-    <a class="nav-tab" href="statistics.html">Stats</a>
-    <a class="nav-tab" href="draft.html">Draft</a>
-    <a class="nav-tab active" href="matches.html">Schedule</a>
-  </div>
-</nav>
+<script src="/nav.js"></script>
 
 <div id="boot-banner" class="banner">Loading…</div>
 
@@ -187,7 +165,7 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 // ── CONFIG ──
 const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
