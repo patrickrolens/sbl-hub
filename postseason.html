@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SBL Hub — Postseason</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ─── TOKENS (shared verbatim with the rest of the hub) ─── */
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+  --nav-h: 49px;
+  --col-w: 232px;   /* bracket node width; mirrored by COL_W in JS */
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+a { color: inherit; }
+
+/* ─── NAV ─── */
+nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1rem; position: sticky; top: 0; z-index: 100; height: var(--nav-h); }
+.nav-logo { font-size: 15px; font-weight: 700; color: var(--accent); padding-right: 16px; margin-right: 8px; border-right: 1px solid var(--border); white-space: nowrap; }
+.nav-tabs { display: flex; align-items: stretch; height: 100%; }
+.nav-tab { display: flex; align-items: center; padding: 0 16px; font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; border-bottom: 2px solid transparent; }
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ─── PAGE HEAD ─── */
+.page-head { padding: 18px 16px 4px; }
+.page-title { font-size: 19px; font-weight: 700; }
+.page-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+/* ─── BRACKET SECTION ─── */
+.bracket-section { padding: 14px 16px 26px; }
+.bracket-section-title { font-size: 14px; font-weight: 700; letter-spacing: .3px; margin-bottom: 10px; }
+.stage-divider { height: 1px; background: var(--border); margin: 4px 16px; }
+
+.bracket-scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; }
+.bracket-headers { position: relative; height: 22px; margin-bottom: 8px; }
+.rhead { position: absolute; top: 0; width: var(--col-w); text-align: center; font-size: 11px; font-weight: 700;
+  letter-spacing: .4px; text-transform: uppercase; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bracket-inner { position: relative; }
+.bracket-inner svg.connectors { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.bracket-inner svg.connectors path { fill: none; stroke: var(--border); stroke-width: 1.5; }
+
+/* ─── MATCH NODE (collapsed) ─── */
+.bnode { position: absolute; width: var(--col-w); background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; z-index: 2; }
+.bteam { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; line-height: 1.3; }
+.bteam + .bteam { border-top: 1px solid var(--border); }
+.bteam .bn { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bteam .bn .pl { color: var(--text3); font-weight: 400; }
+.bteam .bsc { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--text3); flex-shrink: 0; }
+.bteam.win .bn { font-weight: 700; color: var(--blue); }
+.bteam.win .bsc { color: var(--blue); }
+.bteam.bye .bn { color: var(--text3); font-style: italic; }
+.bteam.tbd .bn { color: var(--text3); }
+.bteam.tbd .bsc { opacity: .5; }
+/* position-letter tab straddling the right edge, vertically centered */
+.bpos { position: absolute; right: -9px; top: 50%; transform: translateY(-50%); min-width: 18px; height: 18px;
+  padding: 0 3px; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; font-size: 9px;
+  font-weight: 700; color: var(--text2); display: flex; align-items: center; justify-content: center; z-index: 3; }
+
+/* ─── CHAMPION CALLOUT ─── */
+.champ { position: absolute; z-index: 2; width: var(--col-w); text-align: center; }
+.champ .lbl { font-size: 9px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--yellow); margin-bottom: 3px; }
+.champ .nm { font-size: 13px; font-weight: 700; color: var(--text); }
+.champ .nm .pl { color: var(--text3); font-weight: 400; }
+
+.empty-state { color: var(--text3); font-size: 13px; font-style: italic; padding: 16px 2px; }
+
+.banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
+.banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
+
+#toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 300; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.toast { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 13px; color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,.4); max-width: 90vw; }
+.toast.err { border-color: rgba(224,85,85,.55); color: #ff9c9c; }
+
+@media (max-width: 768px) {
+  nav { padding: 0 8px; }
+  .nav-logo { padding-right: 10px; margin-right: 6px; font-size: 14px; }
+  .nav-tabs { overflow-x: auto; scrollbar-width: none; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tab { padding: 0 11px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">SBL Hub</div>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="standings.html">Standings</a>
+    <a class="nav-tab" href="team.html">Teams</a>
+    <a class="nav-tab" href="statistics.html">Stats</a>
+    <a class="nav-tab" href="draft.html">Draft</a>
+    <a class="nav-tab" href="matches.html">Schedule</a>
+    <a class="nav-tab active" href="postseason.html">Postseason</a>
+  </div>
+</nav>
+
+<div id="boot-banner" class="banner">Loading…</div>
+
+<div id="layout" hidden>
+  <div class="page-head">
+    <div class="page-title">Postseason</div>
+    <div class="page-sub" id="season-sub"></div>
+  </div>
+
+  <div class="bracket-section">
+    <div class="bracket-section-title">Playoffs</div>
+    <div id="playoffs-mount"></div>
+  </div>
+
+  <div class="stage-divider"></div>
+
+  <div class="bracket-section">
+    <div class="bracket-section-title">Cup</div>
+    <div id="cup-mount"></div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Bracket geometry (COL_W must match --col-w above).
+const COL_W = 232, COL_GAP = 60, V_GAP = 22;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let season = null;
+let teams = [], teamById = {}, ownersByTeam = {};
+let matches = [];                  // postseason matches only (playoffs + cup)
+let bracketStages = {};            // stage -> sorted seeded team list (cached for resize redraw)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS (mirror the rest of the hub)
+// ─────────────────────────────────────────────────────────────────────────────
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
+// Coach active for a team during a given week — falls back to current owner, then team name.
+function coachAtWeek(teamId, week) {
+  const stints = ownersByTeam[teamId] || [];
+  let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
+  if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
+  return s ? s.name : null;
+}
+// No transactions happen after the regular season, so postseason labels use the current owner.
+function coachNow(teamId) { return coachAtWeek(teamId, 1e9); }
+// "Team Name (Coach)"; collapses to one when coach == team name.
+function bracketTeamLabel(team) {
+  if (!team) return 'TBD';
+  const c = coachNow(team.id), name = team.name;
+  if (!c || c === name) return escapeHtml(name);
+  return escapeHtml(name) + ' <span class="pl">(' + escapeHtml(c) + ')</span>';
+}
+function pairKey(a, b) { return [a, b].sort().join('|'); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BRACKET MODEL (seed-driven)
+// ─────────────────────────────────────────────────────────────────────────────
+// Standard single-elim seed order for a bracket of `size` slots: e.g. size 8 -> [1,8,4,5,2,7,3,6].
+function seedSlots(size) {
+  let pls = [1, 2];
+  while (pls.length < size) {
+    const sum = pls.length * 2 + 1;
+    const out = [];
+    for (const p of pls) out.push(p, sum - p);
+    pls = out;
+  }
+  return pls;
+}
+
+// Build the round/node tree from a seeded team list (index 0 = top seed). Returns array of rounds.
+function buildBracket(seeded) {
+  const N = seeded.length;
+  if (N < 2) return null;
+  const size = 1 << Math.ceil(Math.log2(N));
+  const order = seedSlots(size);
+  const slotTeam = order.map(seedNum => (seedNum <= N ? seeded[seedNum - 1] : null)); // null = BYE
+
+  const rounds = [];
+  const round0 = [];
+  for (let i = 0; i < size / 2; i++) {
+    round0.push({ round: 0, index: i, slotA: slotTeam[2 * i], slotB: slotTeam[2 * i + 1], childA: null, childB: null });
+  }
+  rounds.push(round0);
+
+  const totalRounds = Math.log2(size);
+  for (let r = 1; r < totalRounds; r++) {
+    const prev = rounds[r - 1], cur = [];
+    for (let i = 0; i < prev.length / 2; i++) {
+      cur.push({ round: r, index: i, slotA: null, slotB: null, childA: prev[2 * i], childB: prev[2 * i + 1] });
+    }
+    rounds.push(cur);
+  }
+  return rounds;
+}
+
+// Forward pass: resolve each node's two teams, attach a match by participating pair, advance winners/byes.
+function resolveBracket(rounds, stage) {
+  const matchByPair = {};
+  matches.filter(m => m.stage === stage).forEach(m => { matchByPair[pairKey(m.team_a_id, m.team_b_id)] = m; });
+
+  for (let r = 0; r < rounds.length; r++) {
+    for (const node of rounds[r]) {
+      // Determine the two teams entering this node.
+      if (r === 0) {
+        node.aTeam = node.slotA; node.bTeam = node.slotB;
+        node.aBye = node.slotA == null; node.bBye = node.slotB == null;
+      } else {
+        node.aTeam = node.childA.winnerTeam || null; node.bTeam = node.childB.winnerTeam || null;
+        node.aBye = false; node.bBye = false;
+      }
+      node.aScore = 0; node.bScore = 0; node.match = null; node.winnerTeam = null; node.resolved = false;
+
+      if (node.aBye && node.bTeam) { node.winnerTeam = node.bTeam; node.resolved = true; node.isBye = true; }
+      else if (node.bBye && node.aTeam) { node.winnerTeam = node.aTeam; node.resolved = true; node.isBye = true; }
+      else if (node.aTeam && node.bTeam) {
+        const m = matchByPair[pairKey(node.aTeam.id, node.bTeam.id)] || null;
+        node.match = m;
+        if (m) {
+          // Orient scores to match the node's A/B sides (match.team_a_id may be either side).
+          if (m.team_a_id === node.aTeam.id) { node.aScore = m.team_a_score || 0; node.bScore = m.team_b_score || 0; }
+          else { node.aScore = m.team_b_score || 0; node.bScore = m.team_a_score || 0; }
+          if (m.winner_team_id) { node.winnerTeam = teamById[m.winner_team_id] || null; node.resolved = true; }
+        }
+      }
+    }
+  }
+}
+
+function roundHeader(round, ri, totalRounds) {
+  const labels = new Set();
+  round.forEach(n => { if (n.match && n.match.postseason_round) labels.add(n.match.postseason_round); });
+  if (labels.size === 1) return [...labels][0];           // honor a consistent admin-entered label
+  const fromEnd = totalRounds - 1 - ri;
+  if (fromEnd === 0) return 'Finals';
+  if (fromEnd === 1) return 'Semifinals';
+  if (fromEnd === 2) return 'Quarterfinals';
+  return 'Round of ' + (round.length * 2);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function seededTeams(seedField) {
+  return teams.filter(t => t[seedField] != null).sort((a, b) => a[seedField] - b[seedField]);
+}
+
+function nodeRowHtml(node, side) {
+  const team = side === 'a' ? node.aTeam : node.bTeam;
+  const bye  = side === 'a' ? node.aBye  : node.bBye;
+  const score = side === 'a' ? node.aScore : node.bScore;
+  const isWinner = node.match && node.match.winner_team_id && team && node.match.winner_team_id === team.id;
+  let cls = 'bteam', label;
+  if (bye)        { cls += ' bye'; label = 'Bye'; }
+  else if (team)  { label = bracketTeamLabel(team); if (isWinner) cls += ' win'; }
+  else            { cls += ' tbd'; label = 'TBD'; }
+  return '<div class="' + cls + '"><span class="bn">' + label + '</span><span class="bsc">' + (score || 0) + '</span></div>';
+}
+
+// Measure heights, stack round 0, center each parent between its children.
+function layoutBracket(rounds) {
+  let cursor = 0;
+  rounds[0].forEach(node => {
+    node._h = node.el.offsetHeight;
+    node._top = cursor;
+    node._center = cursor + node._h / 2;
+    cursor += node._h + V_GAP;
+  });
+  for (let r = 1; r < rounds.length; r++) {
+    rounds[r].forEach(node => {
+      node._h = node.el.offsetHeight;
+      node._center = (node.childA._center + node.childB._center) / 2;
+      node._top = node._center - node._h / 2;
+    });
+  }
+  rounds.forEach(round => round.forEach(node => { node.el.style.top = node._top + 'px'; }));
+}
+
+// A champion callout to the right of the final once its winner is set.
+function renderChampion(rounds, inner) {
+  const final = rounds[rounds.length - 1][0];
+  if (!final || !final.resolved || !final.winnerTeam) return null;
+  const c = document.createElement('div'); c.className = 'champ';
+  c.style.left = (rounds.length * (COL_W + COL_GAP)) + 'px';
+  c.innerHTML = '<div class="lbl">Champion</div><div class="nm">' + bracketTeamLabel(final.winnerTeam) + '</div>';
+  inner.appendChild(c);
+  // Vertically center on the final node once it's in the DOM.
+  c.style.top = (final._center - c.offsetHeight / 2) + 'px';
+  return c;
+}
+
+function sizeInner(rounds, inner, innerW, champ) {
+  let maxBottom = 0;
+  rounds.forEach(round => round.forEach(node => { maxBottom = Math.max(maxBottom, node._top + node._h); }));
+  if (champ) { maxBottom = Math.max(maxBottom, parseFloat(champ.style.top) + champ.offsetHeight); inner.style.width = (innerW + COL_GAP + COL_W) + 'px'; }
+  inner.style.height = maxBottom + 'px';
+}
+
+function drawConnectors(svg, rounds) {
+  const NS = 'http://www.w3.org/2000/svg';
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  for (let r = 1; r < rounds.length; r++) {
+    rounds[r].forEach(parent => {
+      const px = parent._left != null ? parent._left : parseFloat(parent.el.style.left);
+      [parent.childA, parent.childB].forEach(child => {
+        const cx = parseFloat(child.el.style.left) + COL_W;
+        const cy = child._center, py = parent._center;
+        const midX = cx + COL_GAP / 2;
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', 'M ' + cx + ' ' + cy + ' H ' + midX + ' V ' + py + ' H ' + px);
+        svg.appendChild(path);
+      });
+    });
+  }
+}
+
+// Stable position letters (A, B, C…) assigned round-by-round, top-to-bottom across the whole bracket.
+function assignLetters(rounds) {
+  let i = 0;
+  rounds.forEach(round => round.forEach(node => { node.posLetter = String.fromCharCode(65 + (i++ % 26)); }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+function renderAll() {
+  const pSeeded = seededTeams('playoff_seed');
+  const cSeeded = seededTeams('cup_seed');
+  drawSection(document.getElementById('playoffs-mount'), pSeeded, 'playoffs');
+  drawSection(document.getElementById('cup-mount'), cSeeded, 'cup');
+}
+
+function drawSection(mount, seeded, stage) {
+  mount.innerHTML = '';
+  const rounds = buildBracket(seeded);
+  if (!rounds) {
+    mount.innerHTML = '<div class="empty-state">' +
+      (seeded.length === 0 ? 'No teams have been seeded for this bracket yet.'
+                           : 'Need at least two seeded teams to render a bracket.') + '</div>';
+    bracketStages[stage] = null;
+    return;
+  }
+  assignLetters(rounds);
+  bracketStages[stage] = { seeded, stage };
+  renderResolved(mount, rounds, stage);
+}
+
+function renderResolved(mount, rounds, stage) {
+  resolveBracket(rounds, stage);
+
+  const scroll = document.createElement('div'); scroll.className = 'bracket-scroll';
+  const headers = document.createElement('div'); headers.className = 'bracket-headers';
+  const inner = document.createElement('div'); inner.className = 'bracket-inner';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'connectors');
+  inner.appendChild(svg);
+
+  const total = rounds.length;
+  const innerW = total * COL_W + (total - 1) * COL_GAP;
+
+  rounds.forEach((round, ri) => {
+    const h = document.createElement('div'); h.className = 'rhead';
+    h.style.left = (ri * (COL_W + COL_GAP)) + 'px';
+    h.textContent = roundHeader(round, ri, total);
+    headers.appendChild(h);
+  });
+
+  rounds.forEach((round, ri) => {
+    round.forEach(node => {
+      const el = document.createElement('div'); el.className = 'bnode';
+      node._left = ri * (COL_W + COL_GAP);
+      el.style.left = node._left + 'px';
+      el.innerHTML = nodeRowHtml(node, 'a') + nodeRowHtml(node, 'b') + '<span class="bpos">' + node.posLetter + '</span>';
+      inner.appendChild(el);
+      node.el = el;
+    });
+  });
+
+  headers.style.width = innerW + 'px';
+  inner.style.width = innerW + 'px';
+  scroll.appendChild(headers); scroll.appendChild(inner);
+  mount.appendChild(scroll);
+
+  layoutBracket(rounds);
+  const champ = renderChampion(rounds, inner);
+  sizeInner(rounds, inner, innerW, champ);
+  drawConnectors(svg, rounds);
+}
+
+// Re-render on resize (cheap rebuild; keeps node measurements honest if wrapping changes).
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (!document.getElementById('layout').hidden) renderAll(); }, 150);
+});
+
+function showToast(msg, kind) {
+  const t = document.createElement('div'); t.className = 'toast' + (kind ? ' ' + kind : ''); t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3400);
+}
+
+async function init() {
+  const banner = document.getElementById('boot-banner');
+  try {
+    const { data: seasonRow, error: sErr } = await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
+    if (sErr) throw sErr;
+    if (!seasonRow) throw new Error('No current season found.');
+    season = seasonRow;
+
+    const [teamsRes, ownersRes, matchRes] = await Promise.all([
+      sb.from('teams').select('id, name, slug, playoff_seed, cup_seed').eq('season_id', season.id),
+      sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
+      sb.from('matches').select('id, stage, week, postseason_round, series_length, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id')
+        .eq('season_id', season.id).in('stage', ['playoffs', 'cup']),
+    ]);
+    for (const r of [teamsRes, ownersRes, matchRes]) if (r.error) throw r.error;
+
+    teams = teamsRes.data || [];
+    teams.forEach(t => { teamById[t.id] = t; });
+    const teamIds = new Set(teams.map(t => t.id));
+    (ownersRes.data || []).filter(o => teamIds.has(o.team_id) && o.players).forEach(o => {
+      (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
+    });
+    Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
+    matches = matchRes.data || [];
+
+    document.getElementById('season-sub').textContent = season.name;
+    banner.hidden = true;
+    document.getElementById('layout').hidden = false;
+    renderAll();
+  } catch (err) {
+    console.error(err);
+    banner.className = 'banner err';
+    banner.textContent = 'Could not load the postseason page: ' + (err.message || err);
+  }
+}
+init();
+</script>
+</body>
+</html>
