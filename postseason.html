@@ -86,13 +86,13 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .bnode.clickable:hover { border-color: var(--accent); }
 .bnode.expanded { border-color: var(--border); }
 
-.bx-roster { display: flex; gap: 1px; justify-content: center; flex-wrap: nowrap; padding: 4px 4px 3px; }
-.bx-mon { width: 20px; height: 20px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0; }
+.bx-roster { display: flex; gap: 2px; justify-content: center; flex-wrap: nowrap; padding: 5px 5px 4px; }
+.bx-mon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0; }
 .bx-mon.dim { opacity: .3; }
-.bx-head { display: flex; align-items: center; gap: 6px; padding: 5px 9px; font-size: 12px; }
-.bx-logo { width: 22px; height: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-.bx-logo img { max-width: 22px; max-height: 22px; object-fit: contain; }
-.bx-logo-mono { width: 22px; height: 22px; border-radius: 5px; background: var(--bg3); border: 1px solid var(--border); font-size: 9px; font-weight: 700; color: var(--text2); display: flex; align-items: center; justify-content: center; }
+.bx-head { display: flex; align-items: center; gap: 7px; padding: 5px 10px; font-size: 12px; }
+.bx-logo { width: 26px; height: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.bx-logo img { max-width: 26px; max-height: 26px; object-fit: contain; }
+.bx-logo-mono { width: 26px; height: 26px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); font-size: 10px; font-weight: 700; color: var(--text2); display: flex; align-items: center; justify-content: center; }
 .bx-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bx-name .pl { color: var(--text3); font-weight: 400; }
 .bx-name.win { font-weight: 700; color: var(--blue); }
@@ -166,8 +166,8 @@ const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Bracket geometry (COL_W must match --col-w above).
-const COL_W = 232, COL_GAP = 60, V_GAP = 22;
+// Bracket geometry (COL_W must match --col-w above). EXP_W is the widened column for expanded cards.
+const COL_W = 232, EXP_W = 300, COL_GAP = 60, V_GAP = 22;
 
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
@@ -406,7 +406,7 @@ function renderChampion(rounds, inner) {
   const final = rounds[rounds.length - 1][0];
   if (!final || !final.resolved || !final.winnerTeam) return null;
   const c = document.createElement('div'); c.className = 'champ';
-  c.style.left = (rounds.length * (COL_W + COL_GAP)) + 'px';
+  c.style.left = (final._left + final._w + COL_GAP) + 'px';
   c.innerHTML = '<div class="lbl">Champion</div><div class="nm">' + bracketTeamLabel(final.winnerTeam) + '</div>';
   inner.appendChild(c);
   // Vertically center on the final node once it's in the DOM.
@@ -417,7 +417,10 @@ function renderChampion(rounds, inner) {
 function sizeInner(rounds, inner, innerW, champ) {
   let maxBottom = 0;
   rounds.forEach(round => round.forEach(node => { maxBottom = Math.max(maxBottom, node._top + node._h); }));
-  if (champ) { maxBottom = Math.max(maxBottom, parseFloat(champ.style.top) + champ.offsetHeight); inner.style.width = (innerW + COL_GAP + COL_W) + 'px'; }
+  if (champ) {
+    maxBottom = Math.max(maxBottom, parseFloat(champ.style.top) + champ.offsetHeight);
+    inner.style.width = (parseFloat(champ.style.left) + champ.offsetWidth) + 'px';
+  }
   inner.style.height = maxBottom + 'px';
 }
 
@@ -436,7 +439,7 @@ function drawConnectors(svg, rounds) {
     rounds[r].forEach(parent => {
       const px = parent._left != null ? parent._left : parseFloat(parent.el.style.left);
       [parent.childA, parent.childB].forEach(child => {
-        const cx = parseFloat(child.el.style.left) + COL_W;
+        const cx = child._left + child._w;   // child's right edge (column-width aware)
         const cy = child._center, py = parent._center;
         const midX = cx + COL_GAP / 2;
         const path = document.createElementNS(NS, 'path');
@@ -503,11 +506,27 @@ function renderResolved(mount, rounds, stage) {
   inner.appendChild(svg);
 
   const total = rounds.length;
-  const innerW = total * COL_W + (total - 1) * COL_GAP;
+
+  // First pass: resolve open/expandable state and which columns contain an expanded card.
+  const expandedCols = new Set();
+  rounds.forEach((round, ri) => round.forEach(node => {
+    node._expandable = isExpandable(node);
+    node._key = stage + ':' + node.posLetter;
+    node._open = node._expandable && expanded.has(node._key);
+    if (node._expandable) expandableKeys.push(node._key);
+    if (node._open) expandedCols.add(ri);
+  }));
+
+  // A column widens to EXP_W only when it holds an expanded card; later columns shift right to follow.
+  const colW = rounds.map((_, ri) => (expandedCols.has(ri) ? EXP_W : COL_W));
+  const colLeft = []; let x = 0;
+  for (let r = 0; r < total; r++) { colLeft[r] = x; x += colW[r] + COL_GAP; }
+  const innerW = colLeft[total - 1] + colW[total - 1];
 
   rounds.forEach((round, ri) => {
     const h = document.createElement('div'); h.className = 'rhead';
-    h.style.left = (ri * (COL_W + COL_GAP)) + 'px';
+    h.style.left = colLeft[ri] + 'px';
+    h.style.width = colW[ri] + 'px';
     h.textContent = roundHeader(round, ri, total);
     headers.appendChild(h);
   });
@@ -515,16 +534,13 @@ function renderResolved(mount, rounds, stage) {
   rounds.forEach((round, ri) => {
     round.forEach(node => {
       const el = document.createElement('div');
-      node._left = ri * (COL_W + COL_GAP);
+      node._left = colLeft[ri]; node._w = colW[ri];
       el.style.left = node._left + 'px';
-      const expandable = isExpandable(node);
-      const key = stage + ':' + node.posLetter;
-      const open = expandable && expanded.has(key);
-      if (expandable) expandableKeys.push(key);
-      el.className = 'bnode' + (expandable ? ' clickable' : '') + (open ? ' expanded' : '');
-      if (open) el.innerHTML = expandedCardHtml(node);
+      el.style.width = node._w + 'px';
+      el.className = 'bnode' + (node._expandable ? ' clickable' : '') + (node._open ? ' expanded' : '');
+      if (node._open) el.innerHTML = expandedCardHtml(node);
       else el.innerHTML = nodeRowHtml(node, 'a') + nodeRowHtml(node, 'b') + '<span class="bpos">' + node.posLetter + '</span>';
-      if (expandable) el.onclick = () => toggleNode(key);
+      if (node._expandable) el.onclick = () => toggleNode(node._key);
       inner.appendChild(el);
       node.el = el;
     });
