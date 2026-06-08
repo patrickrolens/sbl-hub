@@ -16,6 +16,10 @@
   const PLANNER_URL       = "https://planner.springfieldbattleleague.com";
   const LOGO_SRC          = "/assets/SBL_Logo.png";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Single shared client for the whole page — pages should use window.sb rather than
+  // creating their own, so there's only one auth/session manager (two clients on the
+  // same project fight over the session lock).
+  window.sb = sb;
 
   // Admin pages listed in the Admin dropdown when signed in (now under /admin/).
   const ADMIN_LINKS = [
@@ -372,7 +376,7 @@
       allTeams = teamsRes.data || [];
       const ids = new Set(allTeams.map(t => t.id));
       (ownersRes.data || []).filter(o => ids.has(o.team_id) && o.ended_week == null && o.players).forEach(o => { coachByTeam[o.team_id] = o.players.display_name; });
-    } catch (e) { /* nav still works without the team list */ }
+    } catch (e) { console.error("nav.js loadData:", e); /* nav still works without the team list */ }
   }
 
   // ── boot ──
