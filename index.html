@@ -157,7 +157,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 // ─────────────────────────────────────────────────────────────────────────────
 const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Reuse the single client created by nav.js; fall back to our own only if it's absent.
+const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
