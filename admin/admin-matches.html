@@ -114,6 +114,12 @@ table.seed-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .sync-row select { padding: 5px 8px; }
 .sync-status { font-size: 11px; color: var(--text2); margin-top: 9px; line-height: 1.5; }
 
+.pub-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; }
+.pub-row .pub-status { flex: 1 1 auto; font-size: 12px; font-weight: 600; }
+.pub-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 7px; vertical-align: middle; }
+.pub-status.on { color: var(--green); } .pub-status.on .pub-dot { background: var(--green); }
+.pub-status.off { color: var(--text3); } .pub-status.off .pub-dot { background: var(--text3); }
+
 /* ── COLLAPSIBLE PANEL (shared by coverage + match list) ── */
 .collapse { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 16px; }
 .collapse-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none; }
@@ -746,11 +752,39 @@ function togglePostseasonSection() {
   document.getElementById('postseason-caret').textContent = postseasonCollapsed ? '\u25B6' : '\u25BC';
 }
 
+async function togglePublish() {
+  const season = seasons.find(s => s.id === selectedSeasonId);
+  if (!season) { showToast('Pick a season first.', 'err'); return; }
+  const next = !season.postseason_published;
+  try {
+    const { error } = await sb.from('seasons').update({ postseason_published: next }).eq('id', selectedSeasonId);
+    if (error) throw error;
+    season.postseason_published = next;
+    renderPostseason();
+    showToast(next ? 'Postseason is now public.' : 'Postseason hidden from the public.', 'ok');
+  } catch (err) {
+    console.error(err);
+    showToast('Could not update publish state: ' + (err.message || err), 'err');
+  }
+}
+
 function renderPostseason() {
   const el = document.getElementById('postseason-body');
   if (!el) return;
   if (!teams.length) { el.innerHTML = '<div class="section-sub">Pick a season with teams to set seeds.</div>'; return; }
   seedDirty = false;
+
+  const season = seasons.find(s => s.id === selectedSeasonId);
+  const published = !!(season && season.postseason_published);
+  const pubRow =
+    '<div class="pub-row">'
+    + '<span class="pub-status ' + (published ? 'on' : 'off') + '"><span class="pub-dot"></span>'
+    +   (published ? 'Published — the Postseason page is visible on the public site.'
+                   : 'Not published — hidden from the public. Admins can still preview the page.')
+    + '</span>'
+    + '<button class="btn ' + (published ? '' : 'btn-accent') + '" onclick="togglePublish()">'
+    +   (published ? 'Unpublish' : 'Publish postseason') + '</button>'
+    + '</div>';
 
   const rows = sortedTeams().map(t =>
     '<tr>'
@@ -761,7 +795,8 @@ function renderPostseason() {
   ).join('');
 
   el.innerHTML =
-    '<div class="section-sub">Set each team\u2019s bracket seeds, then generate matches round by round. <b>Sync</b> creates a match row for every matchup whose two teams are known; run it again after a round\u2019s results are in to unlock the next round. Byes are handled automatically. The public bracket draws from seeds alone, so it renders before any matches exist.</div>'
+    pubRow
+    + '<div class="section-sub">Set each team\u2019s bracket seeds, then generate matches round by round. <b>Sync</b> creates a match row for every matchup whose two teams are known; run it again after a round\u2019s results are in to unlock the next round. Byes are handled automatically. The public bracket draws from seeds alone, so it renders before any matches exist.</div>'
     + '<div class="seed-tablewrap"><table class="seed-table">'
     + '<thead><tr><th>Team</th><th class="snum">Playoffs seed</th><th class="snum">Cup seed</th></tr></thead>'
     + '<tbody>' + rows + '</tbody></table></div>'
