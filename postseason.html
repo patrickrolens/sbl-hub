@@ -86,19 +86,19 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .bnode.clickable:hover { border-color: var(--accent); }
 .bnode.expanded { border-color: var(--border); }
 
-.bx-roster { display: flex; gap: 2px; justify-content: center; flex-wrap: nowrap; padding: 5px 5px 4px; }
-.bx-mon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0; }
+.bx-roster { display: flex; gap: 3px; justify-content: center; flex-wrap: nowrap; padding: 8px 8px 6px; }
+.bx-mon { width: 39px; height: 39px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0; }
 .bx-mon.dim { opacity: .3; }
-.bx-head { display: flex; align-items: center; gap: 7px; padding: 5px 10px; font-size: 12px; }
-.bx-logo { width: 26px; height: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-.bx-logo img { max-width: 26px; max-height: 26px; object-fit: contain; }
-.bx-logo-mono { width: 26px; height: 26px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); font-size: 10px; font-weight: 700; color: var(--text2); display: flex; align-items: center; justify-content: center; }
+.bx-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 14px; }
+.bx-logo { width: 39px; height: 39px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.bx-logo img { max-width: 39px; max-height: 39px; object-fit: contain; }
+.bx-logo-mono { width: 39px; height: 39px; border-radius: 8px; background: var(--bg3); border: 1px solid var(--border); font-size: 14px; font-weight: 700; color: var(--text2); display: flex; align-items: center; justify-content: center; }
 .bx-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bx-name .pl { color: var(--text3); font-weight: 400; }
 .bx-name.win { font-weight: 700; color: var(--blue); }
 .bx-sc { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--text3); flex-shrink: 0; }
 .bx-sc.win { color: var(--blue); }
-.bx-vs { text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text3); padding: 3px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.bx-vs { text-align: center; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text3); padding: 5px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 
 .banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
 .banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
@@ -167,7 +167,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Bracket geometry (COL_W must match --col-w above). EXP_W is the widened column for expanded cards.
-const COL_W = 232, EXP_W = 300, COL_GAP = 60, V_GAP = 22;
+const COL_W = 232, EXP_W = 450, COL_GAP = 60, V_GAP = 22;
 
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
