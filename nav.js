@@ -385,7 +385,9 @@
     buildNav();
     loadData();
     sb.auth.getSession().then(({ data: { session } }) => applySession(session));
-    sb.auth.onAuthStateChange((_e, s) => applySession(s));
+    // Defer out of the callback: onAuthStateChange runs while the auth lock is held,
+    // and applySession makes a Supabase call (profiles), which would deadlock the lock.
+    sb.auth.onAuthStateChange((_e, s) => { setTimeout(() => applySession(s), 0); });
   }
 
   window.SBLNav = { ready, get isAdmin() { return isAdmin; }, get user() { return currentUser; } };
