@@ -99,6 +99,50 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
 .bx-sc { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--text3); flex-shrink: 0; }
 .bx-sc.win { color: var(--blue); }
 .bx-vs { text-align: center; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text3); padding: 5px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.vs-link { cursor: pointer; color: var(--accent); font-weight: 700; }
+.vs-link:hover { text-decoration: underline; }
+
+/* ─── MATCH DETAIL PANEL (content ported from matches.html, shown as a right drawer) ─── */
+.panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200; display: flex; justify-content: flex-end; }
+.panel-overlay[hidden] { display: none; }
+.panel { width: min(480px, 100%); height: 100%; background: var(--bg2); border-left: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,.4); }
+.panel-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.panel-title { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 700; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-icon { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; font-family: inherit; padding: 6px 10px; border-radius: 6px; font-weight: 600; flex-shrink: 0; }
+.btn-icon:hover { background: var(--bg3); color: var(--text); }
+.panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 16px 40px; }
+
+.dm-score { text-align: center; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text2); }
+.dm-score .win { color: var(--blue); }
+.dm-score .dash { color: var(--text3); margin: 0 6px; font-weight: 600; }
+.dm-meta { text-align: center; font-size: 11px; color: var(--text3); margin-top: 2px; margin-bottom: 14px; }
+.dm-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.dm-top { margin-bottom: 18px; }
+.dm-side { min-width: 0; }
+.dm-team { display: block; font-size: 13px; font-weight: 700; text-decoration: none; margin-bottom: 8px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+.dm-team:hover { color: var(--accent); }
+.dm-team .pl { color: var(--text3); font-weight: 400; }
+.brought-row { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
+.brought-row img.bi { width: 38px; height: 38px; object-fit: contain; }
+.brought-row img.ball { opacity: .4; }
+.dm-section-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin: 4px 0 9px; padding-top: 14px; border-top: 1px solid var(--border); text-align: center; }
+.stat-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 12px; }
+.stat-row img.si { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+.stat-row .sn { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-row .sk, .stat-row .sf { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text3); flex-shrink: 0; }
+.stat-row .sk { color: var(--blue); }
+.dm-game { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin-bottom: 8px; }
+.dm-game-head { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 8px; text-align: center; }
+.dm-game-head .gw { color: var(--blue); }
+.dm-game-head .replay { color: var(--accent); text-decoration: none; font-weight: 600; }
+.dm-game-head .replay:hover { text-decoration: underline; }
+.dm-game .dm-sides { gap: 10px; }
+.game-mon { display: flex; align-items: center; gap: 5px; padding: 2px 0; font-size: 11px; }
+.game-mon img { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
+.game-mon .gmn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-mon.fainted { opacity: .42; }
+.dm-loading, .dm-empty { color: var(--text3); font-size: 13px; font-style: italic; padding: 12px 2px; }
+@media (max-width: 600px) { .panel { width: 100%; border-left: none; } }
 
 .banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
 .banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
@@ -156,6 +200,16 @@ nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: f
   </div>
 </div>
 
+<div class="panel-overlay" id="panel-overlay" hidden onclick="if(event.target===this)closePanel()">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title" id="panel-title"></span>
+      <button class="btn-icon" onclick="closePanel()">✕</button>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+  </div>
+</div>
+
 <div id="toast-container"></div>
 
 <script>
@@ -184,6 +238,9 @@ let rosterByTeam = {};             // team_id -> [team_pokemon rows]
 let broughtMap = {};               // "matchId|teamId" -> Set(pokemon_id)
 let expanded = new Set();          // expanded node keys ("stage:Letter")
 let expandableKeys = [];           // all expandable keys from the last render
+let matchById = {};                // postseason match id -> match row
+let matchDetailCache = {};         // match id -> { games, stats }
+let detailLoading = {};            // match id -> bool
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS (mirror the rest of the hub)
@@ -247,6 +304,20 @@ function logoHtml(team) {
 
 // A node can expand only when it's a real match between two known teams (no byes/TBD).
 function isExpandable(node) { return !!(node.aTeam && node.bTeam && !node.aBye && !node.bBye); }
+
+function stageLabel(s) { return ({ regular: 'Regular Season', playoffs: 'Playoffs', cup: 'Cup' })[s] || 'Postseason'; }
+function fmtDateTime(s) {
+  if (!s) return '';
+  const d = new Date(s); if (isNaN(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function teamLinkHtml(id) {
+  const t = teamById[id]; if (!t) return '<span class="dm-team">TBD</span>';
+  const c = coachNow(id);
+  return '<a class="dm-team" href="team.html#' + encodeURIComponent(t.slug) + '">'
+    + escapeHtml(t.name) + (c && c !== t.name ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '') + '</a>';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BRACKET MODEL (seed-driven)
@@ -374,9 +445,12 @@ function expandedCardHtml(node) {
   const week = node.match ? node.match.week : 1e9;   // post-RS roster is week-invariant
   const aWin = !!(node.match && node.match.winner_team_id === node.aTeam.id);
   const bWin = !!(node.match && node.match.winner_team_id === node.bTeam.id);
+  const vs = matchId
+    ? '<div class="bx-vs"><span class="vs-link" data-match="' + escapeHtml(matchId) + '">vs · view match</span></div>'
+    : '<div class="bx-vs">vs</div>';
   return rosterStripHtml(node.aTeam.id, week, matchId)
     + headHtml(node.aTeam, node.aScore, aWin)
-    + '<div class="bx-vs">vs</div>'
+    + vs
     + headHtml(node.bTeam, node.bScore, bWin)
     + rosterStripHtml(node.bTeam.id, week, matchId)
     + '<span class="bpos">' + node.posLetter + '</span>';
@@ -454,6 +528,117 @@ function drawConnectors(svg, rounds) {
 function assignLetters(rounds) {
   let i = 0;
   rounds.forEach(round => round.forEach(node => { node.posLetter = String.fromCharCode(65 + (i++ % 26)); }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MATCH DETAIL PANEL (content mirrors matches.html, scoped to postseason matches)
+// ─────────────────────────────────────────────────────────────────────────────
+function openPanel(matchId) {
+  const m = matchById[matchId]; if (!m) return;
+  document.getElementById('panel-overlay').hidden = false;
+  document.getElementById('panel-title').textContent = teamName(m.team_a_id) + ' vs ' + teamName(m.team_b_id);
+  const body = document.getElementById('panel-body');
+  if (matchDetailCache[matchId]) { renderMatchDetail(body, m, matchDetailCache[matchId]); return; }
+  body.innerHTML = '<div class="dm-loading">Loading match\u2026</div>';
+  if (!detailLoading[matchId]) loadMatchDetail(matchId);
+}
+function closePanel() { document.getElementById('panel-overlay').hidden = true; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+async function loadMatchDetail(id) {
+  detailLoading[id] = true;
+  try {
+    const { data: games, error: gErr } = await sb.from('games')
+      .select('id, game_number, replay_url, winner_team_id').eq('match_id', id).order('game_number');
+    if (gErr) throw gErr;
+    const gameIds = (games || []).map(g => g.id);
+    let stats = [];
+    if (gameIds.length) {
+      const { data, error } = await sb.from('game_pokemon_stats').select('game_id, team_id, pokemon_id, kills, deaths').in('game_id', gameIds);
+      if (error) throw error; stats = data || [];
+    }
+    matchDetailCache[id] = { games: games || [], stats };
+  } catch (err) {
+    console.error(err); matchDetailCache[id] = { games: [], stats: [], error: true };
+    showToast('Could not load match details.', 'err');
+  } finally {
+    detailLoading[id] = false;
+    const m = matchById[id];
+    if (m && !document.getElementById('panel-overlay').hidden) renderMatchDetail(document.getElementById('panel-body'), m, matchDetailCache[id]);
+  }
+}
+
+// Brought six: prefer match_pokemon (already loaded), fall back to distinct mons seen in the games.
+function panelBroughtIds(matchId, teamId, d) {
+  let ids = [...broughtSet(matchId, teamId)];
+  if (!ids.length && d) {
+    const seen = new Set();
+    d.stats.filter(s => s.team_id === teamId).forEach(s => seen.add(s.pokemon_id));
+    ids = [...seen];
+  }
+  return ids.slice(0, 6);
+}
+function broughtIconsHtml(ids) {
+  let h = '';
+  for (let i = 0; i < 6; i++) {
+    const id = ids[i];
+    if (id) h += '<img class="bi" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="' + escapeHtml(monName(id)) + '" title="' + escapeHtml(monName(id)) + '">';
+    else h += '<img class="bi ball" src="' + POKEBALL_FALLBACK + '" alt="">';
+  }
+  return h;
+}
+function statListHtml(matchId, teamId, d) {
+  const ids = panelBroughtIds(matchId, teamId, d);
+  if (!ids.length) return '<div class="dm-empty">No data</div>';
+  return ids.map(id => {
+    let k = 0, dd = 0;
+    d.stats.filter(s => s.team_id === teamId && s.pokemon_id === id).forEach(s => { k += s.kills || 0; dd += s.deaths || 0; });
+    return '<div class="stat-row"><img class="si" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="">'
+      + '<span class="sn">' + escapeHtml(monName(id)) + '</span>'
+      + '<span class="sk">' + k + ' K</span><span class="sf">' + dd + ' F</span></div>';
+  }).join('');
+}
+function gameHtml(m, g, d) {
+  const winName = g.winner_team_id ? teamName(g.winner_team_id) : null;
+  let head = 'Game ' + g.game_number;
+  if (winName) head += ' \u00B7 <span class="gw">' + escapeHtml(winName) + ' won</span>';
+  if (g.replay_url) head += ' \u00B7 <a class="replay" href="' + escapeHtml(g.replay_url) + '" target="_blank" rel="noopener">Replay \u2197</a>';
+  const sideHtml = teamId => {
+    const rows = d.stats.filter(s => s.game_id === g.id && s.team_id === teamId);
+    if (!rows.length) return '<div class="dm-empty">—</div>';
+    return rows.map(s => '<div class="game-mon' + ((s.deaths || 0) > 0 ? ' fainted' : '') + '">'
+      + '<img src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
+      + '<span class="gmn">' + escapeHtml(monName(s.pokemon_id)) + '</span></div>').join('');
+  };
+  return '<div class="dm-game"><div class="dm-game-head">' + head + '</div>'
+    + '<div class="dm-sides"><div class="dm-side">' + sideHtml(m.team_a_id) + '</div>'
+    + '<div class="dm-side">' + sideHtml(m.team_b_id) + '</div></div></div>';
+}
+function matchHasResults(m) { return !!m.winner_team_id || (m.team_a_score || 0) > 0 || (m.team_b_score || 0) > 0; }
+function renderMatchDetail(body, m, d) {
+  const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
+  const date = fmtDateTime(m.match_date);
+  const meta = [stageLabel(m.stage), (m.postseason_round || 'Week ' + m.week), 'Bo' + (m.series_length || 3)]
+    .concat(date ? [date] : []).join(' \u00B7 ');
+  const h = [];
+  h.push('<div class="dm-score"><span class="' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span><span class="dash">\u2013</span><span class="' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>');
+  h.push('<div class="dm-meta">' + escapeHtml(meta) + '</div>');
+
+  h.push('<div class="dm-sides dm-top">');
+  [m.team_a_id, m.team_b_id].forEach(teamId => {
+    h.push('<div class="dm-side">' + teamLinkHtml(teamId) + '<div class="brought-row">' + broughtIconsHtml(panelBroughtIds(m.id, teamId, d)) + '</div></div>');
+  });
+  h.push('</div>');
+
+  h.push('<div class="dm-section-title">Brought Pokémon &amp; stats</div>');
+  h.push('<div class="dm-sides"><div class="dm-side">' + statListHtml(m.id, m.team_a_id, d) + '</div><div class="dm-side">' + statListHtml(m.id, m.team_b_id, d) + '</div></div>');
+
+  h.push('<div class="dm-section-title">Games</div>');
+  if (d.games.length) d.games.forEach(g => h.push(gameHtml(m, g, d)));
+  else h.push('<div class="dm-empty">' + (matchHasResults(m) ? 'Result recorded without game-by-game detail.' : 'This match hasn\u2019t been played yet.') + '</div>');
+
+  body.innerHTML = h.join('');
+  body.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -556,6 +741,10 @@ function renderResolved(mount, rounds, stage) {
   mount.querySelectorAll('img.bx-logo-img').forEach(img => {
     img.onerror = () => { img.onerror = null; img.parentNode.innerHTML = '<span class="bx-logo-mono">' + monogram(teamById[img.dataset.team]) + '</span>'; };
   });
+  // "vs" opens the match panel without collapsing the card.
+  mount.querySelectorAll('.vs-link').forEach(el => {
+    el.onclick = e => { e.stopPropagation(); openPanel(el.dataset.match); };
+  });
 
   layoutBracket(rounds);
   const champ = renderChampion(rounds, inner);
@@ -602,6 +791,7 @@ async function init() {
     });
     Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
     matches = matchRes.data || [];
+    matches.forEach(m => { matchById[m.id] = m; });
 
     // Rosters for bracket teams + brought-sets for postseason matches (small, scoped data → instant expand).
     const seededIds = teams.filter(t => t.playoff_seed != null || t.cup_seed != null).map(t => t.id);
