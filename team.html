@@ -869,14 +869,10 @@ function renderSchedule() {
 // TEAM SELECTOR — searchable dropdown off the Teams tab. Teams listed as
 // "Team Name (Coach)"; selecting one swaps the page in place and updates #slug.
 // ─────────────────────────────────────────────────────────────────────────────
-let suppressHashChange = false;
 async function selectTeam(teamId) {
   const t = allTeams.find(x => x.id === teamId);
   if (!t || (team && t.id === team.id)) return;
   team = t;
-  // Update the shareable hash without triggering our own hashchange reload.
-  suppressHashChange = true;
-  location.hash = t.slug || '';
 
   const banner = document.getElementById('boot-banner');
   document.getElementById('layout').hidden = true;
@@ -895,7 +891,6 @@ async function selectTeam(teamId) {
 
 // Back/forward or an edited #slug swaps teams in place (not our own hash writes).
 window.addEventListener('hashchange', () => {
-  if (suppressHashChange) { suppressHashChange = false; return; }
   const t = resolveTeam();
   if (t && (!team || t.id !== team.id)) selectTeam(t.id);
 });
