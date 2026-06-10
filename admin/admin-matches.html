@@ -18,18 +18,6 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* ── NAV ── */
-nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1rem; position: sticky; top: 0; z-index: 100; }
-.nav-logo { font-size: 15px; font-weight: 700; color: var(--accent); padding: 14px 16px 14px 0; margin-right: 8px; border-right: 1px solid var(--border); white-space: nowrap; }
-.nav-tabs { display: flex; align-items: stretch; }
-.nav-tab { padding: 14px 16px; font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; border-bottom: 2px solid transparent; transition: color .15s, border-color .15s; }
-.nav-tab:hover { color: var(--text); }
-.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; padding-left: 12px; }
-.user-chip { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
-.user-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
-.user-chip .email { color: var(--text); font-weight: 600; }
-
 /* ── BUTTONS ── */
 .btn { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 14px; cursor: pointer; font-family: inherit; transition: border-color .15s, background .15s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
 .btn:hover { border-color: var(--accent); }
@@ -92,33 +80,6 @@ select:focus, input:focus { border-color: var(--accent); }
 .match-row .badge.final { background: rgba(96,165,250,.14); color: var(--blue); }
 .match-row .badge.upcoming { background: var(--bg2); color: var(--text3); border: 1px solid var(--border); }
 .empty-state { text-align: center; color: var(--text3); font-size: 13px; padding: 32px; font-style: italic; }
-
-/* ── POSTSEASON SEEDING + SYNC ── */
-.seed-tablewrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
-table.seed-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.seed-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 8px 12px; background: var(--bg3); border-bottom: 1px solid var(--border); }
-.seed-table th.snum { width: 130px; }
-.seed-table td { padding: 6px 12px; border-bottom: 1px solid var(--bg3); }
-.seed-table tr:last-child td { border-bottom: none; }
-.seed-table .pl { color: var(--text3); font-weight: 400; }
-.seed-in { width: 90px; }
-.seed-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; }
-.seed-note { font-size: 11px; color: var(--text3); }
-.seed-note.warn { color: var(--yellow); }
-.seed-note.ok { color: var(--green); }
-
-.sync-block { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
-.sync-title { font-size: 12px; font-weight: 700; letter-spacing: .3px; margin-bottom: 9px; }
-.sync-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.sync-row label { font-size: 10px; font-weight: 700; letter-spacing: .4px; color: var(--text3); text-transform: uppercase; }
-.sync-row select { padding: 5px 8px; }
-.sync-status { font-size: 11px; color: var(--text2); margin-top: 9px; line-height: 1.5; }
-
-.pub-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; }
-.pub-row .pub-status { flex: 1 1 auto; font-size: 12px; font-weight: 600; }
-.pub-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 7px; vertical-align: middle; }
-.pub-status.on { color: var(--green); } .pub-status.on .pub-dot { background: var(--green); }
-.pub-status.off { color: var(--text3); } .pub-status.off .pub-dot { background: var(--text3); }
 
 /* ── COLLAPSIBLE PANEL (shared by coverage + match list) ── */
 .collapse { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 16px; }
@@ -234,13 +195,6 @@ table.seed-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
 
 @media (max-width: 768px) {
-  nav { padding: 0 8px; }
-  .nav-logo { padding: 12px 10px 12px 0; margin-right: 6px; font-size: 14px; flex-shrink: 0; }
-  .nav-tabs { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-  .nav-tabs::-webkit-scrollbar { display: none; }
-  .nav-tab { padding: 12px 10px; }
-  .nav-right { flex-shrink: 0; gap: 8px; padding-left: 8px; }
-  .user-chip .email { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .btn { padding: 6px 10px; }
   .match-row { flex-wrap: wrap; }
 }
@@ -248,21 +202,7 @@ table.seed-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 </head>
 <body>
 
-<nav>
-  <div class="nav-logo">SBL Hub</div>
-  <div class="nav-tabs">
-    <a class="nav-tab" href="standings.html">Standings</a>
-    <a class="nav-tab" href="draft.html">Draft</a>
-    <a class="nav-tab" href="schedule.html">Schedule</a>
-  </div>
-  <div class="nav-right">
-    <button class="btn" id="login-btn" onclick="openLogin()" hidden>Admin Login</button>
-    <span class="user-chip" id="user-chip" hidden>
-      <span class="dot"></span><span class="email" id="user-email"></span>
-      <button class="btn" onclick="doLogout()">Log out</button>
-    </span>
-  </div>
-</nav>
+<script src="/nav.js"></script>
 
 <div id="boot-banner" class="banner">Loading…</div>
 
@@ -270,7 +210,7 @@ table.seed-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 <div class="gate" id="gate" hidden>
   <h2>Admin access required</h2>
   <p>Log in with an admin account to manage the schedule and enter match results.</p>
-  <button class="btn btn-accent" onclick="openLogin()">Admin Login</button>
+  <button class="btn btn-accent" onclick="window.SBLNav && window.SBLNav.login()">Admin Login</button>
 </div>
 
 <!-- The tool (admins only) -->
@@ -335,15 +275,6 @@ table.seed-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     </div>
   </div>
 
-  <!-- ── POSTSEASON ── -->
-  <div class="section">
-    <div class="section-head" onclick="togglePostseasonSection()">
-      <span class="caret" id="postseason-caret">▼</span>
-      <span class="section-title">Postseason Seeding &amp; Brackets</span>
-    </div>
-    <div id="postseason-body"></div>
-  </div>
-
   <!-- ── MATCH DATA ENTRY ── -->
   <div class="section">
     <div class="section-head" onclick="toggleDataSection()">
@@ -366,10 +297,9 @@ table.seed-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 // ── CONFIG ──
 const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ── STATE ──
-let currentUser      = null;
 let isAdmin          = false;
 let seasons          = [];          // all seasons
 let selectedSeasonId = null;
@@ -383,8 +313,6 @@ let gamesCountByMatch = {};         // match_id -> number of games entered
 let coverageCollapsed = true;       // schedule-coverage panel starts collapsed
 let scheduleCollapsed = false;      // whole schedule section starts expanded
 let matchListCollapsed = true;      // individual-match list starts collapsed
-let postseasonCollapsed = false;    // postseason section starts expanded
-let seedDirty = false;              // unsaved edits in the seeding table
 
 // ── match-data-entry state ──
 let pokemonById  = {};              // pokemon.json id -> entry
@@ -460,61 +388,6 @@ function activeRoster(teamId, week) {
 function stageLabel(stage) { return ({ regular: 'Regular', playoffs: 'Playoffs', cup: 'Cup' })[stage] || (stage || 'Regular'); }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BRACKET MODEL (seed-driven; mirrors postseason.html so the generated matches
-// line up exactly with how the public bracket attaches them)
-// ─────────────────────────────────────────────────────────────────────────────
-function pairKey(a, b) { return [a, b].sort().join('|'); }
-function seedSlots(size) {
-  let pls = [1, 2];
-  while (pls.length < size) {
-    const sum = pls.length * 2 + 1; const out = [];
-    for (const p of pls) out.push(p, sum - p);
-    pls = out;
-  }
-  return pls;
-}
-function buildBracket(seeded) {
-  const N = seeded.length;
-  if (N < 2) return null;
-  const size = 1 << Math.ceil(Math.log2(N));
-  const order = seedSlots(size);
-  const slotTeam = order.map(s => (s <= N ? seeded[s - 1] : null)); // null = BYE
-  const rounds = [], round0 = [];
-  for (let i = 0; i < size / 2; i++) round0.push({ round: 0, slotA: slotTeam[2 * i], slotB: slotTeam[2 * i + 1], childA: null, childB: null });
-  rounds.push(round0);
-  const totalRounds = Math.log2(size);
-  for (let r = 1; r < totalRounds; r++) {
-    const prev = rounds[r - 1], cur = [];
-    for (let i = 0; i < prev.length / 2; i++) cur.push({ round: r, slotA: null, slotB: null, childA: prev[2 * i], childB: prev[2 * i + 1] });
-    rounds.push(cur);
-  }
-  return rounds;
-}
-function resolveBracket(rounds, stage) {
-  const matchByPair = {};
-  matches.filter(m => m.stage === stage).forEach(m => { matchByPair[pairKey(m.team_a_id, m.team_b_id)] = m; });
-  for (let r = 0; r < rounds.length; r++) for (const node of rounds[r]) {
-    if (r === 0) { node.aTeam = node.slotA; node.bTeam = node.slotB; node.aBye = node.slotA == null; node.bBye = node.slotB == null; }
-    else { node.aTeam = node.childA.winnerTeam || null; node.bTeam = node.childB.winnerTeam || null; node.aBye = false; node.bBye = false; }
-    node.match = null; node.winnerTeam = null; node.resolved = false;
-    if (node.aBye && node.bTeam) { node.winnerTeam = node.bTeam; node.resolved = true; }
-    else if (node.bBye && node.aTeam) { node.winnerTeam = node.aTeam; node.resolved = true; }
-    else if (node.aTeam && node.bTeam) {
-      const m = matchByPair[pairKey(node.aTeam.id, node.bTeam.id)] || null;
-      node.match = m;
-      if (m && m.winner_team_id) { node.winnerTeam = teamById[m.winner_team_id] || null; node.resolved = true; }
-    }
-  }
-}
-function roundName(ri, totalRounds, nodesInRound) {
-  const fromEnd = totalRounds - 1 - ri;
-  if (fromEnd === 0) return 'Finals';
-  if (fromEnd === 1) return 'Semifinals';
-  if (fromEnd === 2) return 'Quarterfinals';
-  return 'Round of ' + (nodesInRound * 2);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // DATA LOAD
 // ─────────────────────────────────────────────────────────────────────────────
 async function loadSeasons() {
@@ -557,11 +430,11 @@ async function loadSeasonData(seasonId) {
   if (!seasonId) { renderTool(); return; }
 
   const [teamsRes, ownersRes, matchRes, rosterRes] = await Promise.all([
-    sb.from('teams').select('id, name, slug, initial_seed, playoff_seed, cup_seed').eq('season_id', seasonId),
+    sb.from('teams').select('id, name, slug, initial_seed').eq('season_id', seasonId),
     sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('matches')
-      .select('id, week, stage, postseason_round, series_length, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id')
-      .eq('season_id', seasonId),
+      .select('id, week, stage, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id')
+      .eq('season_id', seasonId).eq('stage', 'regular'),
     sb.from('team_pokemon').select('team_id, pokemon_id, acquired_week, released_week'),
   ]);
   for (const r of [teamsRes, ownersRes, matchRes, rosterRes]) if (r.error) throw r.error;
@@ -609,7 +482,6 @@ function renderTool() {
   populateTeamSelects();
   renderCoverage();
   renderMatchList();
-  renderPostseason();
   renderMatchData();
 }
 
@@ -617,12 +489,11 @@ function renderTool() {
 // A team is "complete" (blue) if it has a match in each of those weeks, else "missing" (red).
 function renderCoverage() {
   const el = document.getElementById('coverage-panel');
-  const reg = matches.filter(m => m.stage === 'regular');
-  if (!reg.length || !teams.length) { el.innerHTML = ''; return; }
+  if (!matches.length || !teams.length) { el.innerHTML = ''; return; }
 
-  const weeks = [...new Set(reg.map(m => m.week))].sort((a, b) => a - b);
+  const weeks = [...new Set(matches.map(m => m.week))].sort((a, b) => a - b);
   const rows = sortedTeams().map(t => {
-    const tw = new Set(reg.filter(m => m.team_a_id === t.id || m.team_b_id === t.id).map(m => m.week));
+    const tw = new Set(matches.filter(m => m.team_a_id === t.id || m.team_b_id === t.id).map(m => m.week));
     const missing = weeks.filter(w => !tw.has(w));
     return { t, missing, ok: missing.length === 0 };
   });
@@ -660,9 +531,8 @@ function populateTeamSelects() {
 function renderMatchList() {
   const el = document.getElementById('match-list');
   el.innerHTML = '';
-  const reg = matches.filter(m => m.stage === 'regular');
 
-  if (!reg.length) {
+  if (!matches.length) {
     const s = document.createElement('div');
     s.className = 'summary';
     s.innerHTML = '<span style="color:var(--text3)">No schedule for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet — import a CSV or add matches above.</span>';
@@ -670,8 +540,8 @@ function renderMatchList() {
     return;
   }
 
-  const weeks = [...new Set(reg.map(m => m.week))].sort((a, b) => a - b);
-  const withResults = reg.filter(matchHasResults).length;
+  const weeks = [...new Set(matches.map(m => m.week))].sort((a, b) => a - b);
+  const withResults = matches.filter(matchHasResults).length;
   const summaryText = matches.length + ' matches across ' + weeks.length + ' week' + (weeks.length === 1 ? '' : 's')
     + (withResults ? ' \u00B7 ' + withResults + ' with results entered' : '');
 
@@ -694,7 +564,7 @@ function renderMatchList() {
       group.className = 'week-group';
       group.innerHTML = '<div class="week-head">Week ' + w + '</div>';
 
-      matches.filter(m => m.stage === 'regular' && m.week === w)
+      matches.filter(m => m.week === w)
         .sort((a, b) => teamLabelText(a.team_a_id).localeCompare(teamLabelText(b.team_a_id)))
         .forEach(m => {
           const aWin = m.winner_team_id && m.winner_team_id === m.team_a_id;
@@ -738,219 +608,8 @@ function toggleScheduleSection() {
 
 // Pre-fill the add-match week with the latest week in the schedule (or 1 if empty).
 function setDefaultWeek() {
-  const reg = matches.filter(m => m.stage === 'regular');
-  const wk = reg.length ? Math.max(...reg.map(m => m.week)) : 1;
+  const wk = matches.length ? Math.max(...matches.map(m => m.week)) : 1;
   document.getElementById('add-week').value = wk;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// POSTSEASON SEEDING + BRACKET GENERATION
-// ─────────────────────────────────────────────────────────────────────────────
-function togglePostseasonSection() {
-  postseasonCollapsed = !postseasonCollapsed;
-  document.getElementById('postseason-body').hidden = postseasonCollapsed;
-  document.getElementById('postseason-caret').textContent = postseasonCollapsed ? '\u25B6' : '\u25BC';
-}
-
-async function togglePublish() {
-  const season = seasons.find(s => s.id === selectedSeasonId);
-  if (!season) { showToast('Pick a season first.', 'err'); return; }
-  const next = !season.postseason_published;
-  try {
-    const { error } = await sb.from('seasons').update({ postseason_published: next }).eq('id', selectedSeasonId);
-    if (error) throw error;
-    season.postseason_published = next;
-    renderPostseason();
-    showToast(next ? 'Postseason is now public.' : 'Postseason hidden from the public.', 'ok');
-  } catch (err) {
-    console.error(err);
-    showToast('Could not update publish state: ' + (err.message || err), 'err');
-  }
-}
-
-function renderPostseason() {
-  const el = document.getElementById('postseason-body');
-  if (!el) return;
-  if (!teams.length) { el.innerHTML = '<div class="section-sub">Pick a season with teams to set seeds.</div>'; return; }
-  seedDirty = false;
-
-  const season = seasons.find(s => s.id === selectedSeasonId);
-  const published = !!(season && season.postseason_published);
-  const pubRow =
-    '<div class="pub-row">'
-    + '<span class="pub-status ' + (published ? 'on' : 'off') + '"><span class="pub-dot"></span>'
-    +   (published ? 'Published — the Postseason page is visible on the public site.'
-                   : 'Not published — hidden from the public. Admins can still preview the page.')
-    + '</span>'
-    + '<button class="btn ' + (published ? '' : 'btn-accent') + '" onclick="togglePublish()">'
-    +   (published ? 'Unpublish' : 'Publish postseason') + '</button>'
-    + '</div>';
-
-  const rows = sortedTeams().map(t =>
-    '<tr>'
-    + '<td>' + teamLabelHtml(t.id) + '</td>'
-    + '<td><input type="number" min="1" step="1" class="seed-in" data-team="' + t.id + '" data-field="playoff_seed" value="' + (t.playoff_seed ?? '') + '" oninput="onSeedInput()"></td>'
-    + '<td><input type="number" min="1" step="1" class="seed-in" data-team="' + t.id + '" data-field="cup_seed" value="' + (t.cup_seed ?? '') + '" oninput="onSeedInput()"></td>'
-    + '</tr>'
-  ).join('');
-
-  el.innerHTML =
-    pubRow
-    + '<div class="section-sub">Set each team\u2019s bracket seeds, then generate matches round by round. <b>Sync</b> creates a match row for every matchup whose two teams are known; run it again after a round\u2019s results are in to unlock the next round. Byes are handled automatically. The public bracket draws from seeds alone, so it renders before any matches exist.</div>'
-    + '<div class="seed-tablewrap"><table class="seed-table">'
-    + '<thead><tr><th>Team</th><th class="snum">Playoffs seed</th><th class="snum">Cup seed</th></tr></thead>'
-    + '<tbody>' + rows + '</tbody></table></div>'
-    + '<div class="seed-actions">'
-    +   '<button class="btn btn-accent" id="save-seeds-btn" onclick="saveSeeding()">Save seeds</button>'
-    +   '<span class="seed-note" id="seed-note-playoffs"></span>'
-    +   '<span class="seed-note" id="seed-note-cup"></span>'
-    + '</div>'
-    + syncBlockHtml('playoffs', 'playoff_seed', 'Playoffs')
-    + syncBlockHtml('cup', 'cup_seed', 'Cup');
-
-  updateSeedNotes();
-}
-
-// Read the seed inputs into { teamId: {playoff_seed, cup_seed} }.
-function readSeedInputs() {
-  const out = {};
-  document.querySelectorAll('.seed-in').forEach(inp => {
-    const id = inp.dataset.team, field = inp.dataset.field;
-    const v = inp.value.trim() === '' ? null : parseInt(inp.value, 10);
-    (out[id] = out[id] || {})[field] = (Number.isInteger(v) ? v : null);
-  });
-  return out;
-}
-// Validation summary for one bracket: counts, duplicates, gaps. Advisory only.
-function seedSummary(seedMap, field, label) {
-  const vals = Object.values(seedMap).map(s => s[field]).filter(v => v != null);
-  if (!vals.length) return { text: label + ': none seeded', cls: '' };
-  const sorted = [...vals].sort((a, b) => a - b);
-  const dupes = [...new Set(sorted.filter((v, i) => sorted[i - 1] === v))];
-  const expected = Array.from({ length: vals.length }, (_, i) => i + 1);
-  const contiguous = sorted.every((v, i) => v === expected[i]);
-  let msg = label + ': ' + vals.length + ' team' + (vals.length === 1 ? '' : 's') + ', seeds ' + sorted[0] + '\u2013' + sorted[sorted.length - 1];
-  if (dupes.length) return { text: msg + ' \u00B7 \u26a0 duplicate seed ' + dupes.join(', '), cls: 'warn' };
-  if (!contiguous) return { text: msg + ' \u00B7 \u26a0 not 1\u2013' + vals.length + ' (gaps will still seed in order)', cls: 'warn' };
-  return { text: msg + ' \u2713', cls: 'ok' };
-}
-function updateSeedNotes() {
-  const m = readSeedInputs();
-  ['playoffs|playoff_seed|Playoffs', 'cup|cup_seed|Cup'].forEach(spec => {
-    const [stage, field, label] = spec.split('|');
-    const s = seedSummary(m, field, label);
-    const note = document.getElementById('seed-note-' + stage);
-    if (note) { note.textContent = s.text; note.className = 'seed-note ' + s.cls; }
-  });
-}
-function onSeedInput() {
-  seedDirty = true;
-  updateSeedNotes();
-  // Sync needs saved seeds; reflect that the moment edits begin.
-  ['playoffs', 'cup'].forEach(stage => { const b = document.getElementById('sync-btn-' + stage); if (b) b.disabled = true; });
-  ['playoffs', 'cup'].forEach(stage => { const st = document.getElementById('sync-status-' + stage); if (st) st.textContent = 'Save seeds to refresh this bracket.'; });
-}
-
-async function saveSeeding() {
-  const seedMap = readSeedInputs();
-  const btn = document.getElementById('save-seeds-btn');
-  btn.disabled = true; btn.textContent = 'Saving\u2026';
-  try {
-    // Only write teams whose seeds actually changed.
-    const updates = teams.filter(t => {
-      const s = seedMap[t.id] || {};
-      return (s.playoff_seed ?? null) !== (t.playoff_seed ?? null) || (s.cup_seed ?? null) !== (t.cup_seed ?? null);
-    });
-    for (const t of updates) {
-      const s = seedMap[t.id] || {};
-      const { error } = await sb.from('teams').update({ playoff_seed: s.playoff_seed ?? null, cup_seed: s.cup_seed ?? null }).eq('id', t.id);
-      if (error) throw error;
-    }
-    await loadSeasonData(selectedSeasonId);
-    showToast(updates.length ? 'Seeds saved.' : 'No changes to save.', 'ok');
-  } catch (err) {
-    console.error(err);
-    btn.disabled = false; btn.textContent = 'Save seeds';
-    showToast('Could not save seeds: ' + (err.message || err), 'err');
-  }
-}
-
-// Compute bracket status for a stage from saved seeds + existing matches.
-function bracketStatus(stage, seedField) {
-  const seeded = teams.filter(t => t[seedField] != null).sort((a, b) => a[seedField] - b[seedField]);
-  if (seeded.length < 2) return { seeded: seeded.length, rounds: null, created: 0, needed: 0, creatable: 0 };
-  const rounds = buildBracket(seeded);
-  resolveBracket(rounds, stage);
-  const flat = rounds.flat();
-  const created = flat.filter(n => n.match).length;
-  const creatable = flat.filter(n => n.aTeam && n.bTeam && !n.aBye && !n.bBye && !n.match).length;
-  return { seeded: seeded.length, rounds, created, needed: seeded.length - 1, creatable };
-}
-
-function syncBlockHtml(stage, seedField, label) {
-  const s = bracketStatus(stage, seedField);
-  let status, disabled;
-  if (s.seeded < 2) { status = 'Seed at least two teams to generate a bracket.'; disabled = true; }
-  else {
-    const tail = s.creatable ? ' \u00B7 ' + s.creatable + ' ready to create now'
-      : (s.created >= s.needed ? ' \u00B7 bracket complete' : ' \u00B7 waiting on results to unlock the next round');
-    status = s.seeded + ' teams \u00B7 ' + s.created + ' of ' + s.needed + ' matches created' + tail;
-    disabled = s.creatable === 0;
-  }
-  return '<div class="sync-block">'
-    + '<div class="sync-title">' + label + ' Bracket</div>'
-    + '<div class="sync-row">'
-    +   '<label>Series</label>'
-    +   '<select id="sync-series-' + stage + '"><option value="3">Bo3</option><option value="5" selected>Bo5</option><option value="7">Bo7</option></select>'
-    +   '<label>Finals</label>'
-    +   '<select id="sync-final-' + stage + '"><option value="3">Bo3</option><option value="5">Bo5</option><option value="7" selected>Bo7</option></select>'
-    +   '<button class="btn" id="sync-btn-' + stage + '" onclick="syncBracket(\'' + stage + '\',\'' + seedField + '\')"' + (disabled ? ' disabled' : '') + '>\u21bb Generate / sync matches</button>'
-    + '</div>'
-    + '<div class="sync-status" id="sync-status-' + stage + '">' + escapeHtml(status) + '</div>'
-    + '</div>';
-}
-
-async function syncBracket(stage, seedField) {
-  if (seedDirty) { showToast('Save seeds before generating.', 'err'); return; }
-  const seeded = teams.filter(t => t[seedField] != null).sort((a, b) => a[seedField] - b[seedField]);
-  if (seeded.length < 2) { showToast('Seed at least two teams first.', 'err'); return; }
-
-  const rounds = buildBracket(seeded);
-  resolveBracket(rounds, stage);
-  const totalRounds = rounds.length;
-  const reg = matches.filter(m => m.stage === 'regular');
-  const baseWeek = reg.length ? Math.max(...reg.map(m => m.week)) : 0;
-  const nonFinal = parseInt(document.getElementById('sync-series-' + stage).value, 10) || 5;
-  const finalLen = parseInt(document.getElementById('sync-final-' + stage).value, 10) || 7;
-
-  const toCreate = [];
-  rounds.forEach((round, ri) => round.forEach(node => {
-    if (!(node.aTeam && node.bTeam && !node.aBye && !node.bBye && !node.match)) return;
-    const aSeed = node.aTeam[seedField] ?? 1e9, bSeed = node.bTeam[seedField] ?? 1e9;
-    const [teamA, teamB] = aSeed <= bSeed ? [node.aTeam, node.bTeam] : [node.bTeam, node.aTeam];
-    toCreate.push({
-      season_id: selectedSeasonId, stage,
-      week: baseWeek + ri + 1,
-      postseason_round: roundName(ri, totalRounds, round.length),
-      series_length: ri === totalRounds - 1 ? finalLen : nonFinal,
-      team_a_id: teamA.id, team_b_id: teamB.id,
-      team_a_score: 0, team_b_score: 0,
-    });
-  }));
-
-  if (!toCreate.length) { showToast('Bracket is up to date — nothing new to create.', 'ok'); return; }
-  const btn = document.getElementById('sync-btn-' + stage);
-  if (btn) { btn.disabled = true; btn.textContent = 'Generating\u2026'; }
-  try {
-    const { error } = await sb.from('matches').insert(toCreate);
-    if (error) throw error;
-    await loadSeasonData(selectedSeasonId);
-    showToast('Created ' + toCreate.length + ' ' + stageLabel(stage).toLowerCase() + ' match' + (toCreate.length === 1 ? '' : 'es') + '.', 'ok');
-  } catch (err) {
-    console.error(err);
-    showToast('Could not generate matches: ' + (err.message || err), 'err');
-    renderPostseason();
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1657,63 +1316,18 @@ function parseCsvRows(text) {
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH (same magic-link pattern as the other admin pages)
 // ─────────────────────────────────────────────────────────────────────────────
-async function initAuth() {
-  const { data: { session } } = await sb.auth.getSession();
-  await applySession(session);
-  sb.auth.onAuthStateChange((_e, session) => { applySession(session); });
-}
-
-async function applySession(session) {
-  currentUser = session?.user || null;
-  isAdmin = false;
-  if (currentUser) {
-    const { data, error } = await sb.from('profiles').select('is_admin').eq('id', currentUser.id).maybeSingle();
-    if (error) console.error('profile lookup failed:', error);
-    isAdmin = !!(data && data.is_admin);
-  }
-  updateAuthUI();
+// Admin status comes from the shared nav (nav.js owns the session).
+function initAuth() {
+  const ready = (window.SBLNav && window.SBLNav.ready) || Promise.resolve({ isAdmin: false });
+  ready.then(({ isAdmin: a }) => { isAdmin = !!a; updateAuthUI(); });
+  window.addEventListener('sbl-auth', e => { isAdmin = !!(e.detail && e.detail.isAdmin); updateAuthUI(); });
+  return ready;
 }
 
 function updateAuthUI() {
-  const loginBtn = document.getElementById('login-btn');
-  const chip = document.getElementById('user-chip');
-  if (currentUser) {
-    loginBtn.hidden = true; chip.hidden = false;
-    document.getElementById('user-email').textContent = currentUser.email + (isAdmin ? '' : ' (no admin)');
-  } else {
-    loginBtn.hidden = false; chip.hidden = true;
-  }
   document.getElementById('tool').hidden = !isAdmin;
   document.getElementById('gate').hidden = isAdmin;
 }
-
-function openLogin() {
-  openModal(
-    '<h3>Admin Login</h3>'
-    + '<p>Enter your admin email and we\u2019ll send a magic link.</p>'
-    + '<input type="email" id="login-email" placeholder="you@example.com" autocomplete="email">'
-    + '<div class="modal-actions">'
-    +   '<button class="btn" onclick="closeModal()">Cancel</button>'
-    +   '<button class="btn btn-accent" id="send-link-btn" onclick="sendMagicLink()">Send link</button>'
-    + '</div>'
-  );
-  setTimeout(() => document.getElementById('login-email').focus(), 30);
-  document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') sendMagicLink(); });
-}
-
-async function sendMagicLink() {
-  const email = (document.getElementById('login-email').value || '').trim();
-  if (!email) { showToast('Enter an email first.', 'err'); return; }
-  const btn = document.getElementById('send-link-btn');
-  btn.disabled = true; btn.textContent = 'Sending…';
-  const redirectTo = window.location.origin + window.location.pathname;
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
-  if (error) { showToast('Could not send link: ' + error.message, 'err'); btn.disabled = false; btn.textContent = 'Send link'; return; }
-  closeModal();
-  showToast('Magic link sent to ' + email + '. Check your inbox.', 'ok');
-}
-
-async function doLogout() { await sb.auth.signOut(); showToast('Logged out.', 'ok'); }
 
 // ── MODAL / TOAST ──
 function openModal(html) { document.getElementById('modal').innerHTML = html; document.getElementById('modal-overlay').hidden = false; }
