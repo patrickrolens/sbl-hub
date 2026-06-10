@@ -348,14 +348,57 @@ function escapeHtml(s) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WHICH TEAM? — hash (#slug) wins if present so links are shareable; otherwise the
-// first team by seed then name. A proper dropdown selector lands in the next pass.
+// WHICH TEAM? — the hash can be any of several aliases for a team: its canonical
+// slug, its slugified full name, or its current/past coach name (slugified).
+// On a match via a non-canonical alias we normalize the URL to the canonical slug
+// so every team has one shareable permalink (aliases just redirect to it).
+// Collision priority: slug > team name > current coach > past coach. A lower
+// priority source never shadows a key already claimed by a higher one.
 // ─────────────────────────────────────────────────────────────────────────────
+function slugify(s) {
+  return String(s || '')
+    .trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')   // non-alphanumerics → hyphen
+    .replace(/^-+|-+$/g, '');      // trim leading/trailing hyphens
+}
+
+// alias key -> team.id, built once. Higher-priority sources are registered first
+// and win; we never overwrite an existing key (so a real slug can't be shadowed).
+let _aliasIndex = null;
+function buildAliasIndex() {
+  const idx = {};
+  const claim = (key, teamId) => { const k = slugify(key); if (k && !(k in idx)) idx[k] = teamId; };
+
+  // 1) canonical slugs (also covers slugs that aren't alphanumeric-clean, matched verbatim below)
+  allTeams.forEach(t => { if (t.slug) idx[t.slug.trim().toLowerCase()] = t.id; });
+  // 2) slugified full names
+  allTeams.forEach(t => claim(t.name, t.id));
+  // 3) current coaches
+  allTeams.forEach(t => { const c = coachByTeam[t.id]; if (c) claim(c, t.id); });
+  // 4) past coaches (from the full owner history)
+  allOwners.forEach(o => { if (o.players && o.players.display_name) claim(o.players.display_name, o.team_id); });
+
+  _aliasIndex = idx;
+}
+
 function resolveTeam() {
-  const slug = (location.hash || '').replace(/^#/, '').trim().toLowerCase();
-  if (slug) {
-    const hit = allTeams.find(t => (t.slug || '').toLowerCase() === slug);
-    if (hit) return hit;
+  if (!_aliasIndex) buildAliasIndex();
+  const raw = (location.hash || '').replace(/^#/, '').trim().toLowerCase();
+  if (raw) {
+    // exact slug match first (preserves slugs that slugify() would alter), then alias index
+    let hit = allTeams.find(t => (t.slug || '').toLowerCase() === raw);
+    if (!hit) {
+      const id = _aliasIndex[raw] || _aliasIndex[slugify(raw)];
+      if (id) hit = allTeams.find(t => t.id === id);
+    }
+    if (hit) {
+      // normalize the URL to the canonical slug (Option A); guard prevents loops
+      const canon = (hit.slug || '').toLowerCase();
+      if (canon && raw !== canon) {
+        history.replaceState(null, '', location.pathname + location.search + '#' + canon);
+      }
+      return hit;
+    }
   }
   return [...allTeams].sort((a, b) =>
     (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name)
