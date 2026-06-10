@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SBL Hub — Rosters &amp; Transactions Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+  --nav-h: 49px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── BUTTONS ── */
+.btn { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; font-weight: 600; padding: 7px 14px; cursor: pointer; font-family: inherit; transition: border-color .15s, background .15s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn:disabled:hover { border-color: var(--border); }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-accent:hover { filter: brightness(1.08); border-color: var(--accent); }
+.btn-accent:disabled:hover { filter: none; }
+.btn-sm { padding: 4px 9px; font-size: 11px; }
+.btn-danger { color: #ff9c9c; }
+.btn-danger:hover { border-color: var(--red); }
+
+/* ── PAGE ── */
+.wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
+.page-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+.page-sub { font-size: 13px; color: var(--text2); margin-bottom: 20px; line-height: 1.5; }
+
+.section { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px 18px; margin-bottom: 18px; }
+.section-title { font-size: 13px; font-weight: 700; letter-spacing: .4px; margin-bottom: 4px; }
+.section-sub { font-size: 12px; color: var(--text2); margin-bottom: 14px; line-height: 1.5; }
+
+/* ── ADMIN GATE ── */
+.gate { max-width: 420px; margin: 80px auto; text-align: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 28px; }
+.gate h2 { font-size: 17px; margin-bottom: 8px; }
+.gate p { font-size: 13px; color: var(--text2); margin-bottom: 18px; line-height: 1.5; }
+
+/* ── CONTROLS ── */
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+.controls .group { display: flex; align-items: center; gap: 8px; }
+.controls label { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; }
+select, input[type=number], input[type=text] { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 13px; font-family: inherit; padding: 7px 10px; outline: none; }
+select:focus, input:focus { border-color: var(--accent); }
+select:disabled { opacity: .5; }
+
+/* ── TRANSACTION FORM ── */
+.txn-week { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.txn-week label { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; }
+.txn-week input { width: 72px; }
+
+.txn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.txn-side { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 13px 13px 14px; min-width: 0; }
+.txn-side .fld { margin-bottom: 11px; }
+.txn-side .fld:last-child { margin-bottom: 0; }
+.txn-side .fld label { display: block; font-size: 10px; font-weight: 700; letter-spacing: .4px; color: var(--text3); text-transform: uppercase; margin-bottom: 5px; }
+.txn-side select { width: 100%; }
+
+/* selected-mon readout */
+.mon-readout { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 2px; }
+.mon-readout.empty { color: var(--text3); font-style: italic; font-size: 12px; padding: 14px 10px; text-align: center; }
+.mon-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.mon-head img { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
+.mon-head .mn { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mon-stat { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+.mon-stat .k { color: var(--text3); }
+.mon-stat .v { font-variant-numeric: tabular-nums; font-weight: 700; }
+.mon-stat .v.over { color: var(--red); }
+
+/* FA search (mirrors planner) */
+.fa-box { position: relative; }
+.fa-box input { width: 100%; }
+.fa-results { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 200; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; max-height: 280px; overflow-y: auto; display: none; box-shadow: 0 8px 28px rgba(0,0,0,.45); }
+.fa-results.open { display: block; }
+.fa-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; cursor: pointer; }
+.fa-item:hover, .fa-item.highlighted { background: var(--bg3); }
+.fa-item img { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
+.fa-item .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-item .pts { color: var(--yellow); font-variant-numeric: tabular-nums; font-weight: 700; flex-shrink: 0; }
+.fa-empty { padding: 12px; color: var(--text3); font-size: 13px; }
+
+/* budget advisory */
+.budget-warn { margin-top: 14px; border: 1px solid rgba(240,192,96,.5); background: rgba(240,192,96,.08); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--yellow); line-height: 1.55; }
+.budget-warn b { color: var(--yellow); }
+
+/* footer row */
+.txn-foot { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.txn-foot .spacer { flex: 1 1 auto; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); cursor: pointer; user-select: none; }
+.chk input { width: 15px; height: 15px; accent-color: var(--accent); }
+.notes-row { margin-top: 12px; }
+.notes-row label { display: block; font-size: 10px; font-weight: 700; letter-spacing: .4px; color: var(--text3); text-transform: uppercase; margin-bottom: 5px; }
+.notes-row input { width: 100%; }
+
+/* ── MANUAL ROSTER EDITOR ── */
+.editor-empty { color: var(--text3); font-style: italic; font-size: 13px; padding: 16px 4px; text-align: center; }
+.er-group-head { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin: 16px 0 8px; }
+.er-row { display: flex; align-items: center; gap: 11px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; margin-bottom: 7px; }
+.er-row.dirty { border-color: var(--accent); }
+.er-row.inactive { opacity: .82; }
+.er-icon { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+.er-main { flex: 1 1 auto; min-width: 0; }
+.er-name { font-size: 13px; font-weight: 700; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.er-name .er-cost { color: var(--text3); font-weight: 400; font-size: 11px; }
+.er-fields { display: flex; flex-wrap: wrap; gap: 7px 12px; align-items: center; }
+.er-fields label { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); }
+.er-fields input, .er-fields select { font-size: 12px; padding: 4px 6px; }
+.er-fields .er-aw { width: 52px; }
+.er-fields .er-notes { width: 150px; text-transform: none; }
+.er-actions { display: flex; flex-wrap: wrap; gap: 5px; flex-shrink: 0; justify-content: flex-end; }
+
+.add-head { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); margin-bottom: 10px; }
+.add-grid { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.add-fld { display: flex; flex-direction: column; gap: 4px; }
+.add-fld label { font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); }
+.add-fld.grow { flex: 1 1 220px; min-width: 180px; }
+.add-fld.grow .fa-box { width: 100%; }
+#add-week { width: 72px; }
+.editor-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+.editor-foot .spacer { flex: 1 1 auto; }
+.er-row.removing { opacity: .6; }
+.er-name.struck { text-decoration: line-through; }
+.er-tag { font-size: 9px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+.er-tag.new { background: rgba(124,111,247,.18); color: var(--accent); }
+.er-group-head.removing { color: #ff9c9c; }
+
+/* ── MODAL ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay[hidden] { display: none; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: 100%; max-width: 460px; box-shadow: 0 12px 40px rgba(0,0,0,.5); max-height: 84vh; overflow-y: auto; }
+.modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+.modal p { font-size: 13px; color: var(--text2); line-height: 1.55; margin-bottom: 12px; }
+.modal .swap { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px; margin-bottom: 14px; font-size: 13px; line-height: 1.6; }
+.modal .swap .mon { font-weight: 700; color: var(--text); }
+.modal .swap .arrow { color: var(--accent); margin: 0 6px; }
+.modal .swap .lbl { color: var(--text3); }
+.modal .warn { color: var(--yellow); font-weight: 600; }
+.modal input[type=email] { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; margin-bottom: 14px; }
+.modal input[type=email]:focus { border-color: var(--accent); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ── TOASTS ── */
+#toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 300; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.toast { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 13px; color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,.4); animation: toast-in .18s ease; max-width: 90vw; }
+.toast.ok { border-color: rgba(76,175,125,.5); }
+.toast.err { border-color: rgba(224,85,85,.55); color: #ff9c9c; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
+.banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
+
+@media (max-width: 768px) {
+  .btn { padding: 6px 10px; }
+  .txn-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<script src="/nav.js"></script>
+
+<div id="boot-banner" class="banner">Loading…</div>
+
+<!-- Shown to non-admins -->
+<div class="gate" id="gate" hidden>
+  <h2>Admin access required</h2>
+  <p>Log in with an admin account to record trades and free-agency moves.</p>
+  <button class="btn btn-accent" onclick="window.SBLNav && window.SBLNav.login()">Admin Login</button>
+</div>
+
+<!-- The tool (admins only) -->
+<div class="wrap" id="tool" hidden>
+  <div class="page-title">Rosters &amp; Transactions</div>
+  <div class="page-sub">Record a trade between two teams or a free-agency swap. Each move closes the given-up Pokémon's roster stint and opens a new one, all in a single atomic write.</div>
+
+  <div class="controls">
+    <div class="group">
+      <label for="season-select">Season</label>
+      <select id="season-select" onchange="onSeasonChange()"></select>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Record Transaction</div>
+    <div class="section-sub">Pick the first team and the Pokémon it gives up. For the second side, choose another team (a trade) or <b>Free Agency</b> to add an unowned legal Pokémon. Budget is checked after the drop and flagged if exceeded — you can still approve it.</div>
+
+    <div class="txn-week">
+      <label for="eff-week">Effective Week</label>
+      <input type="number" id="eff-week" min="1" step="1" value="1" oninput="updateReadouts()">
+    </div>
+
+    <div class="txn-grid">
+      <!-- LEFT: Team A (always a team; always gives up a mon) -->
+      <div class="txn-side">
+        <div class="fld">
+          <label for="team-a">Team (Coach) A</label>
+          <select id="team-a" onchange="onTeamAChange()"></select>
+        </div>
+        <div class="fld">
+          <label for="drop-a">Pokémon given up</label>
+          <select id="drop-a" onchange="updateReadouts()"></select>
+        </div>
+        <div class="mon-readout empty" id="readout-a">Select a Pokémon…</div>
+      </div>
+
+      <!-- RIGHT: Team B or Free Agency -->
+      <div class="txn-side">
+        <div class="fld">
+          <label for="team-b">Team (Coach) B  ·  or Free Agency</label>
+          <select id="team-b" onchange="onTeamBChange()"></select>
+        </div>
+        <div class="fld" id="b-trade-fld">
+          <label for="drop-b">Pokémon given up</label>
+          <select id="drop-b" onchange="updateReadouts()"></select>
+        </div>
+        <div class="fld" id="b-fa-fld" hidden>
+          <label for="fa-input">Add from free agency</label>
+          <div class="fa-box">
+            <input type="text" id="fa-input" placeholder="Search legal, unowned Pokémon…" autocomplete="off">
+            <div class="fa-results" id="fa-results"></div>
+          </div>
+        </div>
+        <div class="mon-readout empty" id="readout-b">Select a Pokémon…</div>
+      </div>
+    </div>
+
+    <div id="budget-warn"></div>
+
+    <div class="notes-row">
+      <label for="txn-notes">Notes (optional)</label>
+      <input type="text" id="txn-notes" placeholder="e.g. leg of a larger arrangement">
+    </div>
+
+    <div class="txn-foot">
+      <label class="chk">
+        <input type="checkbox" id="exclude-inactive">
+        Exclude from Inactive Pokémon (hard-remove the given-up mon instead of keeping it as inactive)
+      </label>
+      <span class="spacer"></span>
+      <button class="btn btn-accent" id="apply-btn" onclick="openConfirm()" disabled>Apply Transaction</button>
+    </div>
+  </div>
+
+  <!-- ── EDIT TEAM ROSTER (manual cleanup) ── -->
+  <div class="section">
+    <div class="section-title">Edit Team Roster</div>
+    <div class="section-sub">Direct corrections the recorder can't express — fix a stint's week or acquired-via, move a Pokémon in or out of the active roster, add a missed pick, or remove a row entirely. Edits here write straight to the roster.</div>
+
+    <div class="controls">
+      <div class="group">
+        <label for="editor-team">Team</label>
+        <select id="editor-team" onchange="onEditorTeamChange()"></select>
+      </div>
+    </div>
+
+    <div id="editor-body"><div class="editor-empty">Select a team to edit its roster.</div></div>
+
+    <div id="editor-add" hidden>
+      <div class="add-head">Add a Pokémon</div>
+      <div class="add-grid">
+        <div class="add-fld grow">
+          <label for="add-input">Pokémon (legal pool)</label>
+          <div class="fa-box">
+            <input type="text" id="add-input" placeholder="Search legal Pokémon…" autocomplete="off">
+            <div class="fa-results" id="add-results"></div>
+          </div>
+        </div>
+        <div class="add-fld">
+          <label for="add-week">Week added</label>
+          <input type="number" id="add-week" min="1" step="1" value="1" oninput="updateAddBtn()">
+        </div>
+        <div class="add-fld">
+          <label for="add-via">Acquired via</label>
+          <select id="add-via">
+            <option value="draft">draft</option>
+            <option value="free_agency">free_agency</option>
+            <option value="trade">trade</option>
+          </select>
+        </div>
+        <button class="btn btn-accent" id="add-btn" onclick="addRosterRow()" disabled>+ Add</button>
+      </div>
+      <div id="add-warn"></div>
+    </div>
+
+    <div id="editor-warn"></div>
+    <div class="editor-foot" id="editor-foot" hidden>
+      <span class="spacer"></span>
+      <button class="btn" id="discard-btn" onclick="discardEditorChanges()" disabled>Discard changes</button>
+      <button class="btn btn-accent" id="confirm-changes-btn" onclick="openConfirmChanges()" disabled>Confirm Changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-overlay" hidden onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+// ── CONFIG ──
+const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
+const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
+const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
+
+// ── STATE ──
+let isAdmin          = false;
+let seasons          = [];
+let selectedSeasonId = null;
+let seasonById       = {};
+let teams            = [];
+let teamById         = {};
+let coachByTeam      = {};          // team_id -> active owner display name
+let rosterByTeam     = {};          // team_id -> [pokemon_id] currently active
+let tierCost         = {};          // pokemon_id -> point_cost (null treated as 0)
+let faPool           = [];          // [{id, name, cost}] legal + unowned, sorted by name
+let legalPool        = [];          // [{id, name, cost}] every legal mon this season (for manual add)
+let pokemonById      = {};
+
+// FA search state
+let faResults = [];
+let faHighlight = -1;
+let faSelected = null;              // chosen free-agent pokemon_id
+
+// ── MANUAL ROSTER EDITOR state ──
+let editorTeamId  = null;
+let editorRows    = [];             // original team_pokemon rows from the DB (diff baseline)
+let editorWork    = [];             // staged working copy (edits not yet committed)
+let origById      = {};             // id -> original row, for diffing on confirm
+let editorKeySeq  = 0;              // unique keys for staged new rows
+// add-row search state
+let addResults = [];
+let addHighlight = -1;
+let addSelected = null;             // chosen pokemon_id to add
+
+// ── HELPERS ──
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function monName(id) { const p = pokemonById[id]; return p ? p.name : id; }
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/);
+  if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(id)   { return id ? ASSET_BASE + 'icons/'   + localId(id) + '.png' : ''; }
+function spriteUrl(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
+function attachIconFallback(img, id) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/')) { this.src = spriteUrl(id); }
+    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
+function teamLabelText(id) { const t = teamById[id]; if (!t) return 'TBD'; const c = coachByTeam[id]; return t.name + (c ? ' (' + c + ')' : ''); }
+function sortedTeams() { return [...teams].sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name)); }
+function costOf(id) { const c = tierCost[id]; return (c == null ? 0 : c); }
+function pointLimit() { const s = seasonById[selectedSeasonId]; return s ? (s.point_limit || 0) : 0; }
+function activeRoster(teamId) { return (rosterByTeam[teamId] || []).slice().sort((a, b) => monName(a).localeCompare(monName(b))); }
+// Budget headroom for a team after giving up `dropId`: limit − Σ(cost of every other active mon).
+function remainingAfterDrop(teamId, dropId) {
+  let spentOthers = 0;
+  (rosterByTeam[teamId] || []).forEach(id => { if (id !== dropId) spentOthers += costOf(id); });
+  return pointLimit() - spentOthers;
+}
+
+// ── current mode/selection readers ──
+function mode() { return document.getElementById('team-b').value === 'FA' ? 'fa' : 'trade'; }
+function teamAId() { return document.getElementById('team-a').value || null; }
+function teamBId() { const v = document.getElementById('team-b').value; return (v && v !== 'FA') ? v : null; }
+function dropAId() { return document.getElementById('drop-a').value || null; }
+function dropBId() { return document.getElementById('drop-b').value || null; }
+function effWeek() { return parseInt(document.getElementById('eff-week').value, 10); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA LOAD
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadSeasons() {
+  const { data, error } = await sb.from('seasons').select('*').order('slug', { ascending: false });
+  if (error) throw error;
+  seasons = data || [];
+  seasons.forEach(s => { seasonById[s.id] = s; });
+}
+
+async function loadPokemon() {
+  try {
+    const res = await fetch(POKEMON_JSON_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const arr = Array.isArray(data) ? data : (data.pokemon || []);
+    pokemonById = {};
+    arr.forEach(p => { pokemonById[p.id] = p; });
+  } catch (err) {
+    console.error('Could not load pokemon.json:', err);
+    showToast('Pokémon data didn\u2019t load — names/sprites may be missing.', 'err');
+  }
+}
+
+function populateSeasonDropdown() {
+  const sel = document.getElementById('season-select');
+  sel.innerHTML = '';
+  seasons.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name + (s.is_current ? '  (current)' : '');
+    sel.appendChild(opt);
+  });
+  const current = seasons.find(s => s.is_current) || seasons[0];
+  if (current) { selectedSeasonId = current.id; sel.value = current.id; }
+}
+
+async function loadSeasonData(seasonId) {
+  teams = []; teamById = {}; coachByTeam = {}; rosterByTeam = {}; tierCost = {}; faPool = [];
+  faSelected = null;
+  if (!seasonId) { renderTool(); return; }
+
+  const [teamsRes, ownersRes, tiersRes] = await Promise.all([
+    sb.from('teams').select('id, name, slug, initial_seed').eq('season_id', seasonId),
+    sb.from('team_owners').select('team_id, ended_week, players(display_name)'),
+    sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', seasonId),
+  ]);
+  for (const r of [teamsRes, ownersRes, tiersRes]) if (r.error) throw r.error;
+
+  teams = teamsRes.data || [];
+  teams.forEach(t => { teamById[t.id] = t; });
+  const teamIds = new Set(teams.map(t => t.id));
+
+  (ownersRes.data || []).filter(o => teamIds.has(o.team_id) && o.ended_week == null).forEach(o => {
+    const nm = o.players && o.players.display_name;
+    if (nm) coachByTeam[o.team_id] = nm;
+  });
+
+  (tiersRes.data || []).forEach(r => { tierCost[r.pokemon_id] = r.point_cost; });
+
+  // Active rosters for every team in the season (one query, filtered client-side by season teams).
+  let rosterRows = [];
+  if (teamIds.size) {
+    const { data, error } = await sb.from('team_pokemon')
+      .select('team_id, pokemon_id, released_week')
+      .in('team_id', [...teamIds])
+      .is('released_week', null);
+    if (error) throw error;
+    rosterRows = data || [];
+  }
+  const owned = new Set();
+  rosterRows.forEach(r => {
+    (rosterByTeam[r.team_id] = rosterByTeam[r.team_id] || []).push(r.pokemon_id);
+    owned.add(r.pokemon_id);
+  });
+
+  // Free-agent pool: legal this season AND not on any active roster.
+  faPool = Object.keys(tierCost)
+    .filter(id => !owned.has(id))
+    .map(id => ({ id, name: monName(id), cost: costOf(id) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Manual-add pool: every legal mon this season (ownership not filtered — cleanup may re-add).
+  legalPool = Object.keys(tierCost)
+    .map(id => ({ id, name: monName(id), cost: costOf(id) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  renderTool();
+}
+
+function onSeasonChange() {
+  selectedSeasonId = document.getElementById('season-select').value;
+  loadSeasonData(selectedSeasonId).catch(err => { console.error(err); showToast('Could not load season: ' + (err.message || err), 'err'); });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function renderTool() {
+  populateTeamSelects();
+  // Reset second-side widgets to a clean state on (re)load.
+  document.getElementById('drop-a').innerHTML = '<option value="">—</option>';
+  document.getElementById('drop-b').innerHTML = '<option value="">—</option>';
+  document.getElementById('fa-input').value = '';
+  faSelected = null;
+  syncSecondSideVisibility();
+  updateReadouts();
+  populateEditorTeamSelect();
+  renderEditor();
+}
+
+function teamOptionsHtml(includeFA, excludeId) {
+  let h = '<option value="">—</option>';
+  if (includeFA) h += '<option value="FA">Free Agency</option>';
+  sortedTeams().forEach(t => {
+    if (t.id === excludeId) return;
+    h += '<option value="' + t.id + '">' + escapeHtml(teamLabelText(t.id)) + '</option>';
+  });
+  return h;
+}
+
+function populateTeamSelects() {
+  document.getElementById('team-a').innerHTML = teamOptionsHtml(false, null);
+  document.getElementById('team-b').innerHTML = teamOptionsHtml(true, null);
+}
+
+function rosterOptionsHtml(teamId) {
+  let h = '<option value="">—</option>';
+  activeRoster(teamId).forEach(id => {
+    h += '<option value="' + escapeHtml(id) + '">' + escapeHtml(monName(id)) + '  (' + costOf(id) + ')</option>';
+  });
+  return h;
+}
+
+function onTeamAChange() {
+  const aId = teamAId();
+  document.getElementById('drop-a').innerHTML = rosterOptionsHtml(aId);
+  // Keep B from pointing at the same team as A.
+  const bSel = document.getElementById('team-b');
+  const keepB = bSel.value;
+  bSel.innerHTML = teamOptionsHtml(true, aId);
+  bSel.value = (keepB === aId) ? '' : keepB;
+  onTeamBChange();
+}
+
+function onTeamBChange() {
+  syncSecondSideVisibility();
+  const bId = teamBId();
+  if (mode() === 'trade') {
+    document.getElementById('drop-b').innerHTML = rosterOptionsHtml(bId);
+  } else {
+    document.getElementById('fa-input').value = '';
+    faSelected = null;
+    closeFaResults();
+  }
+  updateReadouts();
+}
+
+function syncSecondSideVisibility() {
+  const isFa = mode() === 'fa';
+  document.getElementById('b-trade-fld').hidden = isFa;
+  document.getElementById('b-fa-fld').hidden = !isFa;
+}
+
+function monReadoutHtml(id, teamId, recvCost) {
+  // recvCost (cost of the mon this side RECEIVES) is null when there's no budget row (FA add side).
+  let h = '<div class="mon-head"><img src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="">'
+        + '<span class="mn">' + escapeHtml(monName(id)) + '</span></div>'
+        + '<div class="mon-stat"><span class="k">Points</span><span class="v">' + costOf(id) + '</span></div>';
+  if (recvCost !== null && teamId) {
+    const rem = remainingAfterDrop(teamId, id);
+    const over = recvCost > rem;
+    h += '<div class="mon-stat"><span class="k">Remaining after drop</span>'
+       + '<span class="v' + (over ? ' over' : '') + '">' + rem + '</span></div>';
+  }
+  return h;
+}
+
+function setReadout(elId, id, teamId, recvCost) {
+  const el = document.getElementById(elId);
+  if (!id) { el.className = 'mon-readout empty'; el.textContent = 'Select a Pokémon…'; return; }
+  el.className = 'mon-readout';
+  el.innerHTML = monReadoutHtml(id, teamId, recvCost);
+  el.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
+}
+
+// Recompute readouts, budget advisory, and the Apply button on every change.
+function updateReadouts() {
+  const m = mode();
+  const aTeam = teamAId(), aDrop = dropAId();
+  const bTeam = teamBId(), bDrop = dropBId();
+  const recvId = (m === 'fa') ? faSelected : bDrop;     // what Team A receives
+  const recvCostA = recvId ? costOf(recvId) : 0;
+
+  // Left readout: A gives up aDrop, receives recvId → show A's remaining vs recvCostA.
+  setReadout('readout-a', aDrop, aTeam, aDrop ? recvCostA : 0);
+
+  // Right readout.
+  if (m === 'fa') {
+    setReadout('readout-b', faSelected, null, null);    // free agent: no budget row
+  } else {
+    // B gives up bDrop, receives aDrop → show B's remaining vs cost(aDrop).
+    const recvCostB = aDrop ? costOf(aDrop) : 0;
+    setReadout('readout-b', bDrop, bTeam, bDrop ? recvCostB : 0);
+  }
+
+  renderBudgetWarn(m, aTeam, aDrop, bTeam, bDrop, recvId);
+  updateApplyEnabled(m, aTeam, aDrop, bTeam, recvId);
+}
+
+function renderBudgetWarn(m, aTeam, aDrop, bTeam, bDrop, recvId) {
+  const el = document.getElementById('budget-warn');
+  const lines = [];
+
+  if (aTeam && aDrop && recvId) {
+    const remA = remainingAfterDrop(aTeam, aDrop);
+    const need = costOf(recvId);
+    if (need > remA) lines.push('<b>' + escapeHtml(teamName(aTeam)) + '</b> would exceed its budget by <b>' + (need - remA) + '</b> point' + (need - remA === 1 ? '' : 's') + '.');
+  }
+  if (m === 'trade' && bTeam && bDrop && aDrop) {
+    const remB = remainingAfterDrop(bTeam, bDrop);
+    const need = costOf(aDrop);
+    if (need > remB) lines.push('<b>' + escapeHtml(teamName(bTeam)) + '</b> would exceed its budget by <b>' + (need - remB) + '</b> point' + (need - remB === 1 ? '' : 's') + '.');
+  }
+
+  el.innerHTML = lines.length ? '<div class="budget-warn">\u26A0 ' + lines.join('<br>\u26A0 ') + '<br><span style="color:var(--text2)">You can still apply this transaction.</span></div>' : '';
+}
+
+function updateApplyEnabled(m, aTeam, aDrop, bTeam, recvId) {
+  let ready = !!(aTeam && aDrop && Number.isInteger(effWeek()) && effWeek() >= 1);
+  if (m === 'trade') ready = ready && !!bTeam && !!dropBId() && bTeam !== aTeam;
+  else ready = ready && !!recvId;
+  document.getElementById('apply-btn').disabled = !ready;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FA SEARCH  (mirrors the planner: filter, arrow keys, Enter commits first/highlighted)
+// ─────────────────────────────────────────────────────────────────────────────
+function doFaSearch(q) {
+  q = q.trim().toLowerCase();
+  faSelected = null;          // typing invalidates a prior pick until re-selected
+  if (!q) { closeFaResults(); updateReadouts(); return; }
+  faResults = faPool.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().startsWith(q)).slice(0, 18);
+  const el = document.getElementById('fa-results');
+  if (!faResults.length) {
+    el.innerHTML = '<div class="fa-empty">No legal, unowned Pokémon match.</div>';
+    el.classList.add('open');
+    faHighlight = -1;
+    updateReadouts();
+    return;
+  }
+  faHighlight = 0;            // start on the first result so Enter commits it
+  el.innerHTML = faResults.map((p, i) =>
+    '<div class="fa-item' + (i === 0 ? ' highlighted' : '') + '" data-i="' + i + '">'
+    + '<img src="' + iconUrl(p.id) + '" data-mon="' + escapeHtml(p.id) + '" alt="">'
+    + '<span class="nm">' + escapeHtml(p.name) + '</span>'
+    + '<span class="pts">' + p.cost + ' pts</span></div>'
+  ).join('');
+  el.classList.add('open');
+  el.querySelectorAll('.fa-item').forEach(item => {
+    const i = +item.getAttribute('data-i');
+    item.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
+    item.addEventListener('mousedown', e => { e.preventDefault(); pickFa(i); });
+  });
+  updateReadouts();
+}
+function updateFaHighlight() {
+  document.querySelectorAll('.fa-item').forEach((el, i) => el.classList.toggle('highlighted', i === faHighlight));
+}
+function pickFa(i) {
+  const p = faResults[i];
+  if (!p) return;
+  faSelected = p.id;
+  document.getElementById('fa-input').value = p.name;
+  closeFaResults();
+  updateReadouts();
+}
+function closeFaResults() {
+  document.getElementById('fa-results').classList.remove('open');
+  faHighlight = -1;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIRM + APPLY
+// ─────────────────────────────────────────────────────────────────────────────
+function openConfirm() {
+  const m = mode();
+  const aTeam = teamAId(), aDrop = dropAId(), w = effWeek();
+  const exclude = document.getElementById('exclude-inactive').checked;
+
+  let title, swapHtml, recvId;
+  if (m === 'trade') {
+    const bTeam = teamBId(), bDrop = dropBId();
+    recvId = bDrop;
+    title = 'Confirm trade';
+    swapHtml =
+      '<div><span class="lbl">' + escapeHtml(teamName(aTeam)) + ' sends</span> <span class="mon">' + escapeHtml(monName(aDrop)) + '</span>'
+      + '<span class="arrow">\u21C4</span><span class="lbl">' + escapeHtml(teamName(bTeam)) + ' sends</span> <span class="mon">' + escapeHtml(monName(bDrop)) + '</span></div>';
+  } else {
+    recvId = faSelected;
+    title = 'Confirm free-agency move';
+    swapHtml =
+      '<div><span class="lbl">' + escapeHtml(teamName(aTeam)) + '</span> drops <span class="mon">' + escapeHtml(monName(aDrop)) + '</span>'
+      + '<span class="arrow">\u2192</span> adds <span class="mon">' + escapeHtml(monName(recvId)) + '</span></div>';
+  }
+
+  // Budget advisory text inside the modal (mirror of the inline warning).
+  const warnLines = [];
+  if (aTeam && aDrop && recvId) {
+    const remA = remainingAfterDrop(aTeam, aDrop), need = costOf(recvId);
+    if (need > remA) warnLines.push(teamName(aTeam) + ' exceeds budget by ' + (need - remA));
+  }
+  if (m === 'trade') {
+    const bTeam = teamBId(), bDrop = dropBId();
+    const remB = remainingAfterDrop(bTeam, bDrop), need = costOf(aDrop);
+    if (need > remB) warnLines.push(teamName(bTeam) + ' exceeds budget by ' + (need - remB));
+  }
+
+  openModal(
+    '<h3>' + title + '</h3>'
+    + '<div class="swap">' + swapHtml + '<div style="margin-top:6px;color:var(--text3)">Effective Week ' + w + '</div></div>'
+    + (exclude ? '<p class="warn">The given-up Pokémon will be removed entirely, not kept as inactive.</p>' : '')
+    + (warnLines.length ? '<p class="warn">\u26A0 ' + warnLines.map(escapeHtml).join('<br>\u26A0 ') + '</p>' : '')
+    + '<div class="modal-actions">'
+    +   '<button class="btn" onclick="closeModal()">Cancel</button>'
+    +   '<button class="btn btn-accent" id="confirm-apply-btn" onclick="applyTransaction()">Confirm</button>'
+    + '</div>'
+  );
+}
+
+async function applyTransaction() {
+  const btn = document.getElementById('confirm-apply-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
+
+  const m = mode();
+  const w = effWeek();
+  const exclude = document.getElementById('exclude-inactive').checked;
+  const notes = (document.getElementById('txn-notes').value || '').trim() || null;
+
+  try {
+    let res;
+    if (m === 'trade') {
+      res = await sb.rpc('record_trade', {
+        p_season_id: selectedSeasonId,
+        p_team_a: teamAId(), p_pokemon_a: dropAId(),
+        p_team_b: teamBId(), p_pokemon_b: dropBId(),
+        p_effective_week: w, p_exclude_inactive: exclude, p_notes: notes,
+      });
+    } else {
+      res = await sb.rpc('record_free_agency', {
+        p_season_id: selectedSeasonId,
+        p_team_id: teamAId(),
+        p_pokemon_dropped: dropAId(), p_pokemon_added: faSelected,
+        p_effective_week: w, p_exclude_inactive: exclude, p_notes: notes,
+      });
+    }
+    if (res.error) throw res.error;
+
+    closeModal();
+    showToast(m === 'trade' ? 'Trade recorded.' : 'Free-agency move recorded.', 'ok');
+    resetSelectionsKeepContext();
+    await loadSeasonData(selectedSeasonId);   // refresh rosters / pool / budgets
+  } catch (err) {
+    console.error(err);
+    showToast('Could not apply: ' + (err.message || err), 'err');
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirm'; }
+  }
+}
+
+// After a successful apply, keep season + week but clear the mon picks.
+function resetSelectionsKeepContext() {
+  document.getElementById('drop-a').value = '';
+  document.getElementById('drop-b').value = '';
+  document.getElementById('fa-input').value = '';
+  document.getElementById('txn-notes').value = '';
+  document.getElementById('exclude-inactive').checked = false;
+  faSelected = null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANUAL ROSTER EDITOR  (staged: edits batch until "Confirm Changes")
+// ─────────────────────────────────────────────────────────────────────────────
+function populateEditorTeamSelect() {
+  const sel = document.getElementById('editor-team');
+  const prev = editorTeamId;
+  let h = '<option value="">—</option>';
+  sortedTeams().forEach(t => { h += '<option value="' + t.id + '">' + escapeHtml(teamLabelText(t.id)) + '</option>'; });
+  sel.innerHTML = h;
+  if (prev && teamById[prev]) { sel.value = prev; editorTeamId = prev; }
+  else { sel.value = ''; editorTeamId = null; editorRows = []; editorWork = []; origById = {}; }
+}
+
+function onEditorTeamChange() {
+  editorTeamId = document.getElementById('editor-team').value || null;
+  resetAddPicker();
+  if (!editorTeamId) { editorRows = []; editorWork = []; origById = {}; renderEditor(); return; }
+  loadEditorTeam(editorTeamId);
+}
+
+async function loadEditorTeam(teamId) {
+  try {
+    const { data, error } = await sb.from('team_pokemon')
+      .select('id, pokemon_id, acquired_week, released_week, acquired_via, notes')
+      .eq('team_id', teamId);
+    if (error) throw error;
+    editorRows = data || [];
+  } catch (err) {
+    console.error(err);
+    showToast('Could not load roster: ' + (err.message || err), 'err');
+    editorRows = [];
+  }
+  origById = {};
+  editorRows.forEach(r => { origById[r.id] = r; });
+  buildWorkFromRows();
+  renderEditor();
+}
+
+// Reset the staged working copy to a fresh clone of the DB rows.
+function buildWorkFromRows() {
+  editorWork = editorRows.map(o => ({
+    key: o.id, id: o.id,
+    pokemon_id: o.pokemon_id,
+    acquired_week: o.acquired_week,
+    released_week: o.released_week,
+    acquired_via: o.acquired_via,
+    notes: o.notes,
+    isNew: false, isDeleted: false,
+  }));
+}
+
+function workByKey(key) { return editorWork.find(r => r.key === key); }
+
+// Another team (not excludeTeamId) whose committed active roster holds this mon, or null.
+function activeOwnerOf(pokemonId, excludeTeamId) {
+  for (const tid of Object.keys(rosterByTeam)) {
+    if (tid !== excludeTeamId && (rosterByTeam[tid] || []).includes(pokemonId)) return tid;
+  }
+  return null;
+}
+
+function viaOptionsHtml(selected) {
+  return ['draft', 'free_agency', 'trade']
+    .map(v => '<option value="' + v + '"' + (selected === v ? ' selected' : '') + '>' + v + '</option>').join('');
+}
+
+function editorRowHtml(r) {
+  if (r.isDeleted) {
+    return '<div class="er-row removing" data-key="' + r.key + '">'
+      + '<img class="er-icon" src="' + iconUrl(r.pokemon_id) + '" data-mon="' + escapeHtml(r.pokemon_id) + '" alt="">'
+      + '<div class="er-main"><div class="er-name struck">' + escapeHtml(monName(r.pokemon_id))
+      +   ' <span class="er-cost">marked for removal</span></div></div>'
+      + '<div class="er-actions"><button class="btn btn-sm er-undo">Undo</button></div>'
+    + '</div>';
+  }
+  const active = r.released_week == null;
+  return '<div class="er-row' + (active ? '' : ' inactive') + '" data-key="' + r.key + '">'
+    + '<img class="er-icon" src="' + iconUrl(r.pokemon_id) + '" data-mon="' + escapeHtml(r.pokemon_id) + '" alt="">'
+    + '<div class="er-main">'
+    +   '<div class="er-name">' + escapeHtml(monName(r.pokemon_id))
+    +     (r.isNew ? '<span class="er-tag new">new</span>' : '')
+    +     ' <span class="er-cost">' + costOf(r.pokemon_id) + ' pts' + (active ? '' : ' \u00B7 dropped wk ' + r.released_week) + '</span></div>'
+    +   '<div class="er-fields">'
+    +     '<label>Wk added <input type="number" class="er-aw" min="1" step="1" value="' + (r.acquired_week == null ? '' : r.acquired_week) + '"></label>'
+    +     '<label>Via <select class="er-via">' + viaOptionsHtml(r.acquired_via) + '</select></label>'
+    +     '<label>Notes <input type="text" class="er-notes" value="' + escapeHtml(r.notes || '') + '"></label>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="er-actions">'
+    +   '<button class="btn btn-sm er-toggle">' + (active ? 'Move to Inactive' : 'Move to Active') + '</button>'
+    +   '<button class="btn btn-sm btn-danger er-remove">Remove</button>'
+    + '</div>'
+  + '</div>';
+}
+
+function renderEditor() {
+  const body = document.getElementById('editor-body');
+  const addPanel = document.getElementById('editor-add');
+  const foot = document.getElementById('editor-foot');
+  if (!editorTeamId) {
+    body.innerHTML = '<div class="editor-empty">Select a team to edit its roster.</div>';
+    addPanel.hidden = true; foot.hidden = true;
+    document.getElementById('editor-warn').innerHTML = '';
+    return;
+  }
+  addPanel.hidden = false; foot.hidden = false;
+
+  const active = editorWork.filter(r => !r.isDeleted && r.released_week == null)
+    .sort((a, b) => monName(a.pokemon_id).localeCompare(monName(b.pokemon_id)));
+  const inactive = editorWork.filter(r => !r.isDeleted && r.released_week != null)
+    .sort((a, b) => (b.released_week || 0) - (a.released_week || 0) || monName(a.pokemon_id).localeCompare(monName(b.pokemon_id)));
+  const removed = editorWork.filter(r => r.isDeleted);
+
+  let h = '<div class="er-group-head">Active Pokémon (' + active.length + ')</div>';
+  h += active.length ? active.map(editorRowHtml).join('') : '<div class="editor-empty">No active Pokémon.</div>';
+  h += '<div class="er-group-head">Inactive Pokémon (' + inactive.length + ')</div>';
+  h += inactive.length ? inactive.map(editorRowHtml).join('') : '<div class="editor-empty">No inactive Pokémon.</div>';
+  if (removed.length) {
+    h += '<div class="er-group-head removing">Marked for removal (' + removed.length + ')</div>';
+    h += removed.map(editorRowHtml).join('');
+  }
+  body.innerHTML = h;
+
+  body.querySelectorAll('.er-row').forEach(row => {
+    const key = row.getAttribute('data-key');
+    row.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
+    const undo = row.querySelector('.er-undo');
+    if (undo) { undo.addEventListener('click', () => undoRemove(key)); return; }
+    row.querySelector('.er-aw').addEventListener('input', e => onFieldInput(key, 'acquired_week', e.target.value));
+    row.querySelector('.er-via').addEventListener('change', e => onFieldInput(key, 'acquired_via', e.target.value));
+    row.querySelector('.er-notes').addEventListener('input', e => onFieldInput(key, 'notes', e.target.value));
+    row.querySelector('.er-toggle').addEventListener('click', () => toggleWork(key));
+    row.querySelector('.er-remove').addEventListener('click', () => removeWork(key));
+  });
+
+  refreshEditorFooter();
+}
+
+// Field edits update the working copy in place (no re-render → keeps input focus).
+function onFieldInput(key, field, value) {
+  const r = workByKey(key);
+  if (!r) return;
+  if (field === 'acquired_week') r.acquired_week = (value === '' ? null : parseInt(value, 10));
+  else if (field === 'acquired_via') r.acquired_via = value;
+  else if (field === 'notes') r.notes = (value.trim() === '' ? null : value);
+  refreshEditorFooter();
+}
+
+function toggleWork(key) {
+  const r = workByKey(key);
+  if (!r) return;
+  if (r.released_week == null) openMoveToInactive(key);
+  else { r.released_week = null; renderEditor(); }
+}
+
+function openMoveToInactive(key) {
+  const r = workByKey(key);
+  if (!r) return;
+  const aw = r.acquired_week || 1;
+  let def = effWeek();
+  if (!Number.isInteger(def) || def <= aw) def = aw + 1;
+  openModal(
+    '<h3>Move to Inactive</h3>'
+    + '<p>Set the week ' + escapeHtml(monName(r.pokemon_id)) + ' was dropped. It stays in the inactive roster and keeps contributing its game stats to this team. (Staged until you Confirm Changes.)</p>'
+    + '<label style="display:block;font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Dropped week</label>'
+    + '<input type="number" id="mti-week" min="1" step="1" value="' + def + '" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:14px">'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" onclick="confirmMoveToInactive(\'' + key + '\')">Set week</button></div>'
+  );
+  setTimeout(() => { const el = document.getElementById('mti-week'); if (el) { el.focus(); el.select(); } }, 30);
+}
+
+function confirmMoveToInactive(key) {
+  const r = workByKey(key);
+  if (!r) return;
+  const aw = r.acquired_week || 1;
+  const w = parseInt(document.getElementById('mti-week').value, 10);
+  if (!Number.isInteger(w) || w < 1) { showToast('Enter a valid week.', 'err'); return; }
+  if (w <= aw) { showToast('Dropped week must be after the week added (' + aw + ').', 'err'); return; }
+  r.released_week = w;
+  closeModal();
+  renderEditor();
+}
+
+function removeWork(key) {
+  const r = workByKey(key);
+  if (!r) return;
+  if (r.isNew) { editorWork = editorWork.filter(x => x.key !== key); }  // staged add → just drop it
+  else { r.isDeleted = true; }
+  renderEditor();
+}
+
+function undoRemove(key) {
+  const r = workByKey(key);
+  if (r) r.isDeleted = false;
+  renderEditor();
+}
+
+function rowChanged(r) {
+  const o = origById[r.id];
+  if (!o) return true;
+  return (o.acquired_week ?? null) !== (r.acquired_week ?? null)
+      || (o.released_week ?? null) !== (r.released_week ?? null)
+      || (o.acquired_via ?? null) !== (r.acquired_via ?? null)
+      || (o.notes || null) !== (r.notes || null);
+}
+
+function hasChanges() {
+  for (const r of editorWork) {
+    if (r.isNew && !r.isDeleted) return true;
+    if (r.isNew && r.isDeleted) continue;
+    if (r.isDeleted) return true;
+    if (rowChanged(r)) return true;
+  }
+  return false;
+}
+
+function activeCap() { const s = seasonById[selectedSeasonId]; return (s && s.team_size) || 10; }
+
+function refreshEditorFooter() {
+  if (!editorTeamId) return;
+  const changed = hasChanges();
+  document.getElementById('confirm-changes-btn').disabled = !changed;
+  document.getElementById('discard-btn').disabled = !changed;
+
+  const activeWork = editorWork.filter(r => !r.isDeleted && r.released_week == null);
+  const cap = activeCap();
+  const limit = pointLimit();
+  const activeCost = activeWork.reduce((s, r) => s + costOf(r.pokemon_id), 0);
+
+  const lines = [];
+  if (activeWork.length > cap) {
+    lines.push('Active roster has <b>' + activeWork.length + '</b> Pokémon — over the season maximum of <b>' + cap + '</b>.');
+  }
+  if (limit > 0 && activeCost > limit) {
+    lines.push('Active roster costs <b>' + activeCost + '</b> points — over the <b>' + limit + '</b>-point budget by <b>' + (activeCost - limit) + '</b>.');
+  }
+  document.getElementById('editor-warn').innerHTML = lines.length
+    ? '<div class="budget-warn">\u26A0 ' + lines.join('<br>\u26A0 ') + '</div>'
+    : '';
+}
+
+function discardEditorChanges() {
+  buildWorkFromRows();
+  resetAddPicker();
+  renderEditor();
+}
+
+function editorValidationError() {
+  for (const r of editorWork) {
+    if (r.isDeleted) continue;
+    if (!Number.isInteger(r.acquired_week) || r.acquired_week < 1) {
+      return monName(r.pokemon_id) + ': week added must be 1 or greater.';
+    }
+    if (r.released_week != null && r.released_week <= r.acquired_week) {
+      return monName(r.pokemon_id) + ': dropped week must be after the week added.';
+    }
+  }
+  return null;
+}
+
+function openConfirmChanges() {
+  const bad = editorValidationError();
+  if (bad) { showToast(bad, 'err'); return; }
+
+  const inserts = editorWork.filter(r => r.isNew && !r.isDeleted);
+  const deletes = editorWork.filter(r => !r.isNew && r.isDeleted);
+  const updates = editorWork.filter(r => !r.isNew && !r.isDeleted && rowChanged(r));
+  if (!inserts.length && !deletes.length && !updates.length) { showToast('No changes to confirm.', 'err'); return; }
+
+  const cap = activeCap();
+  const activeWork = editorWork.filter(r => !r.isDeleted && r.released_week == null);
+  const activeCount = activeWork.length;
+  const limit = pointLimit();
+  const activeCost = activeWork.reduce((s, r) => s + costOf(r.pokemon_id), 0);
+
+  const parts = [];
+  if (inserts.length) parts.push(inserts.length + ' to add');
+  if (updates.length) parts.push(updates.length + ' to update');
+  if (deletes.length) parts.push(deletes.length + ' to remove');
+
+  // Staged adds that are currently on another team's active roster.
+  const conflicts = inserts
+    .map(r => ({ mon: r.pokemon_id, owner: activeOwnerOf(r.pokemon_id, editorTeamId) }))
+    .filter(c => c.owner);
+
+  openModal(
+    '<h3>Confirm roster changes</h3>'
+    + '<div class="swap">' + escapeHtml(teamName(editorTeamId)) + '<div style="margin-top:6px;color:var(--text3)">' + parts.join(' \u00B7 ') + '</div></div>'
+    + (deletes.length ? '<p class="warn">' + deletes.length + ' row' + (deletes.length === 1 ? '' : 's') + ' will be permanently deleted. Any already-recorded game stats are stored separately and are not removed.</p>' : '')
+    + (activeCount > cap ? '<p class="warn">\u26A0 Active roster will have ' + activeCount + ' Pokémon — over the season maximum of ' + cap + '.</p>' : '')
+    + (limit > 0 && activeCost > limit ? '<p class="warn">\u26A0 Active roster will cost ' + activeCost + ' points — over the ' + limit + '-point budget by ' + (activeCost - limit) + '.</p>' : '')
+    + (conflicts.length ? '<p class="warn">\u26A0 ' + conflicts.map(c => escapeHtml(monName(c.mon)) + ' is on ' + escapeHtml(teamName(c.owner)) + '\u2019s active roster').join('<br>\u26A0 ') + '.<br><span style="color:var(--text2)">If a trade is intended, the recorder above keeps both sides and the log consistent.</span></p>' : '')
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" id="confirm-changes-go" onclick="applyEditorChanges()">Confirm</button></div>'
+  );
+}
+
+async function applyEditorChanges() {
+  const btn = document.getElementById('confirm-changes-go');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  const inserts = editorWork.filter(r => r.isNew && !r.isDeleted);
+  const deletes = editorWork.filter(r => !r.isNew && r.isDeleted);
+  const updates = editorWork.filter(r => !r.isNew && !r.isDeleted && rowChanged(r));
+
+  try {
+    for (const r of deletes) {
+      const { error } = await sb.from('team_pokemon').delete().eq('id', r.id);
+      if (error) throw error;
+    }
+    for (const r of updates) {
+      const { error } = await sb.from('team_pokemon')
+        .update({ acquired_week: r.acquired_week, released_week: r.released_week, acquired_via: r.acquired_via, notes: r.notes })
+        .eq('id', r.id);
+      if (error) throw error;
+    }
+    for (const r of inserts) {
+      const { error } = await sb.from('team_pokemon').insert({
+        team_id: editorTeamId, pokemon_id: r.pokemon_id,
+        acquired_week: r.acquired_week, released_week: r.released_week,
+        acquired_via: r.acquired_via, draft_pick_number: null, notes: r.notes,
+      });
+      if (error) throw error;
+    }
+    closeModal();
+    showToast('Roster changes saved.', 'ok');
+    await refreshAfterEdit();
+  } catch (err) {
+    console.error(err);
+    showToast('Some changes may not have been saved: ' + (err.message || err), 'err');
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirm'; }
+    await refreshAfterEdit();   // resync to whatever actually committed
+  }
+}
+
+// ── add a Pokémon to the selected team (stages a new active row) ──
+function doAddSearch(q) {
+  q = q.trim().toLowerCase();
+  addSelected = null;
+  updateAddBtn();
+  if (!q) { closeAddResults(); return; }
+  addResults = legalPool.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().startsWith(q)).slice(0, 18);
+  const el = document.getElementById('add-results');
+  if (!addResults.length) { el.innerHTML = '<div class="fa-empty">No legal Pokémon match.</div>'; el.classList.add('open'); addHighlight = -1; return; }
+  addHighlight = 0;
+  el.innerHTML = addResults.map((p, i) =>
+    '<div class="fa-item' + (i === 0 ? ' highlighted' : '') + '" data-i="' + i + '">'
+    + '<img src="' + iconUrl(p.id) + '" data-mon="' + escapeHtml(p.id) + '" alt="">'
+    + '<span class="nm">' + escapeHtml(p.name) + '</span>'
+    + '<span class="pts">' + p.cost + ' pts</span></div>'
+  ).join('');
+  el.classList.add('open');
+  el.querySelectorAll('.fa-item').forEach(item => {
+    const i = +item.getAttribute('data-i');
+    item.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
+    item.addEventListener('mousedown', e => { e.preventDefault(); pickAdd(i); });
+  });
+}
+function updateAddHighlight() {
+  document.querySelectorAll('#add-results .fa-item').forEach((el, i) => el.classList.toggle('highlighted', i === addHighlight));
+}
+function pickAdd(i) {
+  const p = addResults[i];
+  if (!p) return;
+  addSelected = p.id;
+  document.getElementById('add-input').value = p.name;
+  closeAddResults();
+  updateAddBtn();
+}
+function closeAddResults() { document.getElementById('add-results').classList.remove('open'); addHighlight = -1; }
+function resetAddPicker() {
+  const inp = document.getElementById('add-input');
+  if (inp) inp.value = '';
+  addSelected = null;
+  closeAddResults();
+  updateAddBtn();
+}
+function updateAddBtn() {
+  const wkEl = document.getElementById('add-week');
+  const w = wkEl ? parseInt(wkEl.value, 10) : NaN;
+  const btn = document.getElementById('add-btn');
+  if (btn) btn.disabled = !(editorTeamId && addSelected && Number.isInteger(w) && w >= 1);
+
+  const warnEl = document.getElementById('add-warn');
+  if (!warnEl) return;
+  const owner = addSelected ? activeOwnerOf(addSelected, editorTeamId) : null;
+  warnEl.innerHTML = owner
+    ? '<div class="budget-warn">\u26A0 <b>' + escapeHtml(monName(addSelected)) + '</b> is currently on <b>' + escapeHtml(teamName(owner)) + '</b>\u2019s active roster. '
+      + 'If this is a trade, the recorder above will move it and keep both rosters and the transaction log consistent. '
+      + '<span style="color:var(--text2)">You can still add it here for a manual correction.</span></div>'
+    : '';
+}
+
+function addRosterRow() {
+  if (!editorTeamId || !addSelected) { showToast('Pick a team and a Pokémon first.', 'err'); return; }
+  const w = parseInt(document.getElementById('add-week').value, 10);
+  const via = document.getElementById('add-via').value;
+  if (!Number.isInteger(w) || w < 1) { showToast('Week added must be 1 or greater.', 'err'); return; }
+  editorWork.push({
+    key: 'new-' + (++editorKeySeq), id: null,
+    pokemon_id: addSelected, acquired_week: w, released_week: null,
+    acquired_via: via, notes: null, isNew: true, isDeleted: false,
+  });
+  resetAddPicker();
+  renderEditor();
+}
+
+function wireAddInput() {
+  const input = document.getElementById('add-input');
+  input.addEventListener('input', e => doAddSearch(e.target.value));
+  input.addEventListener('keydown', e => {
+    const n = addResults.length;
+    if (e.key === 'ArrowDown') { e.preventDefault(); addHighlight = Math.min(addHighlight + 1, n - 1); updateAddHighlight(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); addHighlight = Math.max(addHighlight - 1, 0); updateAddHighlight(); }
+    else if (e.key === 'Enter') { e.preventDefault(); pickAdd(addHighlight >= 0 ? addHighlight : 0); }
+    else if (e.key === 'Escape') { closeAddResults(); }
+  });
+  input.addEventListener('blur', () => setTimeout(closeAddResults, 150));
+}
+
+// Re-pull recorder data (rosters/pool) and reset the staged editor after a commit.
+async function refreshAfterEdit() {
+  await loadSeasonData(selectedSeasonId);
+  if (editorTeamId) await loadEditorTeam(editorTeamId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin status comes from the shared nav (nav.js owns the session).
+function initAuth() {
+  const ready = (window.SBLNav && window.SBLNav.ready) || Promise.resolve({ isAdmin: false });
+  ready.then(({ isAdmin: a }) => { isAdmin = !!a; updateAuthUI(); });
+  window.addEventListener('sbl-auth', e => { isAdmin = !!(e.detail && e.detail.isAdmin); updateAuthUI(); });
+  return ready;
+}
+function updateAuthUI() {
+  document.getElementById('tool').hidden = !isAdmin;
+  document.getElementById('gate').hidden = isAdmin;
+}
+// ── MODAL / TOAST ──
+function openModal(html) { document.getElementById('modal').innerHTML = html; document.getElementById('modal-overlay').hidden = false; }
+function closeModal() { document.getElementById('modal-overlay').hidden = true; }
+function showToast(msg, kind) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind ? ' ' + kind : '');
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3400);
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !document.getElementById('modal-overlay').hidden) closeModal(); });
+
+// ── FA input wiring ──
+function wireFaInput() {
+  const input = document.getElementById('fa-input');
+  input.addEventListener('input', e => doFaSearch(e.target.value));
+  input.addEventListener('keydown', e => {
+    const n = faResults.length;
+    if (e.key === 'ArrowDown') { e.preventDefault(); faHighlight = Math.min(faHighlight + 1, n - 1); updateFaHighlight(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); faHighlight = Math.max(faHighlight - 1, 0); updateFaHighlight(); }
+    else if (e.key === 'Enter') { e.preventDefault(); pickFa(faHighlight >= 0 ? faHighlight : 0); }
+    else if (e.key === 'Escape') { closeFaResults(); }
+  });
+  input.addEventListener('blur', () => setTimeout(closeFaResults, 150));
+}
+
+// ── BOOT ──
+async function init() {
+  const banner = document.getElementById('boot-banner');
+  try {
+    await loadSeasons();
+    populateSeasonDropdown();
+    await loadPokemon();
+    await loadSeasonData(selectedSeasonId);
+    wireFaInput();
+    wireAddInput();
+    await initAuth();          // reveals the tool (or the gate) once admin status resolves
+    banner.hidden = true;
+  } catch (err) {
+    console.error(err);
+    banner.className = 'banner err';
+    banner.textContent = 'Could not load: ' + (err.message || err);
+  }
+}
+init();
+</script>
+</body>
+</html>
