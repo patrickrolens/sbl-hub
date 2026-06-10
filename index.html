@@ -29,6 +29,11 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
 .card-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; margin-bottom: 10px; }
 .card-title.center { text-align: center; }
+.card-title a { color: inherit; text-decoration: none; }
+.card-title a:hover { color: var(--accent); }
+/* collapsible section header (mobile gets the arrow; desktop stays open) */
+.sec-head { display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; cursor: default; }
+.sec-head .sec-arrow { display: none; position: absolute; right: 0; font-size: 10px; color: var(--text3); transition: transform .15s; }
 .empty { font-size: 11px; color: var(--text3); font-style: italic; padding: 4px 0; }
 
 /* ─── LARGE LOGO + SEASON NAME ─── */
@@ -39,18 +44,23 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 /* ─── TABLES (standings + leaders) ─── */
 table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
-.tbl th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.tbl td { padding: 6px 6px; border-bottom: 1px solid var(--bg3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tbl tr:last-child td { border-bottom: none; }
-.tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
-.tbl .rank { color: var(--text3); font-weight: 700; width: 1%; padding-right: 4px; }
+.tbl th { text-align: center; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.tbl th.team-head { text-align: left; }
+.tbl td { padding: 6px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* zebra banding */
+.tbl tbody tr:nth-child(even) { background: rgba(255,255,255,.022); }
+.tbl tbody tr:hover { background: var(--bg3); }
+.tbl .num { text-align: center; font-variant-numeric: tabular-nums; }
+.tbl .rank { color: var(--text3); font-weight: 700; width: 1%; padding-right: 4px; text-align: center; }
 .tbl .pl { color: var(--text3); font-weight: 400; }
-.tbl .pos { color: var(--green); } .tbl .neg { color: var(--red); }
+.tbl .pos { color: var(--blue); } .tbl .neg { color: var(--red); }
 .tbl .dim { opacity: .42; }
+.tbl a.team-link { color: var(--text); text-decoration: none; }
+.tbl a.team-link:hover { color: var(--accent); }
 .lead-mon { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .lead-mon img { width: 26px; height: 26px; image-rendering: pixelated; flex-shrink: 0; }
 .lead-mon span { overflow: hidden; text-overflow: ellipsis; }
-.tbl td.team-cell { max-width: 0; }    /* let team names ellipsis instead of forcing width */
+.tbl td.team-cell { max-width: 0; width: 99%; }    /* team column eats remaining width; names ellipsis */
 
 .kf-note { font-size: 10px; color: var(--text3); margin-top: 8px; line-height: 1.4; }
 
@@ -64,17 +74,22 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .match-teams .pl { color: var(--text3); font-weight: 400; }
 .match-date { font-size: 10px; font-weight: 700; letter-spacing: .3px; color: var(--text3); text-transform: uppercase; margin-top: 3px; }
 
-/* ─── RECENTLY COMPLETED ─── */
-.done-row { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 11px; }
-.done-side { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.done-side .who { font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.done-side .who.win { font-weight: 700; color: var(--blue); }
-.done-side .sc { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.done-side .sc.win { color: var(--blue); }
-.brought { display: flex; gap: 2px; margin: 3px 0 7px; flex-wrap: wrap; }
-.brought img { width: 22px; height: 22px; image-rendering: pixelated; }
-.done-mid { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .3px; text-align: center; margin: 2px 0; }
-.done-date { font-size: 10px; color: var(--text3); text-align: right; margin-top: 4px; }
+/* ─── RECENTLY COMPLETED (side-by-side: brought · score · brought, labels beneath) ─── */
+.done-row { display: block; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; text-decoration: none; color: inherit; }
+.done-row:hover { border-color: var(--accent); }
+.done-date { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .3px; text-align: center; margin-bottom: 6px; min-height: 0; }
+.done-grid { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.done-col { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.done-col.right { }
+.done-score { display: flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.done-score .sc { color: var(--text2); }
+.done-score .sc.win { color: var(--blue); }
+.done-score .vs { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; }
+.brought { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; }
+.brought img { width: 21px; height: 21px; image-rendering: pixelated; }
+.done-who { font-size: 11px; line-height: 1.3; text-align: center; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.done-who.win { font-weight: 700; color: var(--blue); }
+.done-who .pl { color: var(--text3); font-weight: 400; }
 
 /* ─── TRANSACTIONS ─── */
 .txn-list { display: flex; flex-direction: column; gap: 8px; }
@@ -88,11 +103,19 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
 .banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
 
-/* ─── RESPONSIVE (coarse for now; full pass is Phase 5) ─── */
+/* ─── RESPONSIVE ─── */
 @media (max-width: 1100px) {
   .layout { grid-template-columns: 1fr; }
   /* Logo + standings lead on narrow screens; leaders and feed follow. */
   .col-center { order: -1; }
+}
+@media (max-width: 680px) {
+  /* Collapsible sections: show the arrow, allow tap-to-toggle. */
+  .sec-head { cursor: pointer; }
+  .sec-head .sec-arrow { display: block; }
+  .card.collapsed .sec-head { margin-bottom: 0; }
+  .card.collapsed .sec-head .sec-arrow { transform: rotate(-90deg); }
+  .card.collapsed .sec-body { display: none; }
 }
 </style>
 </head>
@@ -134,17 +157,17 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
   <!-- ── RIGHT: draft/upcoming, completed, transactions ── -->
   <div class="col col-right">
-    <div class="card">
-      <div class="card-title" id="draft-card-title">Up Next</div>
-      <div id="draft-panel"></div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span id="draft-card-title">Up Next</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="draft-panel"></div></div>
     </div>
-    <div class="card">
-      <div class="card-title">Recently Completed</div>
-      <div id="completed"></div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>Recently Completed</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="completed"></div></div>
     </div>
-    <div class="card">
-      <div class="card-title">Recent Transactions</div>
-      <div id="transactions"></div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><a id="txn-card-title" href="draft.html">Recent Transactions</a><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="transactions"></div></div>
     </div>
   </div>
 
@@ -212,14 +235,46 @@ function fmtDateTime(s) {
   const p = n => String(n).padStart(2, '0');
   return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
+// Mobile uses coach-only labels in the feed; track the breakpoint and re-render on cross.
+const MOBILE_MQ = window.matchMedia('(max-width: 680px)');
+let IS_MOBILE = MOBILE_MQ.matches;
+// Team label that collapses to coach-only on mobile.
+function feedTeamHtml(id, opts) { return IS_MOBILE ? coachOnlyHtml(id, opts) : teamLabelHtml(id, opts); }
+
+function fmtDate(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear();
+}
 function monName(id) { const m = pokemonById[id]; return m ? m.name : id; }
 function monFor(id)  { return pokemonById[id] || { id: id, name: id }; }
-// "Team Name (Coach)" as HTML, coach dimmed.
-function teamLabelHtml(id) {
+
+// Coach for a team, suppressed when it's identical to the team name (note: "if Coach = Team, show once").
+function coachFor(id) {
+  const t = teamById[id]; const c = coachByTeam[id];
+  if (!c) return '';
+  if (t && t.name.trim().toLowerCase() === c.trim().toLowerCase()) return '';
+  return c;
+}
+// "Team Name (Coach)" as HTML, coach dimmed and suppressed when redundant. Optionally a link to the team page.
+function teamLabelHtml(id, opts) {
   const t = teamById[id];
   if (!t) return 'TBD';
-  const c = coachByTeam[id];
-  return escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '');
+  const c = coachFor(id);
+  const inner = escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '');
+  if (opts && opts.link && t.slug) return '<a class="team-link" href="team.html#' + encodeURIComponent(t.slug) + '">' + inner + '</a>';
+  return inner;
+}
+// Coach-only label (used in the compact mobile feed and where space is tight).
+function coachOnlyHtml(id, opts) {
+  const t = teamById[id];
+  if (!t) return 'TBD';
+  const label = coachByTeam[id] || t.name;
+  const esc = escapeHtml(label);
+  if (opts && opts.link && t.slug) return '<a class="team-link" href="team.html#' + encodeURIComponent(t.slug) + '">' + esc + '</a>';
+  return esc;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -377,6 +432,32 @@ function render() {
   renderTransactions();
 }
 
+// Mobile collapse: tapping a section head toggles its body. Desktop ignores it (arrows hidden).
+function wireCollapse() {
+  document.querySelectorAll('.card[data-collapse] .sec-head').forEach(head => {
+    head.addEventListener('click', e => {
+      if (!IS_MOBILE) return;            // arrows only actionable at mobile width
+      if (e.target.closest('a')) return; // let header links (e.g. Transactions → Draft) work
+      head.closest('.card').classList.toggle('collapsed');
+    });
+  });
+}
+
+// Re-render the label-bearing sections when crossing the mobile breakpoint
+// (team labels switch between "Team (Coach)" and coach-only).
+function onBreakpointChange() {
+  const now = MOBILE_MQ.matches;
+  if (now === IS_MOBILE) return;
+  IS_MOBILE = now;
+  renderStandings();
+  renderLeaders();
+  renderDraftPanel();
+  renderCompleted();
+  renderTransactions();
+}
+if (MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener('change', onBreakpointChange);
+else MOBILE_MQ.addListener(onBreakpointChange);
+
 function renderHero() {
   const el = document.getElementById('hero');
   el.innerHTML = '';
@@ -400,15 +481,15 @@ function renderStandings() {
   const el = document.getElementById('standings');
   if (!rows.length) { el.innerHTML = '<div class="empty">No teams in this season yet.</div>'; return; }
   let html = '<table class="tbl"><thead><tr>'
-    + '<th class="rank">#</th><th>Team</th>'
-    + '<th class="num">Match W</th><th class="num">Match L</th>'
+    + '<th class="rank">#</th><th class="team-head">Team</th>'
+    + '<th class="num">W</th><th class="num">L</th>'
     + '<th class="num">SOS</th><th class="num">SOSOS</th>'
-    + '<th class="num">Game Diff</th><th class="num">KF Δ</th>'
+    + '<th class="num">Game Δ</th><th class="num">KF Δ</th>'
     + '</tr></thead><tbody>';
   rows.forEach((r, i) => {
     html += '<tr>'
       + '<td class="rank">' + (i + 1) + '</td>'
-      + '<td class="team-cell">' + teamLabelHtml(r.id) + '</td>'
+      + '<td class="team-cell">' + feedTeamHtml(r.id, { link: true }) + '</td>'
       + '<td class="num">' + r.wins + '</td>'
       + '<td class="num">' + r.losses + '</td>'
       + '<td class="num">' + fmtRate(r.sos) + '</td>'
@@ -441,7 +522,7 @@ function renderLeaderBoard(elId, metricLabel, valueFn, sorter, opts) {
     html += '<tr class="' + dim.trim() + '">'
       + '<td class="rank">' + (i + 1) + '</td>'
       + '<td><div class="lead-mon"><img src="' + iconUrl(mon) + '" alt="" data-mid="' + escapeHtml(r.pokemon_id) + '"><span>' + escapeHtml(mon.name) + '</span></div></td>'
-      + '<td class="team-cell">' + teamLabelHtml(r.team_id) + '</td>'
+      + '<td class="team-cell">' + feedTeamHtml(r.team_id, { link: true }) + '</td>'
       + '<td class="num">' + valueFn(r) + '</td>'
       + '<td class="num">' + r.mp + '</td>'
       + '<td class="num">' + r.gp + '</td>'
@@ -494,7 +575,7 @@ function renderDraftPanel() {
     const row = document.createElement('div');
     row.className = 'match-row';
     row.innerHTML =
-      '<div class="match-teams">' + teamLabelHtml(m.team_a_id) + ' <span class="vs">vs</span> ' + teamLabelHtml(m.team_b_id) + '</div>'
+      '<div class="match-teams">' + feedTeamHtml(m.team_a_id, { link: true }) + ' <span class="vs">vs</span> ' + feedTeamHtml(m.team_b_id, { link: true }) + '</div>'
       + '<div class="match-date">' + fmtDateTime(m.match_date) + '</div>';
     list.appendChild(row);
   });
@@ -515,7 +596,8 @@ function renderCompleted() {
   const el = document.getElementById('completed');
   const done = matches
     .filter(m => m.winner_team_id)
-    .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0));
+    .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0))
+    .slice(0, 3);
   if (!done.length) { el.innerHTML = '<div class="empty">No completed matches yet.</div>'; return; }
 
   const list = document.createElement('div');
@@ -523,17 +605,27 @@ function renderCompleted() {
   done.forEach(m => {
     const aWin = m.winner_team_id === m.team_a_id;
     const bWin = m.winner_team_id === m.team_b_id;
-    const row = document.createElement('div');
+    const dateStr = m.match_date ? fmtDate(m.match_date) : '';
+    const row = document.createElement('a');
     row.className = 'done-row';
+    row.href = 'matches.html#' + m.id;
     row.innerHTML =
-      '<div class="done-side"><span class="who' + (aWin ? ' win' : '') + '">' + teamLabelHtml(m.team_a_id) + '</span>'
-      + '<span class="sc' + (aWin ? ' win' : '') + '">' + (m.team_a_score || 0) + '</span></div>'
-      + broughtIconsHtml(m.id, m.team_a_id)
-      + '<div class="done-mid">vs</div>'
-      + '<div class="done-side"><span class="who' + (bWin ? ' win' : '') + '">' + teamLabelHtml(m.team_b_id) + '</span>'
-      + '<span class="sc' + (bWin ? ' win' : '') + '">' + (m.team_b_score || 0) + '</span></div>'
-      + broughtIconsHtml(m.id, m.team_b_id)
-      + '<div class="done-date">' + fmtDateTime(m.match_date) + '</div>';
+      (dateStr ? '<div class="done-date">' + dateStr + '</div>' : '')
+      + '<div class="done-grid">'
+      +   '<div class="done-col">'
+      +     broughtIconsHtml(m.id, m.team_a_id)
+      +     '<div class="done-who' + (aWin ? ' win' : '') + '">' + feedTeamHtml(m.team_a_id) + '</div>'
+      +   '</div>'
+      +   '<div class="done-score">'
+      +     '<span class="sc' + (aWin ? ' win' : '') + '">' + (m.team_a_score || 0) + '</span>'
+      +     '<span class="vs">vs</span>'
+      +     '<span class="sc' + (bWin ? ' win' : '') + '">' + (m.team_b_score || 0) + '</span>'
+      +   '</div>'
+      +   '<div class="done-col right">'
+      +     broughtIconsHtml(m.id, m.team_b_id)
+      +     '<div class="done-who' + (bWin ? ' win' : '') + '">' + feedTeamHtml(m.team_b_id) + '</div>'
+      +   '</div>'
+      + '</div>';
     list.appendChild(row);
   });
   el.innerHTML = ''; el.appendChild(list);
@@ -547,19 +639,19 @@ function renderTransactions() {
 
   const list = document.createElement('div');
   list.className = 'txn-list';
-  txns.forEach(t => {
+  txns.slice(0, 5).forEach(t => {
     const row = document.createElement('div');
     row.className = 'txn';
     if (t.kind === 'fa') {
       const dropped = monFor(t.dropped), added = monFor(t.added);
       row.innerHTML =
-        '<div class="with">' + teamLabelHtml(t.teams[0]) + ' · Free Agency</div>'
+        '<div class="with">' + coachOnlyHtml(t.teams[0], { link: true }) + ' · Free Agency</div>'
         + '<div class="swap"><span class="drop"><img src="' + iconUrl(dropped) + '" data-mid="' + escapeHtml(t.dropped) + '"> ' + escapeHtml(dropped.name) + '</span>'
         + '<span>⇄</span><span class="gain"><img src="' + iconUrl(added) + '" data-mid="' + escapeHtml(t.added) + '"> ' + escapeHtml(added.name) + '</span></div>';
     } else {
       const aMon = monFor(t.aMon), bMon = monFor(t.bMon);
       row.innerHTML =
-        '<div class="with">' + teamLabelHtml(t.aTeam) + ' ⇄ ' + teamLabelHtml(t.bTeam) + '</div>'
+        '<div class="with">' + coachOnlyHtml(t.aTeam, { link: true }) + ' ⇄ ' + coachOnlyHtml(t.bTeam, { link: true }) + '</div>'
         + '<div class="swap"><span class="gain"><img src="' + iconUrl(aMon) + '" data-mid="' + escapeHtml(t.aMon) + '"> ' + escapeHtml(aMon.name) + '</span>'
         + '<span>⇄</span><span class="gain"><img src="' + iconUrl(bMon) + '" data-mid="' + escapeHtml(t.bMon) + '"> ' + escapeHtml(bMon.name) + '</span></div>';
     }
@@ -578,6 +670,7 @@ async function init() {
   try {
     await loadData();
     render();
+    wireCollapse();
     banner.hidden = true;
     document.getElementById('layout').hidden = false;
   } catch (err) {
