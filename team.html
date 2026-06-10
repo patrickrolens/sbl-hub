@@ -95,46 +95,84 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .roster-copy.copied { color: var(--green); border-color: var(--green); }
 .roster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
+/* ── MEMBER CARD: 170px sprite block (left) + inline stat grid (right). The card
+   border encodes the Pokémon's type(s) — set inline by JS (solid or split). ── */
 .member {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
-  padding: 12px; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap;
+  background: var(--bg2); border: 2px solid var(--border); border-radius: 10px;
+  display: flex; align-items: stretch; overflow: hidden; min-height: 170px;
 }
-/* Left rail — mirrors the Planner's Draft Builder .slot-left (sprite, form toggle,
-   point value), with Week Joined/Dropped stacked beneath. */
-.member-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; gap: 4px; width: 72px; }
-.member-left .slot-sprite { width: 72px; height: 72px; image-rendering: auto; display: block; }
-.member-left .slot-sprite.illegal-img { opacity: .3; filter: grayscale(90%); }
-.slot-pts-display { font-size: 20px; font-weight: 700; color: #fff; line-height: 1; }
-.slot-pts-display.illegal-pts { color: var(--red); font-size: 13px; }
-.slot-alt-form-btn { display: block; width: 100%; padding: 2px 4px; font-size: 9px; font-weight: 700; background: rgba(124,111,247,.15); border: 1px solid rgba(124,111,247,.35); color: var(--accent); border-radius: 3px; cursor: pointer; text-align: center; white-space: nowrap; transition: background .15s; }
-.slot-alt-form-btn:hover { background: rgba(124,111,247,.28); }
-.slot-alt-form-btn.active { background: rgba(124,111,247,.3); border-color: rgba(124,111,247,.65); }
-.slot-alt-form-placeholder { height: 21px; }
-.member-left .wk { font-size: 10px; color: var(--text3); text-align: center; line-height: 1.3; }
-.member-left .wk b { color: var(--text2); font-weight: 700; }
 
-/* Body — name, types, BST, and the compact stat row (speed color-coded), lifted
-   from the Planner's slot-stats-compact so the stat presentation matches. */
-.member-body { flex: 1; min-width: 130px; }
-.member-name { font-size: 15px; font-weight: 700; line-height: 1.15; }
-.member-types { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
-.member-abilities { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-.ability-tag { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px; background: rgba(124,111,247,.15); color: #a89df9; border: 1px solid rgba(124,111,247,.3); }
-.slot-stats-compact { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-.stat-num { font-size: 10px; color: var(--text2); }
-.stat-num span { color: var(--text); font-weight: 600; }
+/* Sprite block — fills card height; point value + name overlaid; opens popover.
+   Source art is 250×250; we render at 170 (downscale = crisp, no upscaling blur). */
+.member-sprite-block {
+  position: relative; width: 170px; flex-shrink: 0; align-self: stretch;
+  background: var(--bg3); cursor: pointer; outline: none;
+}
+.member-sprite-block:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.member-sprite-block .slot-sprite {
+  position: absolute; inset: 0; margin: auto; width: 170px; height: 170px;
+  object-fit: contain; image-rendering: auto; display: block;
+}
+.member-sprite-block .slot-sprite.illegal-img { opacity: .3; filter: grayscale(90%); }
+.sprite-pts {
+  position: absolute; top: 6px; left: 8px; z-index: 2;
+  font-size: 24px; font-weight: 800; color: #fff; line-height: 1;
+  text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;
+}
+.sprite-pts.illegal-pts { color: var(--red); }
+.sprite-name {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  padding: 8px 6px 7px; text-align: center; color: #fff; font-weight: 800; line-height: 1.05;
+  text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;
+  white-space: nowrap;
+}
+/* Length tiers so long names (e.g. Tauros-Paldea-Combat) stay on one line within
+   the 170px sprite block. */
+.sprite-name { font-size: 17px; }           /* short, default */
+.sprite-name.n-med  { font-size: 14px; }    /* ~11–14 chars */
+.sprite-name.n-long { font-size: 12px; }    /* ~15–19 chars */
+.sprite-name.n-xl   { font-size: 10px; }    /* 20+ chars */
 
-/* Right — battle stats. Desktop: 6-col grid with spans giving rows of 2 / 3 / 3
-   ([KOs·Faints] [K/F·KFΔ·KPG] [MB·MP·GP]). Mobile: 4 equal cols → rows of 4 / 4
-   ([KOs·Faints·K/F·KFΔ] [KPG·MB·MP·GP]). MB/MP/GP carry a count beneath the %. */
-.member-statgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; flex: 1 1 230px; min-width: 230px; }
-.member-statgrid .cell { text-align: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 6px 2px; grid-column: span 2; }
-/* row 1: KOs, Faints each span 3 of 6 */
-.member-statgrid .cell:nth-child(1), .member-statgrid .cell:nth-child(2) { grid-column: span 3; }
-.member-statgrid .cell .k { font-size: 9px; font-weight: 700; letter-spacing: .3px; color: var(--text3); text-transform: uppercase; }
-.member-statgrid .cell .v { font-size: 14px; font-weight: 700; margin-top: 2px; }
-.member-statgrid .cell .sub { font-size: 11px; color: var(--text2); font-weight: 700; margin-top: 1px; }
-.v.pos { color: var(--green); } .v.neg { color: var(--red); }
+/* Stat grid — inline "label value" cells, rows of 2 / 3 / 3, filling the height. */
+.member-statgrid {
+  flex: 1; min-width: 0; display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-rows: 1fr; gap: 2px; padding: 2px; background: var(--border);
+}
+.member-statgrid .sc {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--bg2); padding: 4px 10px; min-width: 0;
+}
+.member-statgrid .sc.r1 { grid-column: span 3; }
+.member-statgrid .sc.r2 { grid-column: span 2; }
+.member-statgrid .sc.r3 { grid-column: span 2; }
+.member-statgrid .sc-k { font-size: 13px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .3px; }
+.member-statgrid .sc-v { font-size: 19px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.member-statgrid .sc-v.pos { color: var(--green); }
+.member-statgrid .sc-v.neg { color: var(--red); }
+
+/* ── MEMBER DETAIL POPOVER (hover/tap the sprite) ── */
+.member-pop {
+  width: 260px; background: var(--bg2); border: 1px solid var(--accent); border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.6); padding: 0; text-align: left;
+}
+.member-pop .pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 13px 9px; border-bottom: 1px solid var(--border); }
+.member-pop .pop-name { font-size: 14px; font-weight: 800; }
+.member-pop .pop-types { display: flex; gap: 4px; }
+.member-pop .pop-type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 2px 7px; border-radius: 4px; }
+.member-pop .pop-sec { padding: 9px 13px; border-bottom: 1px solid var(--border); }
+.member-pop .pop-lbl { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--text3); margin-bottom: 5px; }
+.member-pop .pop-row { display: flex; flex-wrap: wrap; gap: 5px; }
+.member-pop .pop-ability { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px; background: rgba(124,111,247,.15); color: #a89df9; border: 1px solid rgba(124,111,247,.3); }
+.member-pop .pop-move { font-size: 10px; background: var(--bg3); border: 1px solid var(--border); padding: 2px 7px; border-radius: 4px; color: var(--text2); }
+.member-pop .pop-dim { color: var(--text3); font-size: 11px; }
+.member-pop .pop-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.member-pop .pop-stat { text-align: center; background: var(--bg3); border-radius: 5px; padding: 4px 2px; }
+.member-pop .pop-stat .ps-k { display: block; font-size: 8px; font-weight: 700; color: var(--text3); text-transform: uppercase; }
+.member-pop .pop-stat .ps-v { display: block; font-size: 13px; font-weight: 700; margin-top: 1px; }
+.member-pop .pop-bst { margin-top: 6px; font-size: 11px; color: var(--text2); text-align: right; }
+.member-pop .pop-bst b { color: var(--text); font-weight: 800; }
+.member-pop .pop-foot { padding: 9px 13px; font-size: 11px; color: var(--text3); }
 
 /* ── INACTIVE MEMBERS — same card component, just stacked. ── */
 .inactive-list { display: flex; flex-direction: column; gap: 12px; }
@@ -223,6 +261,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 <body>
 
 <script src="/nav.js"></script>
+<script src="/tooltip.js"></script>
 
 <div id="boot-banner" class="banner">Loading team…</div>
 
@@ -306,6 +345,17 @@ function speedTierColor(spe) {
 // member-card stat presentation matches the Draft Builder exactly.
 const BAR_SK = ["hp", "atk", "def", "spa", "spd", "spe"];
 const BAR_SL = ["HP", "Atk", "Def", "SpA", "SpD", "Spe"];
+
+// Canonical type palette, mirrored from the Planner so card borders / popover
+// badges match the rest of the ecosystem. Keys are Capitalized.
+const TEAM_TYPE_COLORS = {
+  Normal:"#9199a1",Fire:"#e6724a",Water:"#539ddf",Grass:"#5bbd58",
+  Electric:"#f3d23b",Ice:"#74cfc0",Fighting:"#ce4069",Poison:"#ab6ac8",
+  Ground:"#d97845",Flying:"#89aae3",Psychic:"#f97176",Bug:"#90c12c",
+  Rock:"#c7b78b",Ghost:"#5269ac",Dragon:"#0b6dc3",Dark:"#5a5366",
+  Steel:"#5a8ea1",Fairy:"#ec8fe6"
+};
+const TEAM_TYPE_TEXT_DARK = new Set(["Electric","Ice","Rock","Fairy","Normal","Flying","Bug"]);
 const BAR_SC = ["#e05555", "#f08040", "#f0c060", "#7c6ff7", "#539ddf", "#4caf7d"];
 
 // ── STATE ──
@@ -644,6 +694,9 @@ function toggleMegaBase(id) {
 // RENDER
 // ─────────────────────────────────────────────────────────────────────────────
 function render() {
+  // Detail popovers live on <body>; clear any from a previous team before re-render.
+  document.querySelectorAll('.member-pop').forEach(p => p.remove());
+  if (window.SBLTooltip) window.SBLTooltip.hideAll();
   renderIdentity();
   renderTeamStats();
   renderRoster();
@@ -743,14 +796,29 @@ function memberStats(row) {
   });
   const appearedMatchIds = new Set([...appearedGameIds].map(gid => gameToMatch[gid]));
 
+  const rawPct = (part, whole) => whole > 0 ? (part / whole) * 100 : null;
   return {
     kos, faints,
     kpg: appearedGameIds.size ? kos / appearedGameIds.size : null,
-    gpCount: appearedGameIds.size, gpPct: pct(appearedGameIds.size, ownedGames),
-    mpCount: appearedMatchIds.size, mpPct: pct(appearedMatchIds.size, ownedMatches),
-    mbCount: broughtMatches, mbPct: pct(broughtMatches, ownedMatches),
+    gpCount: appearedGameIds.size, gpWhole: ownedGames, gpPct: pct(appearedGameIds.size, ownedGames), gpRaw: rawPct(appearedGameIds.size, ownedGames),
+    mpCount: appearedMatchIds.size, mpWhole: ownedMatches, mpPct: pct(appearedMatchIds.size, ownedMatches), mpRaw: rawPct(appearedMatchIds.size, ownedMatches),
+    mbCount: broughtMatches, mbWhole: ownedMatches, mbPct: pct(broughtMatches, ownedMatches), mbRaw: rawPct(broughtMatches, ownedMatches),
   };
 }
+// Tooltip line for a participation metric: "83.33% · 15 of 18 matches" + description.
+function partTip(label, raw, count, whole, unit, desc) {
+  const pctStr = raw == null ? '—' : raw.toFixed(2) + '%';
+  return pctStr + ' · ' + count + ' of ' + whole + ' ' + unit + '<br>' + desc;
+}
+
+// Capitalize a lowercase type id to match the Planner's TYPE_COLORS keys.
+function typeColor(t) {
+  if (!t) return null;
+  const key = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  return TEAM_TYPE_COLORS[key] || null;
+}
+
+let _cardSeq = 0;
 
 function memberCard(row, opts) {
   opts = opts || {};
@@ -759,81 +827,118 @@ function memberCard(row, opts) {
   const cost = (row.pokemon_id in tierCost) ? tierCost[row.pokemon_id] : (mon.points != null ? mon.points : '—');
   const st   = memberStats(row);
   const kfDelta = st.kos - st.faints;
+  const uid  = 'pop-' + (++_cardSeq);
 
   const card = document.createElement('div');
-  card.className = 'member';
+  card.className = 'member' + (opts.inactive ? ' inactive' : '');
 
-  // ── LEFT RAIL: sprite, form toggle, point value, week(s) ── (mirrors .slot-left)
-  const hasMega = !!mon.baseForm, megaShowing = megaBaseActive.has(mon.id);
-  const hasAlt  = !!mon.altForm,  altShowing  = altFormActive.has(mon.id);
-  const formBtn = hasMega
-    ? '<button class="slot-alt-form-btn' + (megaShowing ? ' active' : '') + '" onclick="toggleMegaBase(\'' + mon.id + '\')" title="' + (megaShowing ? 'Switch to Mega form' : 'Switch to base form') + '">' + (megaShowing ? '▶ Mega' : '◀ Base') + '</button>'
-    : hasAlt
-      ? '<button class="slot-alt-form-btn' + (altShowing ? ' active' : '') + '" onclick="toggleAltForm(\'' + mon.id + '\')" title="' + (altShowing ? 'Switch to base form' : 'Switch to ' + escapeHtml(mon.altForm.name)) + '">' + (altShowing ? '◀ Base' : '▶ Alt') + '</button>'
-      : '<div class="slot-alt-form-placeholder"></div>';
-
-  let wkHtml = '<div class="wk"><b>Joined</b><br>Week ' + (row.acquired_week || '—') + '</div>';
-  if (opts.inactive) wkHtml += '<div class="wk"><b>Dropped</b><br>Week ' + (row.released_week || '—') + '</div>';
-
-  const left = document.createElement('div');
-  left.className = 'member-left';
-  left.innerHTML =
-    '<img class="slot-sprite" src="' + spriteUrl(disp) + '" alt="' + escapeHtml(disp.name) + '">'
-    + formBtn
-    + '<div class="slot-pts-display">' + cost + '</div>'
-    + wkHtml;
-  attachSpriteFallback(left.querySelector('.slot-sprite'), disp);
-  card.appendChild(left);
-
-  // ── BODY: name, types, abilities, compact stats ──
-  // (BST and utility moves removed in the polish pass — that depth lives in the Planner.)
-  // Abilities come from the drafted entry (mon); altForm sub-objects don't carry abilities.
-  let typesHtml = '';
-  if (disp.type1) typesHtml += '<span class="type-badge t-' + disp.type1 + '">' + disp.type1 + '</span>';
-  if (disp.type2) typesHtml += '<span class="type-badge t-' + disp.type2 + '">' + disp.type2 + '</span>';
-
-  const abilities = (mon.abilities || []).map(a => '<span class="ability-tag">' + escapeHtml(a) + '</span>').join('');
-
-  let statsHtml = '';
-  if (disp.stats && disp.stats.hp != null) {
-    const statNums = BAR_SK.map(function (k, j) {
-      if (k === 'spe') {
-        const sc = speedTierColor(disp.stats[k]);
-        return '<span class="stat-num" style="background:' + sc + '22;border:1px solid ' + sc + '55;border-radius:3px;padding:1px 5px">'
-          + BAR_SL[j] + ' <span style="color:' + sc + ';font-weight:700">' + disp.stats[k] + '</span></span>';
-      }
-      return '<span class="stat-num">' + BAR_SL[j] + ' <span>' + disp.stats[k] + '</span></span>';
-    }).join('');
-    statsHtml = '<div class="slot-stats-compact">' + statNums + '</div>';
+  // Type-colored border. Single type → solid border. Two types → top half is the
+  // first type, bottom half the second, painted as a border-box background layer so
+  // the corners stay rounded (border-image would square them). Both halves are flat
+  // solid colors with a hard split — no gradient blend.
+  const c1 = typeColor(disp.type1), c2 = typeColor(disp.type2);
+  if (c1 && c2) {
+    card.style.border = '2px solid transparent';
+    card.style.background =
+      'linear-gradient(var(--bg2), var(--bg2)) padding-box, '
+      + 'linear-gradient(to bottom, ' + c1 + ' 0 50%, ' + c2 + ' 50% 100%) border-box';
+  } else if (c1) {
+    card.style.borderColor = c1;
   }
 
-  const body = document.createElement('div');
-  body.className = 'member-body';
-  body.innerHTML =
-    '<div class="member-name">' + escapeHtml(disp.name) + '</div>'
-    + '<div class="member-types">' + typesHtml + '</div>'
-    + (opts.inactive ? '' : (abilities ? '<div class="member-abilities">' + abilities + '</div>' : '') + statsHtml);
-  card.appendChild(body);
+  // ── SPRITE BLOCK: 170×170, point value overlay, name overlay, hover popover ──
+  const spriteBlock = document.createElement('div');
+  spriteBlock.className = 'member-sprite-block';
+  spriteBlock.setAttribute('data-pop-target', uid);
+  spriteBlock.setAttribute('data-pop-hover', '');
+  spriteBlock.setAttribute('tabindex', '0');
+  spriteBlock.innerHTML =
+      '<img class="slot-sprite" src="' + spriteUrl(disp) + '" alt="' + escapeHtml(disp.name) + '">'
+    + '<div class="sprite-pts">' + cost + '</div>'
+    + '<div class="sprite-name ' + nameTier(disp.name) + '">' + escapeHtml(disp.name) + '</div>';
+  attachSpriteFallback(spriteBlock.querySelector('.slot-sprite'), disp);
+  card.appendChild(spriteBlock);
 
-  // ── RIGHT: battle stats. Desktop rows: [KOs·Faints] [K/F·KFΔ·KPG] [MB·MP·GP].
-  // Mobile rows: [KOs·Faints·K/F·KFΔ] [KPG·MB·MP·GP] (handled via CSS reflow).
+  // ── DETAIL POPOVER (page-owned node, appended to <body> so the card's
+  //    overflow:hidden border-clip doesn't crop it; tooltip.js positions it) ──
+  document.body.appendChild(buildDetailPopover(uid, row, mon, disp));
+
+  // ── STAT GRID: inline "label value" cells, rows of 2 / 3 / 3 ──
   const grid = document.createElement('div');
   grid.className = 'member-statgrid';
   grid.innerHTML =
-      cell('KOs', st.kos)
-    + cell('Faints', st.faints)
-    + cell('K/F', kfRatio(st.kos, st.faints))
-    + cell('KF Δ', signed(kfDelta), deltaClass(kfDelta), 'KOs minus Faints')
-    + cell('KPG', fmtKpg(st.kpg), '', 'KOs per Game played')
-    + cellSub('MB %', st.mbPct, '(' + st.mbCount + ')', 'Match Bring %: share of available matches this Pokémon was brought in the team of 6')
-    + cellSub('MP %', st.mpPct, '(' + st.mpCount + ')', 'Match Participation %: share of available matches this Pokémon actually played')
-    + cellSub('GP %', st.gpPct, '(' + st.gpCount + ')', 'Game Participation %: share of available games this Pokémon actually played');
+      statCell('r1', 'KOs', st.kos)
+    + statCell('r1', 'Faints', st.faints)
+    + statCell('r2', 'K/F', kfRatio(st.kos, st.faints))
+    + statCell('r2', 'KFΔ', signed(kfDelta), deltaClass(kfDelta))
+    + statCell('r2', 'KPG', fmtKpg(st.kpg))
+    + statCell('r3 tip', 'MB', st.mbPct, '', partTip('Match Bring', st.mbRaw, st.mbCount, st.mbWhole, 'matches', 'Share of available matches this Pokémon was brought in the team of 6.'))
+    + statCell('r3 tip', 'MP', st.mpPct, '', partTip('Match Participation', st.mpRaw, st.mpCount, st.mpWhole, 'matches', 'Share of available matches this Pokémon actually played.'))
+    + statCell('r3 tip', 'GP', st.gpPct, '', partTip('Game Participation', st.gpRaw, st.gpCount, st.gpWhole, 'games', 'Share of available games this Pokémon actually played.'));
   card.appendChild(grid);
 
   return card;
 }
-function cell(k, v, cls, tip)    { return '<div class="cell"' + (tip ? ' title="' + escapeHtml(tip) + '"' : '') + '><div class="k">' + k + '</div><div class="v ' + (cls || '') + '">' + v + '</div></div>'; }
-function cellSub(k, v, sub, tip) { return '<div class="cell"' + (tip ? ' title="' + escapeHtml(tip) + '"' : '') + '><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="sub">' + sub + '</div></div>'; }
+
+// One inline stat cell: label left, value right. `rowCls` = r1|r2|r3 (+ optional "tip").
+function statCell(rowCls, label, value, valCls, tip) {
+  const isTip = rowCls.indexOf('tip') !== -1;
+  const labelHtml = isTip
+    ? '<span class="sc-k sbl-tip-underline" data-tip-title="' + escapeHtml(label) + '" data-tip="' + escapeHtml(tip) + '">' + label + '</span>'
+    : '<span class="sc-k">' + label + '</span>';
+  return '<div class="sc ' + rowCls + '">' + labelHtml + '<span class="sc-v ' + (valCls || '') + '">' + value + '</span></div>';
+}
+
+// The hover/click detail popover content for a member: types, abilities, base
+// stats, join (and drop) week, and utility moves. Markup only — positioning is
+// handled by tooltip.js via the matching data-pop-target id.
+function buildDetailPopover(uid, row, mon, disp) {
+  const pop = document.createElement('div');
+  pop.className = 'member-pop';
+  pop.id = uid;
+
+  // types
+  let typesHtml = '';
+  [disp.type1, disp.type2].forEach(t => {
+    if (!t) return;
+    const c = typeColor(t) || 'var(--bg3)';
+    const dark = TEAM_TYPE_TEXT_DARK.has(t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
+    typesHtml += '<span class="pop-type" style="background:' + c + ';color:' + (dark ? '#222' : '#fff') + '">' + escapeHtml(t) + '</span>';
+  });
+
+  // abilities
+  const abilities = (mon.abilities || []).map(a => '<span class="pop-ability">' + escapeHtml(a) + '</span>').join('') || '<span class="pop-dim">—</span>';
+
+  // base stats (color speed by tier, mirror the old compact row)
+  let statsHtml = '';
+  if (disp.stats && disp.stats.hp != null) {
+    statsHtml = BAR_SK.map((k, j) => {
+      const val = disp.stats[k];
+      if (k === 'spe') {
+        const sc = speedTierColor(val);
+        return '<div class="pop-stat"><span class="ps-k">' + BAR_SL[j] + '</span><span class="ps-v" style="color:' + sc + ';font-weight:700">' + val + '</span></div>';
+      }
+      return '<div class="pop-stat"><span class="ps-k">' + BAR_SL[j] + '</span><span class="ps-v">' + val + '</span></div>';
+    }).join('');
+    statsHtml = '<div class="pop-stats">' + statsHtml + '</div>'
+      + '<div class="pop-bst">BST <b>' + disp.stats.bst + '</b></div>';
+  }
+
+  // utility moves (from the drafted entry, like the Planner)
+  const moves = (mon.moves || []).map(m => '<span class="pop-move">' + escapeHtml(m) + '</span>').join('') || '<span class="pop-dim">—</span>';
+
+  // join / drop weeks
+  let weeks = 'Joined Week ' + (row.acquired_week || '—');
+  if (row.released_week != null) weeks += ' · Dropped Week ' + row.released_week;
+
+  pop.innerHTML =
+      '<div class="pop-head"><span class="pop-name">' + escapeHtml(disp.name) + '</span><span class="pop-types">' + typesHtml + '</span></div>'
+    + '<div class="pop-sec"><div class="pop-lbl">Abilities</div><div class="pop-row">' + abilities + '</div></div>'
+    + (statsHtml ? '<div class="pop-sec"><div class="pop-lbl">Base Stats</div>' + statsHtml + '</div>' : '')
+    + '<div class="pop-sec"><div class="pop-lbl">Utility Moves</div><div class="pop-row">' + moves + '</div></div>'
+    + '<div class="pop-foot">' + weeks + '</div>';
+  return pop;
+}
 
 function renderRoster() {
   const el = document.getElementById('roster');
@@ -844,6 +949,17 @@ function renderRoster() {
 
   if (!active.length) { el.innerHTML = '<div class="empty">No active Pokémon on this roster yet.</div>'; return; }
   active.forEach(r => el.appendChild(memberCard(r)));
+  if (window.SBLTooltip) window.SBLTooltip.refresh();
+}
+
+// Name size tier by length (CSS handles the actual sizes). 170px sprite width fits
+// roughly ≤10 chars at the default size, then steps down in three tiers.
+function nameTier(name) {
+  const n = (name || '').length;
+  if (n >= 20) return 'n-xl';
+  if (n >= 15) return 'n-long';
+  if (n >= 11) return 'n-med';
+  return '';
 }
 
 function renderInactive() {
@@ -861,6 +977,7 @@ function renderInactive() {
   list.className = 'inactive-list';
   inactive.forEach(r => list.appendChild(memberCard(r, { inactive: true })));
   el.appendChild(list);
+  if (window.SBLTooltip) window.SBLTooltip.refresh();
 }
 
 function toggleTxns() { txnExpanded = !txnExpanded; renderTransactions(); }
