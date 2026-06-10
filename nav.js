@@ -87,10 +87,11 @@
 .sbln-btn:disabled { opacity: .5; cursor: default; }
 .sbln-btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
 .sbln-btn-accent:hover { filter: brightness(1.08); }
-.sbln-chip { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
-.sbln-chip .sbln-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
-.sbln-chip .sbln-email { color: var(--text); font-weight: 600; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sbln-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); vertical-align: middle; margin-right: 7px; box-shadow: 0 0 5px rgba(76,175,125,.7); }
 .sbln-admin-wrap { position: relative; display: flex; align-items: center; }
+.sbln-menu-foot { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; align-items: center; gap: 8px; }
+.sbln-foot-email { flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sbln-logout-btn { flex: 0 0 auto; }
 
 /* dropdown menus (Teams + Admin) */
 .sbln-menu { position: fixed; z-index: 150; width: 260px; max-width: calc(100vw - 16px); max-height: min(60vh, 460px); display: flex; flex-direction: column; overflow: hidden; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 14px 34px rgba(0,0,0,.5); }
@@ -153,7 +154,6 @@
       +   `<div class="sbln-admin-wrap" id="sbln-admin-wrap">`
       +     `<button class="sbln-btn${ACTIVE === "admin" ? " sbln-btn-accent" : ""}" id="sbln-admin-btn">Admin</button>`
       +   `</div>`
-      +   `<span class="sbln-chip" id="sbln-chip" hidden><span class="sbln-dot"></span><span class="sbln-email" id="sbln-email"></span><button class="sbln-btn" id="sbln-logout">Log out</button></span>`
       + `</div>`;
     document.body.insertBefore(nav, document.body.firstChild);
 
@@ -169,8 +169,9 @@
 
     const adminMenu = document.createElement("div");
     adminMenu.className = "sbln-menu"; adminMenu.id = "sbln-admin-menu"; adminMenu.hidden = true;
-    adminMenu.style.width = "200px";
-    adminMenu.innerHTML = `<div class="sbln-menu-list">${ADMIN_LINKS.map(l => `<a class="sbln-menu-item" href="${l.href}">${esc(l.label)}</a>`).join("")}</div>`;
+    adminMenu.style.width = "230px";
+    adminMenu.innerHTML = `<div class="sbln-menu-list">${ADMIN_LINKS.map(l => `<a class="sbln-menu-item" href="${l.href}">${esc(l.label)}</a>`).join("")}</div>`
+      + `<div class="sbln-menu-foot"><span class="sbln-foot-email" id="sbln-email"></span><button class="sbln-btn sbln-logout-btn" id="sbln-logout">Log out</button></div>`;
     document.body.appendChild(adminMenu);
 
     // login modal + toast container
@@ -303,14 +304,12 @@
     } else { isAdmin = false; }
 
     const btn = document.getElementById("sbln-admin-btn");
-    const chip = document.getElementById("sbln-chip");
     if (isAdmin) {
-      btn.textContent = "Admin ▾";
-      chip.hidden = false;
-      document.getElementById("sbln-email").textContent = currentUser.email || "admin";
+      btn.innerHTML = `<span class="sbln-dot"></span>Admin <span class="sbln-caret">▾</span>`;
+      const em = document.getElementById("sbln-email");
+      if (em) em.textContent = currentUser.email || "admin";
     } else {
       btn.textContent = "Admin";
-      chip.hidden = true;
       closeMenus();
     }
     applyPostseasonVisibility();
