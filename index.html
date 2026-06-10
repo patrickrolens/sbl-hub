@@ -116,6 +116,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
   .card.collapsed .sec-head { margin-bottom: 0; }
   .card.collapsed .sec-head .sec-arrow { transform: rotate(-90deg); }
   .card.collapsed .sec-body { display: none; }
+  /* Brought-six as two even rows of three. */
+  .brought { display: grid; grid-template-columns: repeat(3, max-content); justify-content: center; }
 }
 </style>
 </head>
@@ -129,18 +131,20 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
   <!-- ── LEFT: leader boards ── -->
   <div class="col col-left">
-    <div class="card">
-      <div class="card-title center">KO Leaders · Top 10</div>
-      <div id="ko-leaders"></div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>KO Leaders · Top 10</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="ko-leaders"></div></div>
     </div>
-    <div class="card">
-      <div class="card-title center">KF Δ Leaders · Top 10</div>
-      <div id="kfd-leaders"></div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>KF Δ Leaders · Top 10</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="kfd-leaders"></div></div>
     </div>
-    <div class="card">
-      <div class="card-title center">K/F Leaders · Top 10</div>
-      <div id="kf-leaders"></div>
-      <div class="kf-note">Pokémon with 4 or fewer games played are dimmed and ranked below qualified Pokémon.</div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>K/F Leaders · Top 10</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <div id="kf-leaders"></div>
+        <div class="kf-note">Pokémon with 4 or fewer games played are dimmed and ranked below qualified Pokémon.</div>
+      </div>
     </div>
   </div>
 
@@ -149,9 +153,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
     <div class="card">
       <div class="hero" id="hero"></div>
     </div>
-    <div class="card">
-      <div class="card-title center">Season Standings</div>
-      <div id="standings"></div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>Season Standings</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="standings"></div></div>
     </div>
   </div>
 
@@ -186,8 +190,8 @@ const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
 
-// League logo: set this once the asset path exists in the repo. Empty → text mark.
-const SBL_LOGO_URL = "";
+// League logo (shared asset, same as the nav). Falls back to a text mark on error.
+const SBL_LOGO_URL = "/assets/SBL_Logo.png";
 
 const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
 
@@ -202,6 +206,7 @@ let matches      = [];     // all matches for the season (any stage)
 let gamesByMatch = {};     // match_id -> [game rows]
 let gameToMatch  = {};     // game_id -> match_id
 let statRows     = [];     // all game_pokemon_stats rows for the season
+let broughtByMatch = {};   // match_id -> { team_id -> [pokemon_id, …] } from match_pokemon
 let txns         = [];
 let pokemonById  = {};
 
@@ -314,8 +319,8 @@ async function loadData() {
   draftRow = draftRes.data || null;
   matches  = matchRes.data || [];
 
-  // Games + per-Pokémon stats across the whole season (drives leaders, KD, "brought").
-  gamesByMatch = {}; gameToMatch = {}; statRows = [];
+  // Games + per-Pokémon stats across the whole season (drives leaders, KD).
+  gamesByMatch = {}; gameToMatch = {}; statRows = []; broughtByMatch = {};
   const matchIds = matches.map(m => m.id);
   if (matchIds.length) {
     const { data: games, error: gErr } = await sb.from('games').select('id, match_id').in('match_id', matchIds);
@@ -327,6 +332,13 @@ async function loadData() {
       if (sErr) throw sErr;
       statRows = stats || [];
     }
+    // Explicit "brought to the match" roster (preferred over inferring from game stats).
+    const { data: mp, error: mpErr } = await sb.from('match_pokemon').select('match_id, team_id, pokemon_id').in('match_id', matchIds);
+    if (mpErr) throw mpErr;
+    (mp || []).forEach(r => {
+      const byTeam = broughtByMatch[r.match_id] = broughtByMatch[r.match_id] || {};
+      (byTeam[r.team_id] = byTeam[r.team_id] || []).push(r.pokemon_id);
+    });
   }
 
   txns = buildTransactions(faRes.data || [], tradeRes.data || []);
@@ -582,11 +594,14 @@ function renderDraftPanel() {
   el.innerHTML = ''; el.appendChild(list);
 }
 
-// Up to 6 distinct Pokémon a team sent out across a match's games.
+// Up to 6 distinct Pokémon a team brought to a match. Prefers the explicit
+// match_pokemon roster; falls back to inferring from game stats for older matches.
 function broughtIconsHtml(matchId, teamId) {
-  const gameIds = (gamesByMatch[matchId] || []).map(g => g.id);
-  const seen = [];
-  statRows.forEach(s => { if (s.team_id === teamId && gameIds.includes(s.game_id) && !seen.includes(s.pokemon_id)) seen.push(s.pokemon_id); });
+  let seen = (broughtByMatch[matchId] && broughtByMatch[matchId][teamId]) ? broughtByMatch[matchId][teamId].slice() : [];
+  if (!seen.length) {
+    const gameIds = (gamesByMatch[matchId] || []).map(g => g.id);
+    statRows.forEach(s => { if (s.team_id === teamId && gameIds.includes(s.game_id) && !seen.includes(s.pokemon_id)) seen.push(s.pokemon_id); });
+  }
   if (!seen.length) return '';
   return '<div class="brought">' + seen.slice(0, 6).map(pid =>
     '<img src="' + iconUrl(monFor(pid)) + '" alt="" title="' + escapeHtml(monName(pid)) + '" data-mid="' + escapeHtml(pid) + '">').join('') + '</div>';
@@ -597,7 +612,7 @@ function renderCompleted() {
   const done = matches
     .filter(m => m.winner_team_id)
     .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0))
-    .slice(0, 3);
+    .slice(0, 5);
   if (!done.length) { el.innerHTML = '<div class="empty">No completed matches yet.</div>'; return; }
 
   const list = document.createElement('div');
@@ -645,13 +660,13 @@ function renderTransactions() {
     if (t.kind === 'fa') {
       const dropped = monFor(t.dropped), added = monFor(t.added);
       row.innerHTML =
-        '<div class="with">' + coachOnlyHtml(t.teams[0], { link: true }) + ' · Free Agency</div>'
+        '<div class="with">' + teamLabelHtml(t.teams[0], { link: true }) + ' · Free Agency</div>'
         + '<div class="swap"><span class="drop"><img src="' + iconUrl(dropped) + '" data-mid="' + escapeHtml(t.dropped) + '"> ' + escapeHtml(dropped.name) + '</span>'
         + '<span>⇄</span><span class="gain"><img src="' + iconUrl(added) + '" data-mid="' + escapeHtml(t.added) + '"> ' + escapeHtml(added.name) + '</span></div>';
     } else {
       const aMon = monFor(t.aMon), bMon = monFor(t.bMon);
       row.innerHTML =
-        '<div class="with">' + coachOnlyHtml(t.aTeam, { link: true }) + ' ⇄ ' + coachOnlyHtml(t.bTeam, { link: true }) + '</div>'
+        '<div class="with">' + teamLabelHtml(t.aTeam, { link: true }) + ' ⇄ ' + teamLabelHtml(t.bTeam, { link: true }) + '</div>'
         + '<div class="swap"><span class="gain"><img src="' + iconUrl(aMon) + '" data-mid="' + escapeHtml(t.aMon) + '"> ' + escapeHtml(aMon.name) + '</span>'
         + '<span>⇄</span><span class="gain"><img src="' + iconUrl(bMon) + '" data-mid="' + escapeHtml(t.bMon) + '"> ' + escapeHtml(bMon.name) + '</span></div>';
     }
