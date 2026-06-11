@@ -83,7 +83,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .stat-box.has-tip:active, .kf-cell.has-tip:active { background: rgba(255,255,255,.09); }
 .stat-box .k { font-size: 10px; font-weight: 700; letter-spacing: .4px; color: var(--text3); text-transform: uppercase; }
 .stat-box .v { font-size: 16px; font-weight: 700; color: var(--text); }
-.stat-box .v.pos { color: var(--green); }
+.stat-box .v.pos { color: var(--blue); }
 .stat-box .v.neg { color: var(--red); }
 .kf-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
 .kf-cell { text-align: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 7px 4px; }
@@ -155,13 +155,30 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .member-statgrid .sc.r3 { grid-column: span 2; }
 .member-statgrid .sc-k { font-size: 13px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .3px; }
 .member-statgrid .sc-v { font-size: 19px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
-.member-statgrid .sc-v.pos { color: var(--green); }
+.member-statgrid .sc-v.pos { color: var(--blue); }
 .member-statgrid .sc-v.neg { color: var(--red); }
 /* MB/MP/GP cells open a tooltip — signal it's tappable with a hover/press state. */
 .member-statgrid .sc[data-tip] { cursor: pointer; transition: background .12s; }
 .member-statgrid .sc[data-tip]:hover { background: var(--bg3); }
 .member-statgrid .sc[data-tip]:active { background: var(--border); }
 .member-statgrid .sc[data-tip] .sc-k { color: var(--text2); }
+
+/* ── INACTIVE VARIANT: shorter card, icon instead of full sprite. Icons are ~40px
+   native, so the block is compact and the card height drops accordingly. ── */
+.member.inactive { min-height: 96px; }
+.member-sprite-block.icon-mode { width: 96px; }
+.member-sprite-block.icon-mode .slot-sprite {
+  width: 64px; height: 64px; image-rendering: pixelated;
+  top: 6px; bottom: auto;   /* sit toward the top, leaving room for the name */
+}
+.member-sprite-block.icon-mode .sprite-pts { font-size: 16px; top: 4px; left: 5px; }
+.member-sprite-block.icon-mode .sprite-name { font-size: 11px; padding: 4px; }
+.member-sprite-block.icon-mode .sprite-name.n-med  { font-size: 10px; }
+.member-sprite-block.icon-mode .sprite-name.n-long { font-size: 9px; }
+.member-sprite-block.icon-mode .sprite-name.n-xl   { font-size: 8px; }
+/* Inactive stat text can be a touch smaller so it never collides at the short height. */
+.member.inactive .member-statgrid .sc-v { font-size: 16px; }
+.member.inactive .member-statgrid .sc-k { font-size: 11px; }
 
 /* ── MEMBER DETAIL POPOVER (hover/tap the sprite) ── */
 .member-pop {
@@ -258,21 +275,23 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   .sec-identity, .sec-stats, .sec-txns, .sec-inactive, .sec-right-sched {
     width: auto; align-self: stretch;
   }
-  .col-main { padding: 0; margin: 12px; }
+  .col-main { padding: 0; margin: 8px; }
   .sec-identity { order: 1; } .sec-stats { order: 2; }
   .sec-roster { order: 3; } .sec-right-sched { order: 4; }
   .sec-txns { order: 5; } .sec-inactive { order: 6; }
   .roster-grid { grid-template-columns: 1fr; }
+  /* Reclaim a little horizontal room for the cards on mobile. */
+  .card { margin: 8px; }
 }
 @media (max-width: 460px) {
   /* Team Stats KO/Faint/Ratio/Δ row: 2×2 instead of a cramped single row of four. */
   .kf-row { grid-template-columns: 1fr 1fr; }
   /* Give the member stat grid more room on small phones so KOs/Faints stay side by
-     side: trim the sprite slightly and the cell padding. */
-  .member-sprite-block { width: 140px; }
-  .member-sprite-block .slot-sprite { width: 140px; height: 140px; }
-  .member { min-height: 140px; }
-  .member-statgrid .sc { padding: 4px 6px; gap: 5px; }
+     side: trim the active sprite and the cell padding. (Icon-mode stays compact.) */
+  .member-sprite-block:not(.icon-mode) { width: 132px; }
+  .member-sprite-block:not(.icon-mode) .slot-sprite { width: 132px; height: 132px; }
+  .member:not(.inactive) { min-height: 132px; }
+  .member-statgrid .sc { padding: 4px 5px; gap: 4px; }
   .member-statgrid .sc-k { font-size: 11px; }
   .member-statgrid .sc-v { font-size: 16px; }
 }
@@ -729,8 +748,17 @@ function renderIdentity() {
   const logo = document.createElement('img');
   logo.className = 'logo';
   logo.alt = team.name + ' logo';
-  logo.src = team.logo_url || POKEBALL_FALLBACK;
-  logo.onerror = function () { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; };
+  // Prefer the season-8 logo asset (filename matches the team slug); fall back to
+  // any stored logo_url, then the Pokéball placeholder.
+  const slugLogo = team.slug ? '/assets/Logos/s8/' + encodeURIComponent(team.slug) + '.png' : '';
+  const fallbacks = [slugLogo, team.logo_url || ''].filter(Boolean);
+  let fbIdx = 0;
+  logo.src = fallbacks[0] || POKEBALL_FALLBACK;
+  logo.onerror = function () {
+    fbIdx++;
+    if (fbIdx < fallbacks.length) { this.src = fallbacks[fbIdx]; }
+    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
   el.appendChild(logo);
 
   const nm = document.createElement('div');
@@ -770,8 +798,8 @@ function renderTeamStats() {
     + '</div>'
     + '<div class="stat-grid">'
     +   statBox('SOS', fmtRate(sos.sos), '', 'Strength of Schedule: average win rate of the opponents this team has faced')
-    +   statBox('SOSOS', fmtRate(sos.sosos), '', 'Strength of Strength of Schedule: average win rate of this team\'s opponents\' opponents')
     +   statBox('Match Δ', signed(matchDelta), deltaClass(matchDelta), 'Match wins minus match losses')
+    +   statBox('SOSOS', fmtRate(sos.sosos), '', 'Strength of Strength of Schedule: average win rate of this team\'s opponents\' opponents')
     +   statBox('Game Δ', signed(gameDelta), deltaClass(gameDelta), 'Games won minus games lost')
     + '</div>'
     + '<div class="kf-row">'
@@ -870,16 +898,19 @@ function memberCard(row, opts) {
     card.style.borderColor = c1;
   }
 
-  // ── SPRITE BLOCK: 170×170, point value overlay, name overlay, hover popover ──
+  // ── SPRITE BLOCK: full 170px sprite (active) or compact icon (inactive). Point
+  //    value + name overlaid; click opens the detail popover. ──
   const spriteBlock = document.createElement('div');
-  spriteBlock.className = 'member-sprite-block';
+  spriteBlock.className = 'member-sprite-block' + (opts.inactive ? ' icon-mode' : '');
   spriteBlock.setAttribute('data-pop-target', uid);
   spriteBlock.setAttribute('tabindex', '0');
+  const imgUrl = opts.inactive ? iconUrl(disp) : spriteUrl(disp);
   spriteBlock.innerHTML =
-      '<img class="slot-sprite" src="' + spriteUrl(disp) + '" alt="' + escapeHtml(disp.name) + '">'
+      '<img class="slot-sprite" src="' + imgUrl + '" alt="' + escapeHtml(disp.name) + '">'
     + '<div class="sprite-pts">' + cost + '</div>'
     + '<div class="sprite-name ' + nameTier(disp.name) + '">' + escapeHtml(disp.name) + '</div>';
-  attachSpriteFallback(spriteBlock.querySelector('.slot-sprite'), disp);
+  const imgEl = spriteBlock.querySelector('.slot-sprite');
+  if (opts.inactive) attachIconFallback(imgEl, disp); else attachSpriteFallback(imgEl, disp);
   card.appendChild(spriteBlock);
 
   // ── DETAIL POPOVER (page-owned node, appended to <body> so the card's
