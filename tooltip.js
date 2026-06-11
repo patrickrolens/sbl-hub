@@ -91,7 +91,7 @@
 
   function showPop(target, trigger) {
     closePop();
-    target.classList.add('sbl-pop', 'open');
+    target.classList.add('open');
     openPop = target; openPopTrigger = trigger;
     positionPop(target, trigger);
   }
@@ -138,6 +138,9 @@
       var id = trigger.getAttribute('data-pop-target');
       var target = document.getElementById(id);
       if (!target) return;
+      // Hide the target up front so it never renders as a stray visible block before
+      // its first open. (.sbl-pop carries position:fixed + visibility:hidden.)
+      target.classList.add('sbl-pop');
       var openByHover = trigger.hasAttribute('data-pop-hover');
 
       trigger.addEventListener('click', function (e) {
