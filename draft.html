@@ -172,8 +172,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .now-team  { font-size: 13px; color: var(--text2); margin-top: 2px; }
 .now-icons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; min-height: 36px; justify-content: center; }
 .now-icons img { width: 36px; height: 36px; image-rendering: pixelated; }
-.now-pts   { font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 10px; }
-.now-pts .total { color: var(--text3); font-weight: 600; }
+.now-pts   { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-top: 10px; }
+.now-pts .spent { font-size: 12px; font-weight: 600; color: var(--text3); }
+.now-pts .rem   { font-size: 22px; font-weight: 800; color: var(--text); }
+.now-pts .total { font-size: 12px; color: var(--text3); font-weight: 600; }
 
 .upnext-col { display: flex; flex-direction: column; gap: 10px; justify-content: flex-start; }
 .upnext-card {
@@ -241,14 +243,14 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .tier-rail.illegal-rail { background: rgba(224,85,85,.06); }
 .tier-pts { font-size: 22px; font-weight: 800; color: var(--accent); line-height: 1; }
 .tier-pts.illegal-pts { color: var(--red); font-size: 15px; letter-spacing: .5px; }
-.tier-count { font-size: 11px; color: var(--text3); margin-top: 4px; font-variant-numeric: tabular-nums; }
-.tier-count .cslash { color: var(--border); margin: 0 1px; }
+.tier-count { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.tier-count .cslash { color: var(--text3); margin: 0 1px; font-weight: 400; }
 .tier-collapse-icon { font-size: 9px; color: var(--text3); margin-top: 3px; }
 /* Card area: an even grid so rows line up (note 21). auto-fill keeps columns tidy. */
 .tier-body {
   flex: 1; min-width: 0; display: grid;
-  grid-template-columns: repeat(auto-fill, 68px); gap: 6px; justify-content: start;
-  padding: 10px 12px; align-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px;
+  padding: 10px 12px; align-content: start; justify-items: center;
 }
 .tier-lane.is-collapsed .tier-body { display: none; }
 .tier-body.collapsed { display: none; }
@@ -782,8 +784,11 @@ function renderStatus() {
   nowCard.appendChild(co);
   if (!same) { const tm = document.createElement('div'); tm.className = 'now-team'; tm.textContent = tName; nowCard.appendChild(tm); }
   nowCard.appendChild(iconRow(picksByTeam[curId], 'now-icons', season.team_size));
+  const limit = season.point_limit ?? 0;
+  const spent = pointsUsed(curId);
   const pts = document.createElement('div'); pts.className = 'now-pts';
-  pts.innerHTML = 'Points: ' + pointsUsed(curId) + '<span class="total">/' + (season.point_limit ?? '—') + '</span>';
+  pts.innerHTML = '<span class="spent">' + spent + '</span>'
+    + '<span class="rem">' + (limit - spent) + '<span class="total">/' + (season.point_limit ?? '—') + '</span></span>';
   nowCard.appendChild(pts);
 
   const nextId = teamAtPick(draft.current_pick_number + 1);
