@@ -380,6 +380,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
      no seam. (Pull up 1px to cover sub-pixel rounding between the two sticky bars.) */
   .toolbar { top: calc(var(--nav-h) - 1px); }
 
+  /* Same non-shrink guard for the sidebar's team cards so they scroll, not smush. */
+  .sidebar-body { flex: 1; min-height: 0; overflow-y: auto; }
+  .sidebar-body .team-card { flex-shrink: 0; }
   /* Activity / sidebar overlays fill the viewport and scroll internally; the body
      behind them is locked (see toggleActivity/toggleSidebar adding .overlay-open). */
   .activity-body, .sidebar-body { -webkit-overflow-scrolling: touch; }
@@ -393,8 +396,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   .activity.collapsed { width: 100%; transform: translateX(100%); }
   .activity.collapsed .activity-head { justify-content: flex-start; padding: 10px 12px; }
   .activity-head { position: static; }
-  /* The log body fills remaining height and scrolls; sections expand within it. */
+  /* The log body fills remaining height and scrolls; sections keep their natural
+     height (flex-shrink:0) so the body scrolls instead of compressing them. */
   .activity-body { flex: 1; min-height: 0; overflow-y: auto; }
+  .activity-body .log-sec { flex-shrink: 0; }
   .log-sec-body { max-height: none; }
 }
 /* When a mobile overlay is open, lock the page behind it. */
