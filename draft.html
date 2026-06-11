@@ -121,7 +121,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .li-mon { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .li-mon img { width: 24px; height: 24px; image-rendering: pixelated; object-fit: contain; flex-shrink: 0; }
 .li-mon .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.li-mon.add { color: var(--green); font-weight: 600; }
+.li-mon.add { color: var(--blue); font-weight: 600; }
 .li-mon.drop { color: var(--text2); }
 .li-mon.drop img { opacity: .55; }
 .li-notes { font-size: 10px; color: var(--text3); font-style: italic; margin-top: 4px; }
@@ -142,11 +142,11 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .team-card-name  { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-card-name:hover { color: var(--accent); }
 .team-card-coach { font-size: 11px; color: var(--text2); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Point tracker: spent sum (left), remaining/total (right). */
+/* Point tracker: spent sum (left, muted) · remaining (right, large/white) / total. */
 .team-card-pts   { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; white-space: nowrap; }
 .team-card-pts .spent { font-size: 11px; font-weight: 600; color: var(--text3); }
-.team-card-pts .rem   { font-size: 12px; font-weight: 700; color: var(--accent); }
-.team-card-pts .total { color: var(--text3); font-weight: 600; }
+.team-card-pts .rem   { font-size: 17px; font-weight: 800; color: var(--text); }
+.team-card-pts .total { font-size: 11px; color: var(--text3); font-weight: 600; }
 /* Icons in a single row across the card. */
 .team-card-icons { display: flex; flex-wrap: nowrap; gap: 2px; margin-top: 8px; }
 .team-card-icons img { width: 24px; height: 24px; image-rendering: pixelated; flex: 1 1 0; min-width: 0; object-fit: contain; }
@@ -158,7 +158,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 /* ── STATUS STRIP (big current-drafter card + up-next) ── */
 .status-strip {
-  display: flex; align-items: stretch; gap: 16px;
+  display: flex; align-items: stretch; justify-content: center; gap: 16px;
   padding: 16px; border-bottom: 1px solid var(--border);
 }
 .now-card {
@@ -241,11 +241,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .tier-rail.illegal-rail { background: rgba(224,85,85,.06); }
 .tier-pts { font-size: 22px; font-weight: 800; color: var(--accent); line-height: 1; }
 .tier-pts.illegal-pts { color: var(--red); font-size: 15px; letter-spacing: .5px; }
-.tier-label { font-size: 9px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
-.tier-count { font-size: 11px; color: var(--text3); margin-top: 3px; }
-.tier-count::before { content: '('; }
-.tier-count::after { content: ')'; }
-.tier-collapse-icon { font-size: 9px; color: var(--text3); margin-top: 2px; }
+.tier-count { font-size: 11px; color: var(--text3); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.tier-count .cslash { color: var(--border); margin: 0 1px; }
+.tier-collapse-icon { font-size: 9px; color: var(--text3); margin-top: 3px; }
 /* Card area: an even grid so rows line up (note 21). auto-fill keeps columns tidy. */
 .tier-body {
   flex: 1; min-width: 0; display: grid;
@@ -297,6 +295,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 /* ── ADMIN OPERATOR HINT (shown in the status strip when logged in as admin) ── */
 .op-hint { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
+.op-hint[hidden] { display: none; }
 .op-hint .op-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .btn-undo { border-color: rgba(224,85,85,.4); color: #ffb3b3; }
 .btn-undo:hover { border-color: var(--red); }
@@ -496,7 +495,8 @@ let ownersByTeam = {};              // team_id -> [{started_week, ended_week, na
 let txns         = [];              // unified transaction feed for the activity log
 let tierCost     = {};              // pokemon_id -> point_cost (this season's legal set)
 let draft        = null;            // drafts row (may be null until Patrick seeds it)
-let picksByTeam  = {};              // team_id -> [pokemon_id, …] in draft order
+let picksByTeam  = {};              // team_id -> [pokemon_id, …] CURRENT active roster (icons/points)
+let rosterByTeam = {};              // alias of the above current-roster map
 let draftPicks   = [];              // global ordered [{pick_number, team_id, pokemon_id}] for undo
 let draftedSet   = new Set();       // pokemon_id that are already drafted
 let orderedTeams = [];              // team_ids in sidebar/draft order
@@ -616,21 +616,31 @@ async function loadData() {
   draft = draftRes.data || null;
 
   // Drafted picks for this season's teams.
-  picksByTeam = {}; draftedSet = new Set(); draftPicks = [];
+  picksByTeam = {}; draftedSet = new Set(); draftPicks = []; rosterByTeam = {};
   if (teamIds.length) {
     const { data: picks, error: picksErr } = await sb
       .from('team_pokemon')
-      .select('team_id, pokemon_id, draft_pick_number')
-      .eq('acquired_via', 'draft')
+      .select('team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week')
       .in('team_id', teamIds);
     if (picksErr) throw picksErr;
+    // Draft LOG (historical): every draft pick ever made, even if later traded away —
+    // the log is a permanent record of who originally drafted what.
     (picks || [])
+      .filter(p => p.acquired_via === 'draft')
       .sort((a, b) => (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
       .forEach(p => {
-        (picksByTeam[p.team_id] = picksByTeam[p.team_id] || []).push(p.pokemon_id);
-        draftedSet.add(p.pokemon_id);
         draftPicks.push({ pick_number: p.draft_pick_number, team_id: p.team_id, pokemon_id: p.pokemon_id });
       });
+    // Current rosters (sidebar icons + point totals + pool "taken" coloring): every
+    // unreleased Pokémon, however acquired, so the board reflects trades and FA.
+    (picks || [])
+      .filter(p => p.released_week == null)
+      .sort((a, b) => (a.acquired_week || 0) - (b.acquired_week || 0) || (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
+      .forEach(p => {
+        (rosterByTeam[p.team_id] = rosterByTeam[p.team_id] || []).push(p.pokemon_id);
+        draftedSet.add(p.pokemon_id);   // currently rostered → unavailable in the pool
+      });
+    picksByTeam = rosterByTeam;
   }
 
   buildTxns(tradeRes.data, faRes.data);
@@ -712,21 +722,20 @@ function renderSidebar() {
     nameWrap.className = 'team-card-names';
     const tName = teamName(id), cName = coachName(id);
     const same = tName.trim().toLowerCase() === cName.trim().toLowerCase();
-    // Team name on top (bold); coach beneath. When identical, show the single name
-    // once, in the bold team-name format so there's always a clear primary label.
+    // Coach name on top (bold, primary); team name beneath. When identical, show the
+    // single name once in the bold primary format.
     const slug = teamSlug(id);
-    const primary = same ? cName : tName;
     nameWrap.innerHTML =
-      '<a class="team-card-name" href="team.html#' + encodeURIComponent(slug) + '" onclick="event.stopPropagation()">' + escapeHtml(primary) + '</a>'
-      + (same ? '' : '<div class="team-card-coach">' + escapeHtml(cName) + '</div>');
+      '<a class="team-card-name" href="team.html#' + encodeURIComponent(slug) + '" onclick="event.stopPropagation()">' + escapeHtml(cName) + '</a>'
+      + (same ? '' : '<div class="team-card-coach">' + escapeHtml(tName) + '</div>');
     head.appendChild(nameWrap);
 
-    // Point tracker: spent sum (left) · remaining/total (right).
+    // Point tracker: spent sum (left, muted) · remaining (right, large/white) / total.
     const limit = season.point_limit ?? 0;
     const spent = pointsUsed(id);
     const pts = document.createElement('div');
     pts.className = 'team-card-pts';
-    pts.innerHTML = '<span class="spent">' + spent + ' pts</span>'
+    pts.innerHTML = '<span class="spent">' + spent + '</span>'
       + '<span class="rem">' + (limit - spent) + '<span class="total">/' + (season.point_limit ?? '—') + '</span></span>';
     head.appendChild(pts);
     card.appendChild(head);
@@ -764,9 +773,9 @@ function renderStatus() {
   nowCard.appendChild(lab);
   const tName = teamName(curId), cName = coachName(curId);
   const same = tName.trim().toLowerCase() === cName.trim().toLowerCase();
-  const co  = document.createElement('div'); co.className = 'now-coach'; co.textContent = same ? cName : tName;
+  const co  = document.createElement('div'); co.className = 'now-coach'; co.textContent = cName;
   nowCard.appendChild(co);
-  if (!same) { const tm = document.createElement('div'); tm.className = 'now-team'; tm.textContent = cName; nowCard.appendChild(tm); }
+  if (!same) { const tm = document.createElement('div'); tm.className = 'now-team'; tm.textContent = tName; nowCard.appendChild(tm); }
   nowCard.appendChild(iconRow(picksByTeam[curId], 'now-icons', season.team_size));
   const pts = document.createElement('div'); pts.className = 'now-pts';
   pts.innerHTML = 'Points: ' + pointsUsed(curId) + '<span class="total">/' + (season.point_limit ?? '—') + '</span>';
@@ -776,7 +785,7 @@ function renderStatus() {
   if (nextId) {
     const nName = teamName(nextId), ncName = coachName(nextId);
     const nSame = nName.trim().toLowerCase() === ncName.trim().toLowerCase();
-    upnext.innerHTML = nSame ? escapeHtml(ncName) : escapeHtml(nName) + ' <span class="pl">(' + escapeHtml(ncName) + ')</span>';
+    upnext.innerHTML = nSame ? escapeHtml(ncName) : escapeHtml(ncName) + ' <span class="pl">(' + escapeHtml(nName) + ')</span>';
   } else {
     upnext.textContent = 'Draft complete';
   }
@@ -974,13 +983,13 @@ function makeLane(key, mons) {
   lane.className = 'tier-lane' + (isIllegal ? ' illegal-lane' : '') + (isCollapsed ? ' is-collapsed' : '');
 
   // Left rail: the point value (doubles as the collapse toggle).
+  const undrafted = mons.filter(m => !draftedSet.has(m.id)).length;
   const rail = document.createElement('div');
   rail.className = 'tier-rail' + (isIllegal ? ' illegal-rail' : '');
   rail.onclick = () => { collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key); renderPool(); };
   rail.innerHTML =
       '<span class="tier-pts' + (isIllegal ? ' illegal-pts' : '') + '">' + (isIllegal ? 'ILL' : String(key)) + '</span>'
-    + (isIllegal ? '' : '<span class="tier-label">pts</span>')
-    + '<span class="tier-count">' + mons.length + '</span>'
+    + '<span class="tier-count">' + undrafted + '<span class="cslash">/</span>' + mons.length + '</span>'
     + '<span class="tier-collapse-icon">' + (isCollapsed ? '▶' : '▼') + '</span>';
   lane.appendChild(rail);
 
@@ -1416,7 +1425,7 @@ async function refreshDraftState() {
     const [draftRes, picksRes, tradeRes, faRes] = await Promise.all([
       sb.from('drafts').select('draft_order, current_pick_number, status').eq('season_id', season.id).maybeSingle(),
       teamIds.length
-        ? sb.from('team_pokemon').select('team_id, pokemon_id, draft_pick_number').eq('acquired_via', 'draft').in('team_id', teamIds)
+        ? sb.from('team_pokemon').select('team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week').in('team_id', teamIds)
         : Promise.resolve({ data: [], error: null }),
       sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at, notes').eq('season_id', season.id),
       sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at, notes').eq('season_id', season.id),
@@ -1429,14 +1438,21 @@ async function refreshDraftState() {
     draft = draftRes.data || null;
 
     // Rebuild pick-derived state from scratch.
-    picksByTeam = {}; draftedSet = new Set(); draftPicks = [];
+    picksByTeam = {}; draftedSet = new Set(); draftPicks = []; rosterByTeam = {};
     (picksRes.data || [])
+      .filter(p => p.acquired_via === 'draft')
       .sort((a, b) => (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
       .forEach(p => {
-        (picksByTeam[p.team_id] = picksByTeam[p.team_id] || []).push(p.pokemon_id);
-        draftedSet.add(p.pokemon_id);
         draftPicks.push({ pick_number: p.draft_pick_number, team_id: p.team_id, pokemon_id: p.pokemon_id });
       });
+    (picksRes.data || [])
+      .filter(p => p.released_week == null)
+      .sort((a, b) => (a.acquired_week || 0) - (b.acquired_week || 0) || (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
+      .forEach(p => {
+        (rosterByTeam[p.team_id] = rosterByTeam[p.team_id] || []).push(p.pokemon_id);
+        draftedSet.add(p.pokemon_id);
+      });
+    picksByTeam = rosterByTeam;
 
     // A Pokémon that's now drafted can't stay yellow-pinned (matches the local rule).
     pinnedIds.forEach(id => { if (draftedSet.has(id)) pinnedIds.delete(id); });
