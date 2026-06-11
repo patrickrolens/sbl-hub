@@ -920,11 +920,11 @@ function memberCard(row, opts) {
   const grid = document.createElement('div');
   grid.className = 'member-statgrid';
   grid.innerHTML =
-      statCell('r1', 'KOs', st.kos, '', 'test')
+      statCell('r1 tip', 'KOs', st.kos, '', 'test')
     + statCell('r1', 'Faints', st.faints)
     + statCell('r2', 'K/F', kfRatio(st.kos, st.faints))
-    + statCell('r2', 'KFΔ', signed(kfDelta), deltaClass(kfDelta), 'The difference between the Pokémon\'s KOs and Faints')
-    + statCell('r2', 'KPG', fmtKpg(st.kpg), '', 'KOs per Game: The total number of KOs scored by this Pokémon divided by the total number of games in which it participated')
+    + statCell('r2 tip', 'KFΔ', signed(kfDelta), deltaClass(kfDelta), 'The difference between the Pokémon\'s KOs and Faints')
+    + statCell('r2 tip', 'KPG', fmtKpg(st.kpg), '', 'KOs per Game: The total number of KOs scored by this Pokémon divided by the total number of games in which it participated')
     + statCell('r3 tip', 'MB', st.mbPct, '', partTip('Match Bring', st.mbRaw, st.mbCount, st.mbWhole, 'matches', 'Share of available matches this Pokémon was brought in the team of 6.'))
     + statCell('r3 tip', 'MP', st.mpPct, '', partTip('Match Participation', st.mpRaw, st.mpCount, st.mpWhole, 'matches', 'Share of available matches this Pokémon actually played.'))
     + statCell('r3 tip', 'GP', st.gpPct, '', partTip('Game Participation', st.gpRaw, st.gpCount, st.gpWhole, 'games', 'Share of available games this Pokémon actually played.'));
