@@ -206,6 +206,15 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .toolbar-search .sc { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 0; line-height: 1; display: none; }
 .toolbar-search .sc.visible { display: block; }
 .toolbar-search .sc:hover { color: var(--text); }
+/* Pool filter toggles (Hide Drafted / Sprites Only). */
+.toolbar-toggle {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none;
+  font-size: 12px; font-weight: 600; color: var(--text2);
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  white-space: nowrap;
+}
+.toolbar-toggle:hover { color: var(--text); border-color: var(--accent); }
+.toolbar-toggle input { accent-color: var(--accent); cursor: pointer; margin: 0; }
 
 /* Selectable search results dropdown (mirrors the Planner; click scrolls to + flags
    the Pokémon in the pool). */
@@ -253,6 +262,14 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   padding: 10px 12px; align-content: start; justify-items: center;
 }
 .tier-lane.is-collapsed .tier-body { display: none; }
+/* Collapsed lanes get compact: smaller point value, no count, a slim rail — so a
+   stack of collapsed tiers takes minimal vertical room. */
+.tier-lane.is-collapsed { }
+.tier-lane.is-collapsed .tier-rail { flex-basis: 48px; flex-direction: row; gap: 6px; padding: 5px 8px; }
+.tier-lane.is-collapsed .tier-pts { font-size: 14px; }
+.tier-lane.is-collapsed .tier-pts.illegal-pts { font-size: 11px; }
+.tier-lane.is-collapsed .tier-count { display: none; }
+.tier-lane.is-collapsed .tier-collapse-icon { margin-top: 0; }
 .tier-body.collapsed { display: none; }
 .tier-empty-msg { font-size: 11px; color: var(--text3); font-style: italic; }
 
@@ -277,6 +294,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 /* Illegal: not in this season's tier list. Image dimmed/grayscaled (image only). */
 .pmon.illegal-card img { opacity: .4; filter: grayscale(70%); }
+
+/* ── SPRITES-ONLY MODE: drop names, shrink cards so more fit per screen. ── */
+.pool.sprites-only .tier-body { grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); }
+.pool.sprites-only .pmon { width: 48px; padding: 4px; }
+.pool.sprites-only .pmon img { width: 38px; height: 38px; }
+.pool.sprites-only .pmon-name { display: none; }
 
 /* ── COLOR STATE (one at a time, by precedence: blue > red > yellow) ──
    A card gets exactly one of team-pick / drafted / pinned, assigned in JS, so the
@@ -461,6 +484,12 @@ body.overlay-open { overflow: hidden; }
         <button class="sc" id="search-clear" onclick="clearSearch()">✕</button>
         <div class="search-results" id="search-results"></div>
       </div>
+      <label class="toolbar-toggle" title="Hide Pokémon that are already on a roster">
+        <input type="checkbox" id="hide-drafted" onchange="toggleHideDrafted()"> Hide Drafted
+      </label>
+      <label class="toolbar-toggle" title="Show sprites only (no names), with smaller cards">
+        <input type="checkbox" id="sprites-only" onchange="toggleSpritesOnly()"> Sprites Only
+      </label>
     </div>
 
     <div class="pool" id="pool"></div>
@@ -518,6 +547,8 @@ let orderedTeams = [];              // team_ids in sidebar/draft order
 let pokemonById  = {};              // id -> pokemon.json entry
 let collapsed    = new Set();       // collapsed tier lane keys
 let searchQ      = '';
+let hideDrafted  = false;           // pool filter: omit rostered Pokémon
+let spritesOnly  = false;           // pool view: sprites only, no names, smaller cards
 let selectedTeam = null;            // team_id whose roster is blue-highlighted (one at a time)
 let pinnedIds    = new Set();       // pokemon_id the viewer yellow-pinned (unlimited)
 
@@ -527,7 +558,10 @@ let pinnedIds    = new Set();       // pokemon_id the viewer yellow-pinned (unli
 function persistKey() { return 'sbl-draft-' + (season ? season.id : 'none'); }
 function savePins() {
   try {
-    localStorage.setItem(persistKey(), JSON.stringify({ pins: [...pinnedIds], sel: selectedTeam }));
+    localStorage.setItem(persistKey(), JSON.stringify({
+      pins: [...pinnedIds], sel: selectedTeam,
+      hideDrafted: hideDrafted, spritesOnly: spritesOnly,
+    }));
   } catch (e) { /* private mode / disabled storage — silently skip */ }
 }
 function loadPins() {
@@ -537,6 +571,11 @@ function loadPins() {
     const data = JSON.parse(raw);
     if (Array.isArray(data.pins)) pinnedIds = new Set(data.pins.filter(id => !draftedSet.has(id)));
     if (data.sel && teams.some(t => t.id === data.sel)) selectedTeam = data.sel;
+    hideDrafted = !!data.hideDrafted;
+    spritesOnly = !!data.spritesOnly;
+    // Reflect restored toggles in the checkboxes.
+    const hd = document.getElementById('hide-drafted'); if (hd) hd.checked = hideDrafted;
+    const so = document.getElementById('sprites-only'); if (so) so.checked = spritesOnly;
   } catch (e) { /* ignore corrupt/unavailable storage */ }
 }
 let isAdmin      = false;           // profiles.is_admin for the logged-in user
@@ -1000,14 +1039,20 @@ function makeLane(key, mons) {
   const lane = document.createElement('div');
   lane.className = 'tier-lane' + (isIllegal ? ' illegal-lane' : '') + (isCollapsed ? ' is-collapsed' : '');
 
-  // Left rail: the point value (doubles as the collapse toggle).
-  const undrafted = mons.filter(m => !draftedSet.has(m.id)).length;
+  // Left rail: the point value (doubles as the collapse toggle). Counts reflect the
+  // FULL tier (undrafted/total), independent of the Hide Drafted filter.
+  const allMons = Object.values(pokemonById);
+  const fullTier = isIllegal
+    ? allMons.filter(m => !(m.id in tierCost))
+    : allMons.filter(m => tierCost[m.id] === key);
+  const total = fullTier.length;
+  const undrafted = fullTier.filter(m => !draftedSet.has(m.id)).length;
   const rail = document.createElement('div');
   rail.className = 'tier-rail' + (isIllegal ? ' illegal-rail' : '');
   rail.onclick = () => { collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key); renderPool(); };
   rail.innerHTML =
       '<span class="tier-pts' + (isIllegal ? ' illegal-pts' : '') + '">' + (isIllegal ? 'ILL' : String(key)) + '</span>'
-    + '<span class="tier-count">' + undrafted + '<span class="cslash">/</span>' + mons.length + '</span>'
+    + '<span class="tier-count">' + undrafted + '<span class="cslash">/</span>' + total + '</span>'
     + '<span class="tier-collapse-icon">' + (isCollapsed ? '▶' : '▼') + '</span>';
   lane.appendChild(rail);
 
@@ -1015,7 +1060,8 @@ function makeLane(key, mons) {
   const bodyEl = document.createElement('div');
   bodyEl.className = 'tier-body' + (isCollapsed ? ' collapsed' : '');
   if (mons.length === 0) {
-    const msg = document.createElement('span'); msg.className = 'tier-empty-msg'; msg.textContent = 'No Pokémon in this tier';
+    const msg = document.createElement('span'); msg.className = 'tier-empty-msg';
+    msg.textContent = (hideDrafted && total > 0) ? 'All drafted' : 'No Pokémon in this tier';
     bodyEl.appendChild(msg);
   } else {
     mons.sort((a, b) => a.name.localeCompare(b.name));
@@ -1028,21 +1074,37 @@ function makeLane(key, mons) {
 function renderPool() {
   const pool = document.getElementById('pool');
   pool.innerHTML = '';
+  pool.classList.toggle('sprites-only', spritesOnly);
+
+  // Optionally omit Pokémon already on a roster (shrinks lanes as the draft fills up).
+  const visible = m => !(hideDrafted && draftedSet.has(m.id));
 
   // Legal lanes: distinct point costs present this season, descending.
   const costs = [...new Set(Object.values(tierCost))].sort((a, b) => b - a);
   const allMons = Object.values(pokemonById);
 
   costs.forEach(cost => {
-    const mons = allMons.filter(m => tierCost[m.id] === cost);
+    const mons = allMons.filter(m => tierCost[m.id] === cost && visible(m));
     pool.appendChild(makeLane(cost, mons));
   });
 
   // Illegal lane: everything not in this season's tier list.
-  const illegalMons = allMons.filter(m => !(m.id in tierCost));
+  const illegalMons = allMons.filter(m => !(m.id in tierCost) && visible(m));
   pool.appendChild(makeLane('illegal', illegalMons));
 
   applySearch();
+}
+
+// ── POOL FILTER/VIEW TOGGLES ──
+function toggleHideDrafted() {
+  hideDrafted = document.getElementById('hide-drafted').checked;
+  renderPool();
+  savePins();
+}
+function toggleSpritesOnly() {
+  spritesOnly = document.getElementById('sprites-only').checked;
+  document.getElementById('pool').classList.toggle('sprites-only', spritesOnly);
+  savePins();
 }
 
 // ── SEARCH (opacity-only dim in the pool + a selectable results dropdown) ──
