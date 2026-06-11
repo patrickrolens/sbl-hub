@@ -77,7 +77,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
   padding: 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
 }
-.stat-box[title], .kf-cell[title] { cursor: help; }
+/* Team Stats cells that carry a click tooltip — same hover/press cue as the roster. */
+.stat-box.has-tip, .kf-cell.has-tip { cursor: pointer; transition: background .12s; }
+.stat-box.has-tip:hover, .kf-cell.has-tip:hover { background: rgba(255,255,255,.05); }
+.stat-box.has-tip:active, .kf-cell.has-tip:active { background: rgba(255,255,255,.09); }
 .stat-box .k { font-size: 10px; font-weight: 700; letter-spacing: .4px; color: var(--text3); text-transform: uppercase; }
 .stat-box .v { font-size: 16px; font-weight: 700; color: var(--text); }
 .stat-box .v.pos { color: var(--green); }
@@ -777,9 +780,16 @@ function renderTeamStats() {
     +   kfCell('K/F Ratio', kfRatio(kf.kos, kf.faints))
     +   kfCell('KF Δ', signed(kfDelta), deltaClass(kfDelta), 'Total KOs minus total Faints')
     + '</div>';
+  if (window.SBLTooltip) window.SBLTooltip.refresh();
 }
-function statBox(k, v, cls, tip) { return '<div class="stat-box"' + (tip ? ' title="' + escapeHtml(tip) + '"' : '') + '><span class="k">' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>'; }
-function kfCell(k, v, cls, tip)  { return '<div class="kf-cell"' + (tip ? ' title="' + escapeHtml(tip) + '"' : '') + '><div class="k">' + k + '</div><div class="v ' + (cls || '') + '">' + v + '</div></div>'; }
+function statBox(k, v, cls, tip) {
+  const t = tip ? ' data-tip-title="' + escapeHtml(k) + '" data-tip="' + escapeHtml(tip) + '"' : '';
+  return '<div class="stat-box' + (tip ? ' has-tip' : '') + '"' + t + '><span class="k">' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>';
+}
+function kfCell(k, v, cls, tip) {
+  const t = tip ? ' data-tip-title="' + escapeHtml(k) + '" data-tip="' + escapeHtml(tip) + '"' : '';
+  return '<div class="kf-cell' + (tip ? ' has-tip' : '') + '"' + t + '><div class="k">' + k + '</div><div class="v ' + (cls || '') + '">' + v + '</div></div>';
+}
 
 // Per-Pokémon KOs/Faints and participation, scoped to the weeks it was rostered.
 function memberStats(row) {
