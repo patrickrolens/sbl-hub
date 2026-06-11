@@ -49,7 +49,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 /* ── SIDEBAR ── */
 .sidebar {
-  width: 300px; flex-shrink: 0; border-right: 1px solid var(--border);
+  width: 340px; flex-shrink: 0; border-right: 1px solid var(--border);
   background: var(--bg); min-height: calc(100vh - var(--nav-h));
   display: flex; flex-direction: column;
   transition: width .18s ease;
@@ -74,7 +74,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 /* ── ACTIVITY PANEL (right): draft + transaction log, mirrors the sidebar ── */
 .activity {
-  width: 320px; flex-shrink: 0; border-left: 1px solid var(--border);
+  width: 340px; flex-shrink: 0; border-left: 1px solid var(--border);
   background: var(--bg); min-height: calc(100vh - var(--nav-h));
   display: flex; flex-direction: column; transition: width .18s ease;
 }
@@ -137,13 +137,19 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* Selected (clicked) team — blue. outline sits outside the border so it coexists
    with the current/next border colors. */
 .team-card.selected  { outline: 2px solid var(--blue); outline-offset: 1px; background: rgba(96,165,250,.08); }
-.team-card-coach { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
-.team-card-name  { font-size: 11px; color: var(--text2); margin-top: 1px; }
-.team-card-row   { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
-.team-card-icons { display: flex; flex-wrap: wrap; gap: 2px; flex: 1; min-height: 22px; }
-.team-card-icons img { width: 22px; height: 22px; image-rendering: pixelated; }
-.team-card-pts   { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; align-self: flex-end; }
+.team-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.team-card-names { min-width: 0; }
+.team-card-name  { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-card-name:hover { color: var(--accent); }
+.team-card-coach { font-size: 11px; color: var(--text2); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Point tracker: spent sum (left), remaining/total (right). */
+.team-card-pts   { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; white-space: nowrap; }
+.team-card-pts .spent { font-size: 11px; font-weight: 600; color: var(--text3); }
+.team-card-pts .rem   { font-size: 12px; font-weight: 700; color: var(--accent); }
 .team-card-pts .total { color: var(--text3); font-weight: 600; }
+/* Icons in a single row across the card. */
+.team-card-icons { display: flex; flex-wrap: nowrap; gap: 2px; margin-top: 8px; }
+.team-card-icons img { width: 24px; height: 24px; image-rendering: pixelated; flex: 1 1 0; min-width: 0; object-fit: contain; }
 /* Unfilled roster slots: a faded Pokéball placeholder. */
 .slot-empty { opacity: .28; filter: grayscale(40%); }
 
@@ -159,11 +165,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   flex: 0 0 auto; min-width: 360px; max-width: 520px;
   background: var(--bg2); border: 2px solid var(--accent);
   box-shadow: 0 0 0 1px rgba(124,111,247,.3); border-radius: 12px; padding: 14px 16px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
 }
 .now-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--accent); text-transform: uppercase; }
 .now-coach { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.1; margin-top: 4px; }
 .now-team  { font-size: 13px; color: var(--text2); margin-top: 2px; }
-.now-icons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; min-height: 36px; }
+.now-icons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; min-height: 36px; justify-content: center; }
 .now-icons img { width: 36px; height: 36px; image-rendering: pixelated; }
 .now-pts   { font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 10px; }
 .now-pts .total { color: var(--text3); font-weight: 600; }
@@ -171,7 +178,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .upnext-col { display: flex; flex-direction: column; gap: 10px; justify-content: flex-start; }
 .upnext-card {
   background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--yellow);
-  border-radius: 8px; padding: 10px 14px;
+  border-radius: 8px; padding: 10px 14px; text-align: center;
 }
 .upnext-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--yellow); text-transform: uppercase; }
 .upnext-text  { font-size: 14px; font-weight: 600; color: var(--text); margin-top: 3px; }
@@ -198,18 +205,54 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .toolbar-search .sc.visible { display: block; }
 .toolbar-search .sc:hover { color: var(--text); }
 
-/* ── POOL (tier lanes — Tier Editor format) ── */
+/* Selectable search results dropdown (mirrors the Planner; click scrolls to + flags
+   the Pokémon in the pool). */
+.search-results {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  max-height: 320px; overflow-y: auto; display: none; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.search-results.open { display: block; }
+.sr-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.sr-item:last-child { border-bottom: none; }
+.sr-item:hover, .sr-item.highlighted { background: var(--bg3); }
+.sr-item.drafted-r { opacity: .55; }
+.sr-item.drafted-r .sr-name { text-decoration: line-through; }
+.sr-sprite { width: 32px; height: 32px; image-rendering: pixelated; flex-shrink: 0; object-fit: contain; }
+.sr-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.sr-sub { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.sr-pts { margin-left: auto; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.sr-empty { padding: 12px; color: var(--text3); font-size: 13px; text-align: center; }
+
+/* ── POOL (tier lanes: point-value rail on the left, even card grid on the right) ── */
 .pool { padding: 16px; display: flex; flex-direction: column; gap: 6px; }
-.tier-lane { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.tier-lane {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  display: flex; align-items: stretch;
+}
 .tier-lane.illegal-lane { border-color: rgba(224,85,85,.25); }
-.tier-header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
-.tier-header:hover { background: rgba(255,255,255,.02); }
-.tier-pts { font-size: 20px; font-weight: 700; color: var(--accent); min-width: 40px; }
-.tier-pts.illegal-pts { color: var(--red); font-size: 14px; letter-spacing: .5px; }
-.tier-label { font-size: 11px; color: var(--text3); font-weight: 600; }
-.tier-count { font-size: 12px; color: var(--text3); margin-left: 6px; }
-.tier-collapse-icon { font-size: 11px; color: var(--text3); margin-left: 4px; }
-.tier-body { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; min-height: 58px; }
+/* Left rail holds the point value and is the collapse toggle. */
+.tier-rail {
+  flex: 0 0 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  padding: 8px 6px; background: var(--bg3); border-right: 1px solid var(--border);
+  cursor: pointer; user-select: none;
+}
+.tier-rail:hover { background: rgba(255,255,255,.03); }
+.tier-rail.illegal-rail { background: rgba(224,85,85,.06); }
+.tier-pts { font-size: 22px; font-weight: 800; color: var(--accent); line-height: 1; }
+.tier-pts.illegal-pts { color: var(--red); font-size: 15px; letter-spacing: .5px; }
+.tier-label { font-size: 9px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.tier-count { font-size: 11px; color: var(--text3); margin-top: 3px; }
+.tier-count::before { content: '('; }
+.tier-count::after { content: ')'; }
+.tier-collapse-icon { font-size: 9px; color: var(--text3); margin-top: 2px; }
+/* Card area: an even grid so rows line up (note 21). auto-fill keeps columns tidy. */
+.tier-body {
+  flex: 1; min-width: 0; display: grid;
+  grid-template-columns: repeat(auto-fill, 68px); gap: 6px; justify-content: start;
+  padding: 10px 12px; align-content: start;
+}
+.tier-lane.is-collapsed .tier-body { display: none; }
 .tier-body.collapsed { display: none; }
 .tier-empty-msg { font-size: 11px; color: var(--text3); font-style: italic; }
 
@@ -244,6 +287,13 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
    survives the fade. */
 .pmon.search-dim   { opacity: .18; }
 .pmon.search-match { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(124,111,247,.4); }
+/* Flash ring when a search-result is selected and scrolled into view. */
+.pmon.search-flash { animation: pmon-flash 1.6s ease; }
+@keyframes pmon-flash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124,111,247,0); }
+  15%      { box-shadow: 0 0 0 3px rgba(124,111,247,.9); }
+  60%      { box-shadow: 0 0 0 3px rgba(124,111,247,.5); }
+}
 
 /* ── ADMIN OPERATOR HINT (shown in the status strip when logged in as admin) ── */
 .op-hint { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
@@ -323,9 +373,17 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   .upnext-col { width: 100%; }
   .pool { padding: 12px; }
 
-  /* Reveal the open-overlay button (lives in the toolbar, shown in lanes view). */
+  /* Reveal the open-overlay buttons. Log is pushed to the right edge. */
   #mobile-teams-btn { display: inline-flex; }
-  #mobile-activity-btn { display: inline-flex; }
+  #mobile-activity-btn { display: inline-flex; margin-left: auto; }
+
+  /* The toolbar is the sticky element on mobile; pin it flush under the nav with
+     no seam. (Pull up 1px to cover sub-pixel rounding between the two sticky bars.) */
+  .toolbar { top: calc(var(--nav-h) - 1px); }
+
+  /* Activity / sidebar overlays fill the viewport and scroll internally; the body
+     behind them is locked (see toggleActivity/toggleSidebar adding .overlay-open). */
+  .activity-body, .sidebar-body { -webkit-overflow-scrolling: touch; }
 
   /* Activity panel mirrors the sidebar overlay, sliding in from the right. */
   .activity {
@@ -336,7 +394,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   .activity.collapsed { width: 100%; transform: translateX(100%); }
   .activity.collapsed .activity-head { justify-content: flex-start; padding: 10px 12px; }
   .activity-head { position: static; }
+  /* The log body fills remaining height and scrolls; sections expand within it. */
+  .activity-body { flex: 1; min-height: 0; overflow-y: auto; }
+  .log-sec-body { max-height: none; }
 }
+/* When a mobile overlay is open, lock the page behind it. */
+body.overlay-open { overflow: hidden; }
 </style>
 </head>
 <body>
@@ -376,12 +439,13 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
     <div class="toolbar">
       <button class="btn" id="mobile-teams-btn" onclick="toggleSidebar()">☰ Teams</button>
-      <button class="btn" id="mobile-activity-btn" onclick="toggleActivity()">📋 Log</button>
+      <button class="btn" id="mobile-activity-btn" onclick="toggleActivity()" title="Activity log">☰ Log</button>
       <div class="toolbar-search">
         <span class="si">🔍</span>
-        <input type="text" id="search-input" placeholder="Search Pokémon…"
-               oninput="onSearch()" onkeydown="if(event.key==='Escape')clearSearch()">
+        <input type="text" id="search-input" placeholder="Search Pokémon…" autocomplete="off"
+               oninput="onSearch()" onkeydown="onSearchKey(event)">
         <button class="sc" id="search-clear" onclick="clearSearch()">✕</button>
+        <div class="search-results" id="search-results"></div>
       </div>
     </div>
 
@@ -441,6 +505,25 @@ let collapsed    = new Set();       // collapsed tier lane keys
 let searchQ      = '';
 let selectedTeam = null;            // team_id whose roster is blue-highlighted (one at a time)
 let pinnedIds    = new Set();       // pokemon_id the viewer yellow-pinned (unlimited)
+
+// ── CLIENT-ONLY PERSISTENCE (yellow pins + blue team selection survive refresh) ──
+// Scoped per-season so switching seasons doesn't carry highlights across. localStorage
+// is viewer-local; it never touches the database.
+function persistKey() { return 'sbl-draft-' + (season ? season.id : 'none'); }
+function savePins() {
+  try {
+    localStorage.setItem(persistKey(), JSON.stringify({ pins: [...pinnedIds], sel: selectedTeam }));
+  } catch (e) { /* private mode / disabled storage — silently skip */ }
+}
+function loadPins() {
+  try {
+    const raw = localStorage.getItem(persistKey());
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (Array.isArray(data.pins)) pinnedIds = new Set(data.pins.filter(id => !draftedSet.has(id)));
+    if (data.sel && teams.some(t => t.id === data.sel)) selectedTeam = data.sel;
+  } catch (e) { /* ignore corrupt/unavailable storage */ }
+}
 let isAdmin      = false;           // profiles.is_admin for the logged-in user
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -575,6 +658,7 @@ async function loadData() {
 // RENDER
 // ─────────────────────────────────────────────────────────────────────────────
 function teamName(id)  { const t = teams.find(x => x.id === id); return t ? t.name : '—'; }
+function teamSlug(id)  { const t = teams.find(x => x.id === id); return t && t.slug ? t.slug : (t ? t.id : id); }
 function coachName(id) { return coachByTeam[id] || '—'; }
 function pointsUsed(id){ return (picksByTeam[id] || []).reduce((s, pid) => s + (tierCost[pid] || 0), 0); }
 
@@ -620,26 +704,36 @@ function renderSidebar() {
     card.dataset.team = id;
     card.onclick = () => selectTeam(id);
 
-    const coach = document.createElement('div');
-    coach.className = 'team-card-coach';
-    coach.textContent = coachName(id);
-    card.appendChild(coach);
+    // Header row: name block (left) + point tracker (right).
+    const head = document.createElement('div');
+    head.className = 'team-card-head';
 
-    const name = document.createElement('div');
-    name.className = 'team-card-name';
-    name.textContent = teamName(id);
-    card.appendChild(name);
+    const nameWrap = document.createElement('div');
+    nameWrap.className = 'team-card-names';
+    const tName = teamName(id), cName = coachName(id);
+    const same = tName.trim().toLowerCase() === cName.trim().toLowerCase();
+    // Team name on top (bold); coach beneath. When identical, show the single name
+    // once, in the bold team-name format so there's always a clear primary label.
+    const slug = teamSlug(id);
+    const primary = same ? cName : tName;
+    nameWrap.innerHTML =
+      '<a class="team-card-name" href="team.html#' + encodeURIComponent(slug) + '" onclick="event.stopPropagation()">' + escapeHtml(primary) + '</a>'
+      + (same ? '' : '<div class="team-card-coach">' + escapeHtml(cName) + '</div>');
+    head.appendChild(nameWrap);
 
-    const row = document.createElement('div');
-    row.className = 'team-card-row';
-    row.appendChild(iconRow(picksByTeam[id], 'team-card-icons', season.team_size));
-
+    // Point tracker: spent sum (left) · remaining/total (right).
+    const limit = season.point_limit ?? 0;
+    const spent = pointsUsed(id);
     const pts = document.createElement('div');
     pts.className = 'team-card-pts';
-    pts.innerHTML = pointsUsed(id) + '<span class="total">/' + (season.point_limit ?? '—') + '</span>';
-    row.appendChild(pts);
+    pts.innerHTML = '<span class="spent">' + spent + ' pts</span>'
+      + '<span class="rem">' + (limit - spent) + '<span class="total">/' + (season.point_limit ?? '—') + '</span></span>';
+    head.appendChild(pts);
+    card.appendChild(head);
 
-    card.appendChild(row);
+    // Icon row: all roster slots in a single row.
+    card.appendChild(iconRow(picksByTeam[id], 'team-card-icons', season.team_size));
+
     body.appendChild(card);
   });
 }
@@ -667,9 +761,12 @@ function renderStatus() {
 
   nowCard.innerHTML = '';
   const lab = document.createElement('div'); lab.className = 'now-label'; lab.textContent = 'On the Clock';
-  const co  = document.createElement('div'); co.className  = 'now-coach'; co.textContent  = coachName(curId);
-  const tm  = document.createElement('div'); tm.className  = 'now-team';  tm.textContent  = teamName(curId);
-  nowCard.appendChild(lab); nowCard.appendChild(co); nowCard.appendChild(tm);
+  nowCard.appendChild(lab);
+  const tName = teamName(curId), cName = coachName(curId);
+  const same = tName.trim().toLowerCase() === cName.trim().toLowerCase();
+  const co  = document.createElement('div'); co.className = 'now-coach'; co.textContent = same ? cName : tName;
+  nowCard.appendChild(co);
+  if (!same) { const tm = document.createElement('div'); tm.className = 'now-team'; tm.textContent = cName; nowCard.appendChild(tm); }
   nowCard.appendChild(iconRow(picksByTeam[curId], 'now-icons', season.team_size));
   const pts = document.createElement('div'); pts.className = 'now-pts';
   pts.innerHTML = 'Points: ' + pointsUsed(curId) + '<span class="total">/' + (season.point_limit ?? '—') + '</span>';
@@ -677,7 +774,9 @@ function renderStatus() {
 
   const nextId = teamAtPick(draft.current_pick_number + 1);
   if (nextId) {
-    upnext.innerHTML = teamName(nextId) + ' <span class="pl">(' + coachName(nextId) + ')</span>';
+    const nName = teamName(nextId), ncName = coachName(nextId);
+    const nSame = nName.trim().toLowerCase() === ncName.trim().toLowerCase();
+    upnext.innerHTML = nSame ? escapeHtml(ncName) : escapeHtml(nName) + ' <span class="pl">(' + escapeHtml(ncName) + ')</span>';
   } else {
     upnext.textContent = 'Draft complete';
   }
@@ -743,6 +842,7 @@ function onPoolClick(mon, card) {
   if (pinnedIds.has(mon.id)) pinnedIds.delete(mon.id);
   else                       pinnedIds.add(mon.id);
   applyCardState(card, mon.id);
+  savePins();
 }
 
 function onPoolDblClick(mon, card) {
@@ -756,12 +856,27 @@ function onPoolDblClick(mon, card) {
 
   const cost  = tierCost[mon.id] || 0;
   const left  = remaining(teamId);
-  const rosterFull = (picksByTeam[teamId] || []).length >= (season.team_size || Infinity);
+  const picksMade = (picksByTeam[teamId] || []).length;
+  const rosterFull = picksMade >= (season.team_size || Infinity);
+
+  // Forward-looking budget check: after this pick, can the team still fill every
+  // remaining roster slot at the cheapest legal cost? If not, flag it so the admin
+  // can warn the player before committing.
+  const minCost = minLegalCost();
+  const slotsAfter = Math.max(0, (season.team_size || 0) - picksMade - 1);
+  const budgetAfter = left - cost;
+  const minNeeded = slotsAfter * minCost;
+  const shortfall = minNeeded - budgetAfter;
 
   // Confirmation — surfaces team, cost, and any budget/roster warning before committing.
   let warn = '';
   if (cost > left)  warn += '<p class="modal-warn">Over budget by ' + (cost - left) + ' pts (' + left + ' remaining).</p>';
-  if (rosterFull)   warn += '<p class="modal-warn">' + teamName(teamId) + ' already has a full roster.</p>';
+  if (rosterFull)   warn += '<p class="modal-warn">' + escapeHtml(teamName(teamId)) + ' already has a full roster.</p>';
+  if (!rosterFull && cost <= left && slotsAfter > 0 && shortfall > 0) {
+    warn += '<p class="modal-warn">Leaves ' + budgetAfter + ' pts for ' + slotsAfter
+      + ' more pick' + (slotsAfter === 1 ? '' : 's') + ' — ' + shortfall + ' pt'
+      + (shortfall === 1 ? '' : 's') + ' short of the minimum (' + minCost + ' pts each) to fill the roster.</p>';
+  }
 
   openModal(
     '<h3>Draft this Pok\u00e9mon?</h3>'
@@ -787,6 +902,15 @@ function onPoolDblClick(mon, card) {
 
 // Points a team has left to spend.
 function remaining(teamId) { return (season.point_limit ?? 0) - pointsUsed(teamId); }
+// Cheapest legal point cost available this season (for the roster-fill budget check).
+let _minLegalCost = null;
+function minLegalCost() {
+  if (_minLegalCost == null) {
+    const costs = Object.values(tierCost);
+    _minLegalCost = costs.length ? Math.min(...costs) : 0;
+  }
+  return _minLegalCost;
+}
 
 // Commit a pick: insert the team_pokemon row, advance (or complete) the draft,
 // then update local state and re-render. No realtime yet (Stage 5) — we update
@@ -816,6 +940,7 @@ async function draftPokemon(mon, teamId, pickNumber) {
     draftedSet.add(mon.id);
     draftPicks.push({ pick_number: pickNumber, team_id: teamId, pokemon_id: mon.id });
     pinnedIds.delete(mon.id);           // a drafted Pokémon clears its yellow pin
+    savePins();
     draft.current_pick_number = pickNumber + 1;
     if (isLast) { draft.status = 'complete'; }
 
@@ -836,6 +961,7 @@ function selectTeam(id) {
   document.querySelectorAll('.team-card').forEach(c =>
     c.classList.toggle('selected', c.dataset.team === selectedTeam));
   refreshPoolColors();
+  savePins();
   // On mobile the sidebar is an overlay; selecting a team closes it so the
   // newly blue-highlighted picks are visible in the pool underneath.
   if (selectedTeam && isMobile()) setSidebarCollapsed(true);
@@ -843,30 +969,24 @@ function selectTeam(id) {
 
 function makeLane(key, mons) {
   const isIllegal = key === 'illegal';
+  const isCollapsed = collapsed.has(key);
   const lane = document.createElement('div');
-  lane.className = 'tier-lane' + (isIllegal ? ' illegal-lane' : '');
+  lane.className = 'tier-lane' + (isIllegal ? ' illegal-lane' : '') + (isCollapsed ? ' is-collapsed' : '');
 
-  const header = document.createElement('div');
-  header.className = 'tier-header';
-  header.onclick = () => { collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key); renderPool(); };
+  // Left rail: the point value (doubles as the collapse toggle).
+  const rail = document.createElement('div');
+  rail.className = 'tier-rail' + (isIllegal ? ' illegal-rail' : '');
+  rail.onclick = () => { collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key); renderPool(); };
+  rail.innerHTML =
+      '<span class="tier-pts' + (isIllegal ? ' illegal-pts' : '') + '">' + (isIllegal ? 'ILL' : String(key)) + '</span>'
+    + (isIllegal ? '' : '<span class="tier-label">pts</span>')
+    + '<span class="tier-count">' + mons.length + '</span>'
+    + '<span class="tier-collapse-icon">' + (isCollapsed ? '▶' : '▼') + '</span>';
+  lane.appendChild(rail);
 
-  const pts = document.createElement('div');
-  pts.className = 'tier-pts' + (isIllegal ? ' illegal-pts' : '');
-  pts.textContent = isIllegal ? 'ILLEGAL' : String(key);
-  header.appendChild(pts);
-
-  if (!isIllegal) {
-    const lbl = document.createElement('div'); lbl.className = 'tier-label'; lbl.textContent = 'pts';
-    header.appendChild(lbl);
-  }
-  const cnt = document.createElement('div'); cnt.className = 'tier-count'; cnt.textContent = '(' + mons.length + ')';
-  header.appendChild(cnt);
-  const ci = document.createElement('span'); ci.className = 'tier-collapse-icon'; ci.textContent = collapsed.has(key) ? '▶' : '▼';
-  header.appendChild(ci);
-  lane.appendChild(header);
-
+  // Cards row (right side), flex-wrapping evenly.
   const bodyEl = document.createElement('div');
-  bodyEl.className = 'tier-body' + (collapsed.has(key) ? ' collapsed' : '');
+  bodyEl.className = 'tier-body' + (isCollapsed ? ' collapsed' : '');
   if (mons.length === 0) {
     const msg = document.createElement('span'); msg.className = 'tier-empty-msg'; msg.textContent = 'No Pokémon in this tier';
     bodyEl.appendChild(msg);
@@ -898,17 +1018,22 @@ function renderPool() {
   applySearch();
 }
 
-// ── SEARCH (opacity-only dim; matches keep their color) ──
+// ── SEARCH (opacity-only dim in the pool + a selectable results dropdown) ──
+let srResults = [];          // current dropdown matches
+let srHighlight = -1;        // keyboard-highlighted index
+
 function onSearch() {
   searchQ = document.getElementById('search-input').value.trim().toLowerCase();
   document.getElementById('search-clear').classList.toggle('visible', searchQ.length > 0);
   applySearch();
+  renderSearchResults();
 }
 function clearSearch() {
   document.getElementById('search-input').value = '';
   searchQ = '';
   document.getElementById('search-clear').classList.remove('visible');
   applySearch();
+  closeSearchResults();
 }
 function applySearch() {
   document.querySelectorAll('.pmon').forEach(card => {
@@ -919,17 +1044,91 @@ function applySearch() {
   });
 }
 
+// Dropdown of up to 18 name/id matches; clicking scrolls to + flags that mon.
+function renderSearchResults() {
+  const el = document.getElementById('search-results');
+  if (!searchQ) { closeSearchResults(); return; }
+  srResults = Object.values(pokemonById)
+    .filter(m => (m.name || '').toLowerCase().includes(searchQ) || (m.id || '').toLowerCase().startsWith(searchQ))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 18);
+  srHighlight = -1;
+  if (!srResults.length) { el.innerHTML = '<div class="sr-empty">No matches</div>'; el.classList.add('open'); return; }
+  el.innerHTML = srResults.map((m, i) => {
+    const drafted = draftedSet.has(m.id);
+    const legal = (m.id in tierCost);
+    const cost = legal ? tierCost[m.id] + ' pts' : 'Illegal';
+    const costColor = legal ? 'var(--accent)' : 'var(--red)';
+    const sub = [m.type1, m.type2].filter(Boolean).join(' / ');
+    return '<div class="sr-item' + (drafted ? ' drafted-r' : '') + '" data-idx="' + i + '" onmousedown="event.preventDefault();pickSearchResult(' + i + ')">'
+      + '<img class="sr-sprite" src="' + spriteUrl(m) + '" alt="" onerror="this.onerror=null;this.src=this.src.replace(\'/sprites/\',\'/icons/\')">'
+      + '<div><div class="sr-name">' + escapeHtml(m.name) + (drafted ? ' <span style="color:var(--red);font-size:10px">· drafted</span>' : '') + '</div>'
+      + '<div class="sr-sub">' + escapeHtml(sub) + '</div></div>'
+      + '<span class="sr-pts" style="color:' + costColor + '">' + cost + '</span>'
+      + '</div>';
+  }).join('');
+  el.classList.add('open');
+}
+function closeSearchResults() {
+  document.getElementById('search-results').classList.remove('open');
+  srHighlight = -1;
+}
+function updateSrHighlight() {
+  document.querySelectorAll('.sr-item').forEach((el, i) => el.classList.toggle('highlighted', i === srHighlight));
+  const hl = document.querySelector('.sr-item.highlighted');
+  if (hl) hl.scrollIntoView({ block: 'nearest' });
+}
+function onSearchKey(e) {
+  if (e.key === 'Escape') { clearSearch(); return; }
+  if (!srResults.length) return;
+  if (e.key === 'ArrowDown')      { e.preventDefault(); srHighlight = Math.min(srHighlight + 1, srResults.length - 1); updateSrHighlight(); }
+  else if (e.key === 'ArrowUp')   { e.preventDefault(); srHighlight = Math.max(srHighlight - 1, 0); updateSrHighlight(); }
+  else if (e.key === 'Enter')     { e.preventDefault(); pickSearchResult(srHighlight >= 0 ? srHighlight : 0); }
+}
+// Scroll the chosen Pokémon into view in the pool and flash a highlight ring.
+function pickSearchResult(idx) {
+  const mon = srResults[idx];
+  if (!mon) return;
+  closeSearchResults();
+  // Make sure its tier lane is expanded so the card exists/visible.
+  const key = (mon.id in tierCost) ? tierCost[mon.id] : 'illegal';
+  if (collapsed.has(key)) { collapsed.delete(key); renderPool(); }
+  const sel = (window.CSS && CSS.escape)
+    ? '.pmon[data-id=' + CSS.escape(mon.id) + ']'
+    : '.pmon[data-id="' + String(mon.id).replace(/["\\]/g, '\\$&') + '"]';
+  const card = document.querySelector(sel);
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.classList.remove('search-flash'); void card.offsetWidth; // restart animation
+  card.classList.add('search-flash');
+  setTimeout(() => card.classList.remove('search-flash'), 1600);
+}
+// Hide the dropdown when focus leaves the search box (delay lets clicks register).
+document.addEventListener('DOMContentLoaded', function () {
+  const inp = document.getElementById('search-input');
+  if (inp) inp.addEventListener('blur', () => setTimeout(closeSearchResults, 150));
+});
+
 // ── SIDEBAR COLLAPSE ──
 function isMobile() { return window.matchMedia('(max-width: 768px)').matches; }
 
 function setSidebarCollapsed(collapsed) {
   document.getElementById('sidebar').classList.toggle('collapsed', collapsed);
   document.getElementById('sidebar-toggle').textContent = collapsed ? '⟩' : '⟨';
+  syncOverlayLock();
 }
 
 function toggleSidebar() {
   const isCollapsed = document.getElementById('sidebar').classList.contains('collapsed');
   setSidebarCollapsed(!isCollapsed);
+}
+
+// Lock the page behind a full-screen overlay (mobile only); unlock when both closed.
+function syncOverlayLock() {
+  if (!isMobile()) { document.body.classList.remove('overlay-open'); return; }
+  const sidebarOpen  = !document.getElementById('sidebar').classList.contains('collapsed');
+  const activityOpen = !document.getElementById('activity').classList.contains('collapsed');
+  document.body.classList.toggle('overlay-open', sidebarOpen || activityOpen);
 }
 
 // ── KEYBOARD ──
@@ -940,6 +1139,9 @@ document.addEventListener('keydown', e => {
   }
   if ((e.key === 'f' || e.key === 'F') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); document.getElementById('search-input').focus(); }
 });
+
+// Resizing/rotating out of mobile while an overlay is open should release the lock.
+window.addEventListener('resize', syncOverlayLock);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH — admin status comes from the shared nav (nav.js owns the session);
@@ -1081,8 +1283,9 @@ function fmtDateShort(s) {
 }
 function logTeamHtml(teamId, week) {
   const slug = teamSlug(teamId);
-  const c = coachAtWeek(teamId, week);
-  const label = escapeHtml(teamName(teamId)) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '');
+  // Coach-only here to save space in the narrow activity column; fall back to the
+  // team name if no coach is on record for that week.
+  const label = escapeHtml(coachAtWeek(teamId, week) || teamName(teamId));
   return slug ? '<a class="li-team" href="team.html#' + encodeURIComponent(slug) + '">' + label + '</a>'
               : '<span class="li-team">' + label + '</span>';
 }
@@ -1168,8 +1371,8 @@ function renderActivity() {
   body.querySelectorAll('img[data-monid]').forEach(img => attachIconFallback(img, pokemonById[img.getAttribute('data-monid')]));
 }
 
-function setActivityCollapsed(collapsed) { document.getElementById('activity').classList.toggle('collapsed', collapsed); }
-function toggleActivity() { document.getElementById('activity').classList.toggle('collapsed'); }
+function setActivityCollapsed(collapsed) { document.getElementById('activity').classList.toggle('collapsed', collapsed); syncOverlayLock(); }
+function toggleActivity() { document.getElementById('activity').classList.toggle('collapsed'); syncOverlayLock(); }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REALTIME — subscribe to draft picks + the draft row. On any change, re-fetch the
@@ -1268,6 +1471,7 @@ async function init() {
   if (navExtra) navExtra.innerHTML = '<span class="live-badge" id="live-badge" title="Live updates"><span class="live-dot"></span><span id="live-text">Connecting…</span></span>';
   try {
     await loadData();
+    loadPins();        // restore yellow pins + blue team selection from a prior session
     renderSidebar();
     renderStatus();
     renderPool();
