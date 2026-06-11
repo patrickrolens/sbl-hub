@@ -166,16 +166,15 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* ── INACTIVE VARIANT: shorter card, icon instead of full sprite. Icons are ~40px
    native, so the block is compact and the card height drops accordingly. ── */
 .member.inactive { min-height: 96px; }
-.member-sprite-block.icon-mode { width: 96px; }
-.member-sprite-block.icon-mode .slot-sprite {
-  width: 64px; height: 64px; image-rendering: pixelated;
-  top: 6px; bottom: auto;   /* sit toward the top, leaving room for the name */
+.member-sprite-block.compact { width: 96px; }
+.member-sprite-block.compact .slot-sprite {
+  width: 96px; height: 96px; image-rendering: auto; inset: 0;
 }
-.member-sprite-block.icon-mode .sprite-pts { font-size: 16px; top: 4px; left: 5px; }
-.member-sprite-block.icon-mode .sprite-name { font-size: 11px; padding: 4px; }
-.member-sprite-block.icon-mode .sprite-name.n-med  { font-size: 10px; }
-.member-sprite-block.icon-mode .sprite-name.n-long { font-size: 9px; }
-.member-sprite-block.icon-mode .sprite-name.n-xl   { font-size: 8px; }
+.member-sprite-block.compact .sprite-pts { font-size: 16px; top: 4px; left: 5px; }
+.member-sprite-block.compact .sprite-name { font-size: 11px; padding: 4px; }
+.member-sprite-block.compact .sprite-name.n-med  { font-size: 10px; }
+.member-sprite-block.compact .sprite-name.n-long { font-size: 9px; }
+.member-sprite-block.compact .sprite-name.n-xl   { font-size: 8px; }
 /* Inactive stat text can be a touch smaller so it never collides at the short height. */
 .member.inactive .member-statgrid .sc-v { font-size: 16px; }
 .member.inactive .member-statgrid .sc-k { font-size: 11px; }
@@ -218,7 +217,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .txn-list { display: flex; flex-direction: column; gap: 8px; }
 .txn { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .txn .swap { font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.txn .swap .drop { color: var(--red); } .txn .swap .gain { color: var(--green); }
+.txn .swap .drop { color: var(--red); } .txn .swap .gain { color: var(--blue); }
 .txn .swap img { width: 22px; height: 22px; image-rendering: pixelated; vertical-align: middle; }
 .txn .with { font-size: 10px; color: var(--text3); margin-top: 4px; }
 
@@ -288,8 +287,8 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   .kf-row { grid-template-columns: 1fr 1fr; }
   /* Give the member stat grid more room on small phones so KOs/Faints stay side by
      side: trim the active sprite and the cell padding. (Icon-mode stays compact.) */
-  .member-sprite-block:not(.icon-mode) { width: 132px; }
-  .member-sprite-block:not(.icon-mode) .slot-sprite { width: 132px; height: 132px; }
+  .member-sprite-block:not(.compact) { width: 132px; }
+  .member-sprite-block:not(.compact) .slot-sprite { width: 132px; height: 132px; }
   .member:not(.inactive) { min-height: 132px; }
   .member-statgrid .sc { padding: 4px 5px; gap: 4px; }
   .member-statgrid .sc-k { font-size: 11px; }
@@ -901,16 +900,16 @@ function memberCard(row, opts) {
   // ── SPRITE BLOCK: full 170px sprite (active) or compact icon (inactive). Point
   //    value + name overlaid; click opens the detail popover. ──
   const spriteBlock = document.createElement('div');
-  spriteBlock.className = 'member-sprite-block' + (opts.inactive ? ' icon-mode' : '');
+  spriteBlock.className = 'member-sprite-block' + (opts.inactive ? ' compact' : '');
   spriteBlock.setAttribute('data-pop-target', uid);
   spriteBlock.setAttribute('tabindex', '0');
-  const imgUrl = opts.inactive ? iconUrl(disp) : spriteUrl(disp);
+  const imgUrl = spriteUrl(disp);
   spriteBlock.innerHTML =
       '<img class="slot-sprite" src="' + imgUrl + '" alt="' + escapeHtml(disp.name) + '">'
     + '<div class="sprite-pts">' + cost + '</div>'
     + '<div class="sprite-name ' + nameTier(disp.name) + '">' + escapeHtml(disp.name) + '</div>';
   const imgEl = spriteBlock.querySelector('.slot-sprite');
-  if (opts.inactive) attachIconFallback(imgEl, disp); else attachSpriteFallback(imgEl, disp);
+  attachSpriteFallback(imgEl, disp);
   card.appendChild(spriteBlock);
 
   // ── DETAIL POPOVER (page-owned node, appended to <body> so the card's
