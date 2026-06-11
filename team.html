@@ -920,7 +920,7 @@ function memberCard(row, opts) {
   const grid = document.createElement('div');
   grid.className = 'member-statgrid';
   grid.innerHTML =
-      statCell('r1', 'KOs', st.kos)
+      statCell('r1', 'KOs', st.kos, '', 'test')
     + statCell('r1', 'Faints', st.faints)
     + statCell('r2', 'K/F', kfRatio(st.kos, st.faints))
     + statCell('r2', 'KFΔ', signed(kfDelta), deltaClass(kfDelta), 'The difference between the Pokémon\'s KOs and Faints')
