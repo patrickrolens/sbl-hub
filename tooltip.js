@@ -122,12 +122,12 @@
   function bind() {
     document.querySelectorAll('[data-tip]').forEach(function (el) {
       if (el._sblTip) return; el._sblTip = true;
-      el.addEventListener('mouseenter', function () { showTip(el); });
-      el.addEventListener('mouseleave', hideTip);
+      // Click-to-toggle (works for mouse and touch alike). No hover-open: the
+      // cell's own CSS hover state is the "click for info" cue. Keyboard users get
+      // it on focus/blur for accessibility.
       el.addEventListener('focus', function () { showTip(el); });
       el.addEventListener('blur', hideTip);
       el.addEventListener('click', function (e) {
-        // tap-to-toggle for touch; harmless on desktop
         if (activeTipEl === el) hideTip(); else showTip(el);
         e.stopPropagation();
       });
