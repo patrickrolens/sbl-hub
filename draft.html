@@ -215,6 +215,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 }
 .toolbar-toggle:hover { color: var(--text); border-color: var(--accent); }
 .toolbar-toggle input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+/* Filters: inline on desktop. The ellipsis button is mobile-only (hidden here). */
+.toolbar-filters { display: flex; align-items: center; gap: 8px; }
+#filter-btn { display: none; }
 
 /* Selectable search results dropdown (mirrors the Planner; click scrolls to + flags
    the Pokémon in the pool). */
@@ -405,16 +408,25 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   .upnext-col { width: 100%; }
   .pool { padding: 12px; }
 
-  /* Toolbar layout on mobile: [Teams] [search……] [Log] on the first row (search
-     fills the middle, Log pinned right), with the checkboxes wrapping to a second
-     row. flex order overrides DOM order so Log lands right of the search. */
+  /* Toolbar layout on mobile: [☰ Teams] [search……] [⋯ filters] [☰ Log] on one row.
+     The two filter checkboxes live in a popover opened by the ellipsis button. */
   #mobile-teams-btn { display: inline-flex; order: 1; flex-shrink: 0; }
-  .toolbar-search   { order: 2; flex: 1 1 120px; min-width: 90px; max-width: none; }
-  #mobile-activity-btn { display: inline-flex; order: 3; flex-shrink: 0; }
-  .toolbar-toggle   { order: 4; }
-  .toolbar .toolbar-toggle { font-size: 11px; padding: 5px 8px; flex: 0 1 auto; }
-  .toolbar .btn { padding: 7px 10px; }   /* tighter buttons to save row width */
-  .toolbar .btn-icon { padding: 6px 10px; display: inline-flex; align-items: center; justify-content: center; }
+  .toolbar-search   { order: 2; flex: 1 1 90px; min-width: 70px; max-width: none; }
+  #filter-btn       { display: inline-flex; order: 3; flex-shrink: 0; }
+  #mobile-activity-btn { display: inline-flex; order: 4; flex-shrink: 0; }
+
+  /* Filters popover: anchored to the toolbar's right edge, below it. */
+  .toolbar { position: sticky; }
+  .toolbar-filters {
+    position: absolute; top: calc(100% + 4px); right: 8px; z-index: 55;
+    flex-direction: column; align-items: stretch; gap: 6px;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+    display: none;
+  }
+  .toolbar-filters.open { display: flex; }
+  .toolbar-filters .toolbar-toggle { font-size: 12px; }
+  .toolbar .btn-icon { padding: 6px 9px; display: inline-flex; align-items: center; justify-content: center; }
   .toolbar .btn-icon svg { display: block; }
 
   /* The toolbar is the sticky element on mobile; pin it flush under the nav with
@@ -502,12 +514,21 @@ body.overlay-open { overflow: hidden; }
         <button class="sc" id="search-clear" onclick="clearSearch()">✕</button>
         <div class="search-results" id="search-results"></div>
       </div>
-      <label class="toolbar-toggle" title="Hide Pokémon that are already on a roster">
-        <input type="checkbox" id="hide-drafted" onchange="toggleHideDrafted()"> Hide Drafted
-      </label>
-      <label class="toolbar-toggle" title="Show sprites only (no names), with smaller cards">
-        <input type="checkbox" id="sprites-only" onchange="toggleSpritesOnly()"> Sprites Only
-      </label>
+      <button class="btn btn-icon" id="filter-btn" onclick="toggleFilters(event)" title="Pool filters" aria-label="Pool filters">
+        <svg viewBox="0 0 22 16" width="20" height="15" aria-hidden="true">
+          <circle cx="4" cy="8" r="1.8" fill="currentColor"/>
+          <circle cx="11" cy="8" r="1.8" fill="currentColor"/>
+          <circle cx="18" cy="8" r="1.8" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="toolbar-filters" id="toolbar-filters">
+        <label class="toolbar-toggle" title="Hide Pokémon that are already on a roster">
+          <input type="checkbox" id="hide-drafted" onchange="toggleHideDrafted()"> Hide Drafted
+        </label>
+        <label class="toolbar-toggle" title="Show sprites only (no names), with smaller cards">
+          <input type="checkbox" id="sprites-only" onchange="toggleSpritesOnly()"> Sprites Only
+        </label>
+      </div>
     </div>
 
     <div class="pool" id="pool"></div>
@@ -1124,6 +1145,18 @@ function toggleSpritesOnly() {
   document.getElementById('pool').classList.toggle('sprites-only', spritesOnly);
   savePins();
 }
+// Mobile filters popover (the ellipsis button). Toggles open; closes on outside click.
+function toggleFilters(e) {
+  if (e) e.stopPropagation();
+  const f = document.getElementById('toolbar-filters');
+  f.classList.toggle('open');
+}
+document.addEventListener('click', function (e) {
+  const f = document.getElementById('toolbar-filters');
+  if (!f || !f.classList.contains('open')) return;
+  if (f.contains(e.target) || e.target.closest('#filter-btn')) return;
+  f.classList.remove('open');
+});
 
 // ── SEARCH (opacity-only dim in the pool + a selectable results dropdown) ──
 let srResults = [];          // current dropdown matches
