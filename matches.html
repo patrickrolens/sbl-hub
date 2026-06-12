@@ -47,6 +47,8 @@ a { color: inherit; }
 .stage-divider { height: 1px; background: var(--border); margin: 20px 0; }
 
 .match-line { display: flex; align-items: center; gap: 8px; padding: 6px 7px; border-radius: 7px; cursor: pointer; margin: 0 -3px; }
+/* Zebra banding within each week block (h3 is child 1, so odd targets rows 2,4,…). */
+.match-line:nth-child(odd) { background: rgba(255,255,255,.03); }
 .match-line:hover { background: var(--bg3); }
 .match-line.selected { background: var(--bg3); outline: 1px solid var(--accent); }
 .match-line .sc { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text3); flex-shrink: 0; }
@@ -54,6 +56,7 @@ a { color: inherit; }
 .match-line .mu { flex: 1 1 auto; min-width: 0; font-size: 12px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .match-line .vs { color: var(--text3); margin: 0 3px; }
 .match-line .pl { color: var(--text3); }
+.match-line .ml-stage { display: inline-block; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text3); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: middle; }
 
 .empty-state { color: var(--text3); font-size: 13px; font-style: italic; padding: 28px 4px; }
 
@@ -414,15 +417,14 @@ function renderSchedule() {
 
   const post = matches.filter(m => m.stage !== 'regular');
   if (post.length) {
-    const groups = {};
-    post.forEach(m => { const k = m.stage + '|' + m.week; (groups[k] = groups[k] || []).push(m); });
+    // One block per postseason week, combining Playoffs + Cup into "Postseason".
+    const byWeek = {};
+    post.forEach(m => { (byWeek[m.week] = byWeek[m.week] || []).push(m); });
     h += '<div class="stage-divider"></div><div class="week-grid">';
-    Object.keys(groups).sort((A, B) => {
-      const [sa, wa] = A.split('|'), [sB, wB] = B.split('|');
-      return (+wa) - (+wB) || stageRank(sa) - stageRank(sB);
-    }).forEach(k => {
-      const [s, w] = k.split('|');
-      h += weekBlockHtml('Week ' + w + ' — ' + stageLabel(s), +w, groups[k], cw);
+    Object.keys(byWeek).map(Number).sort((a, b) => a - b).forEach(w => {
+      // Playoffs matches first, then Cup (stageRank: playoffs 0, cup 1).
+      const list = byWeek[w].slice().sort((a, b) => stageRank(a.stage) - stageRank(b.stage));
+      h += weekBlockHtml('Week ' + w + ' — Postseason', w, list, cw, true);
     });
     h += '</div>';
   }
@@ -431,17 +433,23 @@ function renderSchedule() {
   el.querySelectorAll('.match-line').forEach(r => { r.onclick = () => selectMatch(r.getAttribute('data-id')); });
 }
 
-function weekBlockHtml(label, week, mlist, cw) {
-  const lines = [...mlist]
-    .sort((a, b) => coachLabelText(a.team_a_id, a.week).localeCompare(coachLabelText(b.team_a_id, b.week)))
-    .map(m => {
-      const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
-      const sel = m.id === selectedMatchId ? ' selected' : '';
-      return '<div class="match-line' + sel + '" data-id="' + m.id + '">'
-        + '<span class="sc ' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
-        + '<span class="mu">' + matchupCoachHtml(m) + '</span>'
-        + '<span class="sc ' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>';
-    }).join('');
+function weekBlockHtml(label, week, mlist, cw, grouped) {
+  // Default: alphabetical by first coach. Combined postseason: playoffs before cup,
+  // alphabetical within each stage.
+  const sorted = [...mlist].sort((a, b) =>
+    (grouped ? (stageRank(a.stage) - stageRank(b.stage)) : 0)
+    || coachLabelText(a.team_a_id, a.week).localeCompare(coachLabelText(b.team_a_id, b.week)));
+  const lines = sorted.map(m => {
+    const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
+    const sel = m.id === selectedMatchId ? ' selected' : '';
+    // In a combined postseason block, tag each line with its stage so Playoffs/Cup
+    // remain distinguishable.
+    const tag = grouped ? '<span class="ml-stage">' + escapeHtml(stageLabel(m.stage)) + '</span>' : '';
+    return '<div class="match-line' + sel + '" data-id="' + m.id + '">'
+      + '<span class="sc ' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
+      + '<span class="mu">' + matchupCoachHtml(m) + tag + '</span>'
+      + '<span class="sc ' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>';
+  }).join('');
   return '<div class="week-block' + (week === cw ? ' current' : '') + '"><h3>' + escapeHtml(label) + '</h3>' + lines + '</div>';
 }
 
