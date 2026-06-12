@@ -405,9 +405,17 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   .upnext-col { width: 100%; }
   .pool { padding: 12px; }
 
-  /* Reveal the open-overlay buttons. Log is pushed to the right edge. */
-  #mobile-teams-btn { display: inline-flex; }
-  #mobile-activity-btn { display: inline-flex; margin-left: auto; }
+  /* Toolbar layout on mobile: [Teams] [search……] [Log] on the first row (search
+     fills the middle, Log pinned right), with the checkboxes wrapping to a second
+     row. flex order overrides DOM order so Log lands right of the search. */
+  #mobile-teams-btn { display: inline-flex; order: 1; flex-shrink: 0; }
+  .toolbar-search   { order: 2; flex: 1 1 120px; min-width: 90px; max-width: none; }
+  #mobile-activity-btn { display: inline-flex; order: 3; flex-shrink: 0; }
+  .toolbar-toggle   { order: 4; }
+  .toolbar .toolbar-toggle { font-size: 11px; padding: 5px 8px; flex: 0 1 auto; }
+  .toolbar .btn { padding: 7px 10px; }   /* tighter buttons to save row width */
+  .toolbar .btn-icon { padding: 6px 10px; display: inline-flex; align-items: center; justify-content: center; }
+  .toolbar .btn-icon svg { display: block; }
 
   /* The toolbar is the sticky element on mobile; pin it flush under the nav with
      no seam. (Pull up 1px to cover sub-pixel rounding between the two sticky bars.) */
@@ -475,8 +483,18 @@ body.overlay-open { overflow: hidden; }
     </div>
 
     <div class="toolbar">
-      <button class="btn" id="mobile-teams-btn" onclick="toggleSidebar()">☰ Teams</button>
-      <button class="btn" id="mobile-activity-btn" onclick="toggleActivity()" title="Activity log">☰ Log</button>
+      <button class="btn btn-icon" id="mobile-teams-btn" onclick="toggleSidebar()" title="Teams" aria-label="Teams">
+        <svg viewBox="0 0 22 16" width="20" height="15" aria-hidden="true">
+          <path d="M6 2h14M6 8h14M6 14h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <path d="M4 5 1 8l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </button>
+      <button class="btn btn-icon" id="mobile-activity-btn" onclick="toggleActivity()" title="Activity log" aria-label="Activity log">
+        <svg viewBox="0 0 22 16" width="20" height="15" aria-hidden="true">
+          <path d="M2 2h14M2 8h14M2 14h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <path d="M18 5l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </button>
       <div class="toolbar-search">
         <span class="si">🔍</span>
         <input type="text" id="search-input" placeholder="Search Pokémon…" autocomplete="off"
@@ -1138,22 +1156,21 @@ function renderSearchResults() {
   const el = document.getElementById('search-results');
   if (!searchQ) { closeSearchResults(); return; }
   srResults = Object.values(pokemonById)
-    .filter(m => (m.name || '').toLowerCase().includes(searchQ) || (m.id || '').toLowerCase().startsWith(searchQ))
+    .filter(m => (m.id in tierCost)   // legal only — illegal mons aren't draftable
+      && ((m.name || '').toLowerCase().includes(searchQ) || (m.id || '').toLowerCase().startsWith(searchQ)))
     .sort((a, b) => a.name.localeCompare(b.name))
     .slice(0, 18);
   srHighlight = -1;
   if (!srResults.length) { el.innerHTML = '<div class="sr-empty">No matches</div>'; el.classList.add('open'); return; }
   el.innerHTML = srResults.map((m, i) => {
     const drafted = draftedSet.has(m.id);
-    const legal = (m.id in tierCost);
-    const cost = legal ? tierCost[m.id] + ' pts' : 'Illegal';
-    const costColor = legal ? 'var(--accent)' : 'var(--red)';
+    const cost = tierCost[m.id] + ' pts';
     const sub = [m.type1, m.type2].filter(Boolean).join(' / ');
     return '<div class="sr-item' + (drafted ? ' drafted-r' : '') + '" data-idx="' + i + '" onmousedown="event.preventDefault();pickSearchResult(' + i + ')">'
       + '<img class="sr-sprite" src="' + spriteUrl(m) + '" alt="" onerror="this.onerror=null;this.src=this.src.replace(\'/sprites/\',\'/icons/\')">'
       + '<div><div class="sr-name">' + escapeHtml(m.name) + (drafted ? ' <span style="color:var(--red);font-size:10px">· drafted</span>' : '') + '</div>'
       + '<div class="sr-sub">' + escapeHtml(sub) + '</div></div>'
-      + '<span class="sr-pts" style="color:' + costColor + '">' + cost + '</span>'
+      + '<span class="sr-pts" style="color:var(--accent)">' + cost + '</span>'
       + '</div>';
   }).join('');
   el.classList.add('open');
