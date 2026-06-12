@@ -98,14 +98,17 @@ a { color: inherit; }
 .game-sides { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 12px; align-items: start; }
 .game-divider { background: var(--border); width: 1px; align-self: stretch; }
 .game-side { min-width: 0; }
-/* Tighter K/F columns sit close to their Pokémon; banding on alternating rows. */
-.game-grid { display: grid; grid-template-columns: 1fr auto auto; column-gap: 0; row-gap: 0; align-items: center; }
+/* Tighter K/F columns sit close to their Pokémon; banding on alternating rows.
+   Name column hugs its content so K/F sit just past the longest name (not pushed
+   to the far edge), with a little breathing room before the K column. */
+.game-grid { display: grid; grid-template-columns: auto auto auto; column-gap: 0; row-gap: 0; align-items: center; justify-content: start; }
 .game-grid .gg-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text3); padding-bottom: 4px; }
-.game-grid .gg-head.gg-mon { text-align: left; }
-.game-grid .gg-head.gg-num { padding-left: 6px; }
+.game-grid .gg-head.gg-mon { text-align: center; }
 .game-grid .gg-mon { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; padding: 4px 4px 4px 3px; }
 .game-grid .gg-mon img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
 .game-grid .gg-mon .gmn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Padding before the K column so it isn't flush against the longest name. */
+.game-grid .gg-k { padding-left: 16px; }
 .game-grid .gg-num { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; min-width: 24px; padding: 4px 0; }
 .game-grid .band { background: rgba(255,255,255,.04); }
 .game-grid .gg-mon.band { border-radius: 5px 0 0 5px; }
@@ -141,6 +144,13 @@ a { color: inherit; }
   .detail-head { position: sticky; top: var(--nav-h); z-index: 40; }
   .detail-body { overflow: visible; }
   body.panel-open .schedule-col { display: none; }
+  /* Game grids go icons-only so names never truncate in the narrow panel. The
+     brought-six row above still carries names via its tooltips. */
+  .game-grid .gg-mon .gmn { display: none; }
+  .game-grid .gg-head.gg-mon { font-size: 0; }            /* hide "Pokémon" label */
+  .game-grid .gg-mon { justify-content: center; padding: 4px 6px; }
+  .game-grid .gg-mon img { width: 30px; height: 30px; }   /* a touch larger since it stands alone */
+  .game-grid .gg-k { padding-left: 10px; }
 }
 @media (max-width: 768px) {
   .week-grid { grid-template-columns: 1fr; }
@@ -515,14 +525,14 @@ function gameHtml(m, g, d) {
     const rows = d.stats.filter(s => s.game_id === g.id && s.team_id === teamId);
     if (!rows.length) return '<div class="dm-empty">—</div>';
     let gh = '<div class="game-grid">'
-      + '<div class="gg-head gg-mon">Pokémon</div><div class="gg-head gg-num">K</div><div class="gg-head gg-num">F</div>';
+      + '<div class="gg-head gg-mon">Pokémon</div><div class="gg-head gg-num gg-k">K</div><div class="gg-head gg-num">F</div>';
     rows.forEach((s, i) => {
       const fainted = (s.deaths || 0) > 0;
       const band = i % 2 === 1 ? ' band' : '';
       gh += '<div class="gg-mon' + (fainted ? ' fainted' : '') + band + '">'
         + '<img src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
         + '<span class="gmn">' + escapeHtml(monName(s.pokemon_id)) + '</span></div>'
-        + '<div class="gg-num' + band + '">' + (s.kills || 0) + '</div>'
+        + '<div class="gg-num gg-k' + band + '">' + (s.kills || 0) + '</div>'
         + '<div class="gg-num' + band + '">' + (s.deaths || 0) + '</div>';
     });
     gh += '</div>';
