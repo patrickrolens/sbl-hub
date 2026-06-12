@@ -69,32 +69,40 @@ a { color: inherit; }
 .dm-meta { text-align: center; font-size: 11px; color: var(--text3); margin-top: 2px; margin-bottom: 14px; }
 
 .dm-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.dm-top { margin-bottom: 18px; }
+/* Top brought-row: team | vertical divider | team. */
+.dm-sides.dm-top { grid-template-columns: 1fr 1px 1fr; gap: 12px; margin-bottom: 18px; }
+.dm-side-divider { background: var(--border); width: 1px; align-self: stretch; }
 .dm-side { min-width: 0; }
 .dm-team { display: block; font-size: 13px; font-weight: 700; text-decoration: none; margin-bottom: 8px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
 .dm-team:hover { color: var(--accent); }
 .dm-team .pl { color: var(--text3); font-weight: 400; }
-.brought-row { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
-.brought-row img.bi { width: 38px; height: 38px; object-fit: contain; }
-.brought-row img.ball { opacity: .4; }
+.brought-row { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+.brought-row img.bi { width: 40px; height: 40px; object-fit: contain; border-bottom: 2px solid transparent; padding-bottom: 1px; cursor: pointer; border-radius: 3px; }
+/* Appeared in battle → white underline; team top-KO scorer(s) → yellow (overrides). */
+.brought-row img.bi.played { border-bottom-color: var(--text); }
+.brought-row img.bi.top-ko { border-bottom-color: var(--yellow); }
+.brought-row img.ball { width: 40px; height: 40px; opacity: .4; }
 
 .dm-section-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin: 4px 0 9px; padding-top: 14px; border-top: 1px solid var(--border); }
-.stat-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 12px; }
-.stat-row img.si { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
-.stat-row .sn { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stat-row .sk, .stat-row .sf { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text3); flex-shrink: 0; }
-.stat-row .sk { color: var(--blue); }
+.dm-section-title.center { text-align: center; }
 
+/* ── GAME CARD: per-team Pokémon / K / F grid, vertical divider between teams. ── */
 .dm-game { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin-bottom: 8px; }
-.dm-game-head { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 8px; }
+.dm-game-head { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 8px; text-align: center; }
 .dm-game-head .gw { color: var(--blue); }
 .dm-game-head .replay { color: var(--accent); text-decoration: none; font-weight: 600; }
 .dm-game-head .replay:hover { text-decoration: underline; }
-.dm-game .dm-sides { gap: 10px; }
-.game-mon { display: flex; align-items: center; gap: 5px; padding: 2px 0; font-size: 11px; }
-.game-mon img { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
-.game-mon .gmn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.game-mon.fainted { opacity: .42; }
+.game-sides { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 10px; align-items: start; }
+.game-divider { background: var(--border); width: 1px; align-self: stretch; }
+.game-side { min-width: 0; }
+.game-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 1px 8px; align-items: center; }
+.game-grid .gg-head { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text3); padding-bottom: 3px; }
+.game-grid .gg-head.gg-mon { text-align: left; }
+.game-grid .gg-mon { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; }
+.game-grid .gg-mon img { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.game-grid .gg-mon .gmn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-grid .gg-num { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; min-width: 16px; }
+.game-grid .gg-mon.fainted { opacity: .45; }
 
 /* ── CHRONOLOGICAL LIST (no selection) ── */
 .chrono { display: flex; flex-direction: column; gap: 4px; }
@@ -134,6 +142,7 @@ a { color: inherit; }
 <body>
 
 <script src="/nav.js"></script>
+<script src="/tooltip.js?v=2"></script>
 
 <div id="boot-banner" class="banner">Loading…</div>
 
@@ -451,26 +460,39 @@ function broughtIds(matchId, teamId) {
   }
   return ids.slice(0, 6);
 }
-function broughtIconsHtml(ids) {
+
+// Per-Pokémon match contribution for a team: { id: {kos, faints, played} }.
+function monStatsFor(matchId, teamId) {
+  const d = matchDetailCache[matchId]; if (!d) return {};
+  const out = {};
+  d.stats.filter(s => s.team_id === teamId).forEach(s => {
+    const o = out[s.pokemon_id] = out[s.pokemon_id] || { kos: 0, faints: 0, played: false };
+    o.kos += s.kills || 0; o.faints += s.deaths || 0; o.played = true;   // a stat row = appeared in that game
+  });
+  return out;
+}
+
+// The brought-six row: each icon tooltipped with KOs/Faints; white bottom border if
+// the mon appeared in battle, yellow if it was (one of) the team's top KO scorer(s).
+// Pokéball placeholders and never-played mons get no border.
+function broughtIconsHtml(ids, stats) {
+  // Top-KO threshold for this team (only meaningful if > 0).
+  let topKos = 0;
+  ids.forEach(id => { const o = stats[id]; if (o && o.kos > topKos) topKos = o.kos; });
+
   let h = '';
   for (let i = 0; i < 6; i++) {
     const id = ids[i];
-    if (id) h += '<img class="bi" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="' + escapeHtml(monName(id)) + '" title="' + escapeHtml(monName(id)) + '">';
-    else h += '<img class="bi ball" src="' + POKEBALL_FALLBACK + '" alt="">';
+    if (!id) { h += '<img class="bi ball" src="' + POKEBALL_FALLBACK + '" alt="">'; continue; }
+    const o = stats[id] || { kos: 0, faints: 0, played: false };
+    let cls = 'bi';
+    if (o.played) cls += (topKos > 0 && o.kos === topKos) ? ' top-ko' : ' played';
+    const tip = 'KOs ' + o.kos + ' · Faints ' + o.faints;
+    h += '<img class="' + cls + '" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '"'
+      + ' alt="' + escapeHtml(monName(id)) + '"'
+      + ' data-tip-title="' + escapeHtml(monName(id)) + '" data-tip="' + escapeHtml(tip) + '">';
   }
   return h;
-}
-function statListHtml(matchId, teamId) {
-  const d = matchDetailCache[matchId];
-  const ids = broughtIds(matchId, teamId);
-  if (!ids.length) return '<div class="dm-empty">No data</div>';
-  return ids.map(id => {
-    let k = 0, dd = 0;
-    d.stats.filter(s => s.team_id === teamId && s.pokemon_id === id).forEach(s => { k += s.kills || 0; dd += s.deaths || 0; });
-    return '<div class="stat-row"><img class="si" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="">'
-      + '<span class="sn">' + escapeHtml(monName(id)) + '</span>'
-      + '<span class="sk">' + k + ' K</span><span class="sf">' + dd + ' F</span></div>';
-  }).join('');
 }
 function gameHtml(m, g, d) {
   const winName = g.winner_team_id ? teamName(g.winner_team_id) : null;
@@ -478,34 +500,52 @@ function gameHtml(m, g, d) {
   if (winName) head += ' \u00B7 <span class="gw">' + escapeHtml(winName) + ' won</span>';
   if (g.replay_url) head += ' \u00B7 <a class="replay" href="' + escapeHtml(g.replay_url) + '" target="_blank" rel="noopener">Replay \u2197</a>';
 
-  const sideHtml = teamId => {
+  // One team's grid: a header row (Pokémon / K / F) then a row per mon.
+  const sideGrid = teamId => {
     const rows = d.stats.filter(s => s.game_id === g.id && s.team_id === teamId);
     if (!rows.length) return '<div class="dm-empty">—</div>';
-    return rows.map(s => '<div class="game-mon' + ((s.deaths || 0) > 0 ? ' fainted' : '') + '">'
-      + '<img src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
-      + '<span class="gmn">' + escapeHtml(monName(s.pokemon_id)) + '</span></div>').join('');
+    let gh = '<div class="game-grid">'
+      + '<div class="gg-head gg-mon">Pokémon</div><div class="gg-head gg-num">K</div><div class="gg-head gg-num">F</div>';
+    rows.forEach(s => {
+      const fainted = (s.deaths || 0) > 0;
+      gh += '<div class="gg-mon' + (fainted ? ' fainted' : '') + '">'
+        + '<img src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
+        + '<span class="gmn">' + escapeHtml(monName(s.pokemon_id)) + '</span></div>'
+        + '<div class="gg-num">' + (s.kills || 0) + '</div>'
+        + '<div class="gg-num">' + (s.deaths || 0) + '</div>';
+    });
+    gh += '</div>';
+    return gh;
   };
   return '<div class="dm-game"><div class="dm-game-head">' + head + '</div>'
-    + '<div class="dm-sides"><div class="dm-side">' + sideHtml(m.team_a_id) + '</div>'
-    + '<div class="dm-side">' + sideHtml(m.team_b_id) + '</div></div></div>';
+    + '<div class="game-sides">'
+    +   '<div class="game-side">' + sideGrid(m.team_a_id) + '</div>'
+    +   '<div class="game-divider"></div>'
+    +   '<div class="game-side">' + sideGrid(m.team_b_id) + '</div>'
+    + '</div></div>';
 }
 
 function renderMatchDetail(body, m, d) {
   const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
   const h = [];
   h.push('<div class="dm-score"><span class="' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span><span class="dash">–</span><span class="' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>');
-  h.push('<div class="dm-meta">' + escapeHtml(stageLabel(m.stage)) + ' \u00B7 Week ' + m.week + ' \u00B7 Bo' + (m.series_length || 3) + ' \u00B7 ' + escapeHtml(fmtDateTime(m.match_date)) + '</div>');
+  // Meta line: omit the date entirely when there isn't one (no "TBD").
+  let meta = escapeHtml(stageLabel(m.stage)) + ' \u00B7 Week ' + m.week + ' \u00B7 Bo' + (m.series_length || 3);
+  if (m.match_date) meta += ' \u00B7 ' + escapeHtml(fmtDateTime(m.match_date));
+  h.push('<div class="dm-meta">' + meta + '</div>');
 
+  // Per-team: name + brought-six. Each icon is tooltipped with KOs/Faints; white
+  // bottom border = appeared in battle, yellow = team's top KO scorer(s).
   h.push('<div class="dm-sides dm-top">');
-  [m.team_a_id, m.team_b_id].forEach(teamId => {
-    h.push('<div class="dm-side">' + teamLinkHtml(teamId, m.week) + '<div class="brought-row">' + broughtIconsHtml(broughtIds(m.id, teamId)) + '</div></div>');
+  [m.team_a_id, m.team_b_id].forEach((teamId, i) => {
+    const stats = monStatsFor(m.id, teamId);
+    h.push('<div class="dm-side">' + teamLinkHtml(teamId, m.week)
+      + '<div class="brought-row">' + broughtIconsHtml(broughtIds(m.id, teamId), stats) + '</div></div>');
+    if (i === 0) h.push('<div class="dm-side-divider"></div>');
   });
   h.push('</div>');
 
-  h.push('<div class="dm-section-title">Brought Pokémon &amp; stats</div>');
-  h.push('<div class="dm-sides"><div class="dm-side">' + statListHtml(m.id, m.team_a_id) + '</div><div class="dm-side">' + statListHtml(m.id, m.team_b_id) + '</div></div>');
-
-  h.push('<div class="dm-section-title">Games</div>');
+  h.push('<div class="dm-section-title center">Games</div>');
   if (d.games.length) {
     d.games.forEach(g => h.push(gameHtml(m, g, d)));
   } else {
@@ -514,6 +554,7 @@ function renderMatchDetail(body, m, d) {
 
   body.innerHTML = h.join('');
   body.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
+  if (window.SBLTooltip) window.SBLTooltip.refresh();
 }
 
 function renderChrono(body) {
