@@ -88,20 +88,28 @@ a { color: inherit; }
 
 /* ── GAME CARD: per-team Pokémon / K / F grid, vertical divider between teams. ── */
 .dm-game { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin-bottom: 8px; }
-.dm-game-head { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 8px; text-align: center; }
+/* Header: title centered, replay pinned top-left over it. */
+.dm-game-head { position: relative; font-size: 13px; font-weight: 700; color: var(--text2); margin-bottom: 9px; text-align: center; min-height: 18px; }
+.dm-game-head .gh-title { display: inline-block; }
+.dm-game-head .gh-replay { position: absolute; left: 0; top: 0; }
 .dm-game-head .gw { color: var(--blue); }
-.dm-game-head .replay { color: var(--accent); text-decoration: none; font-weight: 600; }
+.dm-game-head .replay { color: var(--accent); text-decoration: none; font-weight: 600; font-size: 12px; }
 .dm-game-head .replay:hover { text-decoration: underline; }
-.game-sides { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 10px; align-items: start; }
+.game-sides { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 12px; align-items: start; }
 .game-divider { background: var(--border); width: 1px; align-self: stretch; }
 .game-side { min-width: 0; }
-.game-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 1px 8px; align-items: center; }
-.game-grid .gg-head { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text3); padding-bottom: 3px; }
+/* Tighter K/F columns sit close to their Pokémon; banding on alternating rows. */
+.game-grid { display: grid; grid-template-columns: 1fr auto auto; column-gap: 0; row-gap: 0; align-items: center; }
+.game-grid .gg-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text3); padding-bottom: 4px; }
 .game-grid .gg-head.gg-mon { text-align: left; }
-.game-grid .gg-mon { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; }
-.game-grid .gg-mon img { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.game-grid .gg-head.gg-num { padding-left: 6px; }
+.game-grid .gg-mon { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; padding: 4px 4px 4px 3px; }
+.game-grid .gg-mon img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
 .game-grid .gg-mon .gmn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.game-grid .gg-num { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; min-width: 16px; }
+.game-grid .gg-num { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; min-width: 24px; padding: 4px 0; }
+.game-grid .band { background: rgba(255,255,255,.04); }
+.game-grid .gg-mon.band { border-radius: 5px 0 0 5px; }
+.game-grid .gg-num.band:last-child { border-radius: 0 5px 5px 0; }
 .game-grid .gg-mon.fainted { opacity: .45; }
 
 /* ── CHRONOLOGICAL LIST (no selection) ── */
@@ -496,9 +504,11 @@ function broughtIconsHtml(ids, stats) {
 }
 function gameHtml(m, g, d) {
   const winName = g.winner_team_id ? teamName(g.winner_team_id) : null;
-  let head = 'Game ' + g.game_number;
-  if (winName) head += ' \u00B7 <span class="gw">' + escapeHtml(winName) + ' won</span>';
-  if (g.replay_url) head += ' \u00B7 <a class="replay" href="' + escapeHtml(g.replay_url) + '" target="_blank" rel="noopener">Replay \u2197</a>';
+  let title = 'Game ' + g.game_number;
+  if (winName) title += ' \u00B7 <span class="gw">' + escapeHtml(winName) + ' won</span>';
+  const replay = g.replay_url
+    ? '<a class="replay" href="' + escapeHtml(g.replay_url) + '" target="_blank" rel="noopener">Replay \u2197</a>'
+    : '';
 
   // One team's grid: a header row (Pokémon / K / F) then a row per mon.
   const sideGrid = teamId => {
@@ -506,18 +516,20 @@ function gameHtml(m, g, d) {
     if (!rows.length) return '<div class="dm-empty">—</div>';
     let gh = '<div class="game-grid">'
       + '<div class="gg-head gg-mon">Pokémon</div><div class="gg-head gg-num">K</div><div class="gg-head gg-num">F</div>';
-    rows.forEach(s => {
+    rows.forEach((s, i) => {
       const fainted = (s.deaths || 0) > 0;
-      gh += '<div class="gg-mon' + (fainted ? ' fainted' : '') + '">'
+      const band = i % 2 === 1 ? ' band' : '';
+      gh += '<div class="gg-mon' + (fainted ? ' fainted' : '') + band + '">'
         + '<img src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
         + '<span class="gmn">' + escapeHtml(monName(s.pokemon_id)) + '</span></div>'
-        + '<div class="gg-num">' + (s.kills || 0) + '</div>'
-        + '<div class="gg-num">' + (s.deaths || 0) + '</div>';
+        + '<div class="gg-num' + band + '">' + (s.kills || 0) + '</div>'
+        + '<div class="gg-num' + band + '">' + (s.deaths || 0) + '</div>';
     });
     gh += '</div>';
     return gh;
   };
-  return '<div class="dm-game"><div class="dm-game-head">' + head + '</div>'
+  return '<div class="dm-game">'
+    + '<div class="dm-game-head">' + (replay ? '<span class="gh-replay">' + replay + '</span>' : '') + '<span class="gh-title">' + title + '</span></div>'
     + '<div class="game-sides">'
     +   '<div class="game-side">' + sideGrid(m.team_a_id) + '</div>'
     +   '<div class="game-divider"></div>'
