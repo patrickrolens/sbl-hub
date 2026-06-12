@@ -101,14 +101,14 @@ a { color: inherit; }
 /* Tighter K/F columns sit close to their Pokémon; banding on alternating rows.
    Name column hugs its content so K/F sit just past the longest name (not pushed
    to the far edge), with a little breathing room before the K column. */
-.game-grid { display: grid; grid-template-columns: auto auto auto; column-gap: 0; row-gap: 0; align-items: center; justify-content: start; }
+.game-grid { display: grid; grid-template-columns: auto auto auto; column-gap: 0; row-gap: 0; align-items: center; justify-content: center; }
 .game-grid .gg-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text3); padding-bottom: 4px; }
 .game-grid .gg-head.gg-mon { text-align: center; }
 .game-grid .gg-mon { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; padding: 4px 4px 4px 3px; }
 .game-grid .gg-mon img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
 .game-grid .gg-mon .gmn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Padding before the K column so it isn't flush against the longest name. */
-.game-grid .gg-k { padding-left: 16px; }
+.game-grid .gg-k { padding-left: 36px; }
 .game-grid .gg-num { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; min-width: 24px; padding: 4px 0; }
 .game-grid .band { background: rgba(255,255,255,.04); }
 .game-grid .gg-mon.band { border-radius: 5px 0 0 5px; }
