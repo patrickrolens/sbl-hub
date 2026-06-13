@@ -27,8 +27,14 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .card-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; margin-bottom: 10px; }
 .empty { font-size: 12px; color: var(--text3); font-style: italic; padding: 8px 0; }
 
-/* ─── FILTER TOOLBAR ─── */
-.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* ─── FILTER TOOLBAR (sits atop the table, sticky beneath the nav) ─── */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.table-card { padding-top: 0; }
+#filter-bar {
+  position: sticky; top: var(--nav-h); z-index: 6;
+  background: var(--bg2); padding: 14px 0 12px; margin: 0 0 2px;
+  border-bottom: 1px solid var(--border);
+}
 .toolbar .field { display: flex; flex-direction: column; gap: 3px; }
 .toolbar label { font-size: 9px; font-weight: 700; letter-spacing: .4px; color: var(--text3); text-transform: uppercase; }
 .toolbar input, .toolbar select { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 7px 9px; outline: none; font-family: inherit; }
@@ -37,30 +43,35 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .toolbar .count { margin-left: auto; font-size: 11px; color: var(--text3); align-self: flex-end; padding-bottom: 7px; }
 
 /* ─── SCATTER ─── */
-.scatter-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-.scatter-head .card-title { margin: 0; }
-.scatter-head .field { display: flex; align-items: center; gap: 6px; }
+.scatter-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin-bottom: 10px; }
+.scatter-head .scatter-expand { justify-self: start; }
+.scatter-head .scatter-title { grid-column: 2; margin: 0; text-align: center; font-size: 15px; color: var(--text); }
+.scatter-head .field { justify-self: end; flex-direction: row; align-items: center; gap: 6px; }
+.scatter-expand { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text2); font-size: 15px; line-height: 1; padding: 5px 9px; cursor: pointer; }
+.scatter-expand:hover { color: var(--text); border-color: var(--accent); }
 .scatter-head label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; font-weight: 700; }
 .scatter-head select { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 6px 8px; outline: none; font-family: inherit; }
 .scatter-wrap { width: 100%; }
 .scatter-wrap svg { width: 100%; height: auto; display: block; }
+.scatter-wrap.expanded svg { height: calc(100vh - 220px); max-height: 80vh; }
 .axis-line { stroke: var(--border); stroke-width: 1; }
 .axis-label { fill: var(--text3); font-size: 11px; font-weight: 600; }
 .tick-label { fill: var(--text3); font-size: 10px; }
-.dot { fill: var(--accent); fill-opacity: .55; stroke: var(--accent); stroke-opacity: .9; }
 .scatter-empty { fill: var(--text3); font-size: 13px; font-style: italic; }
 
 /* ─── TABLE ─── */
 .table-scroll { overflow-x: auto; }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
-.tbl th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 7px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: var(--nav-h); background: var(--bg2); }
+/* Header sticks just below the sticky filter bar (nav + ~filter height). Solid
+   background + border so rows never bleed through or overlap it. */
+.tbl th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 9px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: calc(var(--nav-h) + 62px); background: var(--bg2); z-index: 4; }
 .tbl th:hover { color: var(--text2); }
 .tbl th .arrow { color: var(--accent); margin-left: 2px; }
 .tbl th.num, .tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tbl td { padding: 7px 8px; border-bottom: 1px solid var(--bg3); white-space: nowrap; }
 .tbl tbody tr:hover { background: var(--bg3); }
 .tbl .pl { color: var(--text3); font-weight: 400; }
-.tbl .pos { color: var(--green); } .tbl .neg { color: var(--red); }
+.tbl .pos { color: var(--blue); } .tbl .neg { color: var(--red); }
 .tbl .sub { color: var(--text3); font-weight: 400; }
 .tbl .inactive-tag { font-size: 9px; font-weight: 700; color: var(--text3); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; margin-left: 6px; text-transform: uppercase; }
 .mon-cell { display: flex; align-items: center; gap: 7px; }
@@ -83,20 +94,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 <div class="wrap" id="wrap" hidden>
 
   <div class="card">
-    <div class="toolbar">
-      <div class="field"><label>Search</label><input type="text" id="f-search" placeholder="Pokémon name…" oninput="applyFilters()"></div>
-      <div class="field"><label>Team</label><select id="f-team" onchange="applyFilters()"></select></div>
-      <div class="field"><label>Status</label><select id="f-status" onchange="applyFilters()"><option value="all">All</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
-      <div class="field"><label>Type</label><select id="f-type" onchange="applyFilters()"></select></div>
-      <span class="count" id="row-count"></span>
-    </div>
-  </div>
-
-  <div class="card">
     <div class="scatter-head">
-      <div class="card-title">KOs Scatter</div>
-      <div class="field"><label>Y axis</label>
-        <select id="scatter-y" onchange="renderScatter()">
+      <button class="scatter-expand" id="scatter-expand" onclick="toggleScatterExpand()" title="Expand chart" aria-label="Expand chart">⤢</button>
+      <div class="card-title scatter-title">KOs Scatter</div>
+      <div class="field"><label>X axis</label>
+        <select id="scatter-x" onchange="renderScatter()">
           <option value="faints">Faints</option>
           <option value="gp">Game Participation</option>
           <option value="mp">Match Participation</option>
@@ -106,7 +108,14 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
     <div class="scatter-wrap" id="scatter"></div>
   </div>
 
-  <div class="card">
+  <div class="card table-card">
+    <div class="toolbar" id="filter-bar">
+      <div class="field"><label>Search</label><input type="text" id="f-search" placeholder="Pokémon name…" oninput="applyFilters()"></div>
+      <div class="field"><label>Team</label><select id="f-team" onchange="applyFilters()"></select></div>
+      <div class="field"><label>Status</label><select id="f-status" onchange="applyFilters()"><option value="all">All</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+      <div class="field"><label>Type</label><select id="f-type" onchange="applyFilters()"></select></div>
+      <span class="count" id="row-count"></span>
+    </div>
     <div class="table-scroll">
       <table class="tbl" id="stats-table"></table>
     </div>
@@ -330,21 +339,27 @@ function renderTable() {
 }
 
 // ── SCATTER (hand-rolled SVG, no charting dependency) ──
-const Y_META = { faints: { label: 'Faints', get: r => r.faints }, gp: { label: 'Game Participation', get: r => r.gpCount }, mp: { label: 'Match Participation', get: r => r.mpCount } };
+// X = selectable stat, Y = KOs (axes swapped). Points are Pokémon icons; icons that
+// share a coordinate are fanned out in a small cluster so they don't fully overlap.
+const X_META = { faints: { label: 'Faints', get: r => r.faints }, gp: { label: 'Game Participation', get: r => r.gpCount }, mp: { label: 'Match Participation', get: r => r.mpCount } };
 function renderScatter() {
   const el = document.getElementById('scatter');
-  const yKey = document.getElementById('scatter-y').value;
-  const yMeta = Y_META[yKey];
-  const W = 640, H = 360, padL = 46, padB = 34, padT = 12, padR = 14;
+  const expanded = el.classList.contains('expanded');
+  const xKey = document.getElementById('scatter-x').value;
+  const xMeta = X_META[xKey];
+  // Bigger canvas when expanded.
+  const W = expanded ? 1100 : 720, H = expanded ? 620 : 380;
+  const padL = 46, padB = 38, padT = 14, padR = 18;
   const plotW = W - padL - padR, plotH = H - padT - padB, x0 = padL, y0 = H - padB;
 
-  const pts = filtered.map(r => ({ x: r.kos, y: yMeta.get(r), name: r.name, team: teamLabelText(r.team_id) }));
+  const pts = filtered.map(r => ({ x: xMeta.get(r), y: r.kos, id: r.pokemon_id, name: r.name, team: teamLabelText(r.team_id) }));
   const maxX = Math.max(1, ...pts.map(p => p.x));
   const maxY = Math.max(1, ...pts.map(p => p.y));
   const hasData = pts.some(p => p.x > 0 || p.y > 0);
 
   const sx = v => x0 + (v / maxX) * plotW;
   const sy = v => y0 - (v / maxY) * plotH;
+  const iconSize = expanded ? 26 : 20;
 
   let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img">';
   // axes
@@ -355,19 +370,49 @@ function renderScatter() {
   svg += '<text class="tick-label" x="' + (W - padR) + '" y="' + (y0 + 14) + '" text-anchor="end">' + maxX + '</text>';
   svg += '<text class="tick-label" x="' + (x0 - 6) + '" y="' + (y0 + 3) + '" text-anchor="end">0</text>';
   svg += '<text class="tick-label" x="' + (x0 - 6) + '" y="' + (padT + 8) + '" text-anchor="end">' + maxY + '</text>';
-  // axis titles
-  svg += '<text class="axis-label" x="' + (x0 + plotW / 2) + '" y="' + (H - 4) + '" text-anchor="middle">KOs</text>';
-  svg += '<text class="axis-label" transform="translate(13,' + (padT + plotH / 2) + ') rotate(-90)" text-anchor="middle">' + yMeta.label + '</text>';
+  // axis titles — X = selectable, Y = KOs
+  svg += '<text class="axis-label" x="' + (x0 + plotW / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + escapeHtml(xMeta.label) + '</text>';
+  svg += '<text class="axis-label" transform="translate(13,' + (padT + plotH / 2) + ') rotate(-90)" text-anchor="middle">KOs</text>';
 
   if (!hasData) {
     svg += '<text class="scatter-empty" x="' + (x0 + plotW / 2) + '" y="' + (padT + plotH / 2) + '" text-anchor="middle">No game data yet</text>';
   } else {
+    // Group points that land on the same pixel cell so we can fan them out.
+    const cells = {};
     pts.forEach(p => {
-      svg += '<circle class="dot" cx="' + sx(p.x).toFixed(1) + '" cy="' + sy(p.y).toFixed(1) + '" r="5">'
-        + '<title>' + escapeHtml(p.name) + (p.team ? ' — ' + escapeHtml(p.team) : '') + '\nKOs: ' + p.x + '  ·  ' + yMeta.label + ': ' + p.y + '</title></circle>';
+      const px = Math.round(sx(p.x)), py = Math.round(sy(p.y));
+      const key = px + ',' + py;
+      (cells[key] = cells[key] || { px, py, items: [] }).items.push(p);
     });
+    let imgs = '';
+    Object.values(cells).forEach(cell => {
+      const n = cell.items.length;
+      cell.items.forEach((p, i) => {
+        let cx = cell.px, cy = cell.py;
+        if (n > 1) {
+          // fan the cluster around the shared point on a small ring
+          const ring = iconSize * 0.55;
+          const ang = (i / n) * Math.PI * 2;
+          cx += Math.cos(ang) * ring;
+          cy += Math.sin(ang) * ring;
+        }
+        imgs += '<image href="' + iconUrl(monFor(p.id)) + '" x="' + (cx - iconSize / 2).toFixed(1) + '" y="' + (cy - iconSize / 2).toFixed(1) + '"'
+          + ' width="' + iconSize + '" height="' + iconSize + '" style="image-rendering:pixelated">'
+          + '<title>' + escapeHtml(p.name) + (p.team ? ' — ' + escapeHtml(p.team) : '') + '\nKOs: ' + p.y + '  ·  ' + xMeta.label + ': ' + p.x + '</title></image>';
+      });
+    });
+    svg += imgs;
   }
   el.innerHTML = svg + '</svg>';
+}
+
+function toggleScatterExpand() {
+  const el = document.getElementById('scatter');
+  el.classList.toggle('expanded');
+  const btn = document.getElementById('scatter-expand');
+  btn.textContent = el.classList.contains('expanded') ? '⤡' : '⤢';
+  btn.title = el.classList.contains('expanded') ? 'Collapse chart' : 'Expand chart';
+  renderScatter();
 }
 
 // ── populate filter dropdowns ──
