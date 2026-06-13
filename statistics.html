@@ -55,16 +55,25 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .scatter-wrap svg { width: 100%; height: auto; display: block; }
 .scatter-wrap.expanded svg { height: calc(100vh - 220px); max-height: 80vh; }
 .axis-line { stroke: var(--border); stroke-width: 1; }
+.grid-line { stroke: var(--border); stroke-opacity: .35; stroke-width: 1; }
 .axis-label { fill: var(--text3); font-size: 11px; font-weight: 600; }
 .tick-label { fill: var(--text3); font-size: 10px; }
 .scatter-empty { fill: var(--text3); font-size: 13px; font-style: italic; }
+/* Clickable outline circle marking each plotted coordinate. */
+.cl-ring { fill: rgba(124,111,247,.06); stroke: var(--accent); stroke-opacity: .5; stroke-width: 1.5; cursor: pointer; transition: fill .12s, stroke-opacity .12s; }
+.cl-ring:hover { fill: rgba(124,111,247,.16); stroke-opacity: .9; }
+/* Cluster tooltip (click a circle) — lists the point's values + Pokémon there. */
+#cluster-tip { position: fixed; z-index: 999; display: none; min-width: 150px; max-width: 240px; max-height: 320px; overflow-y: auto; background: var(--bg2); border: 1px solid var(--accent); border-radius: 8px; padding: 9px 11px; box-shadow: 0 10px 30px rgba(0,0,0,.55); font-size: 12px; }
+#cluster-tip .ct-head { font-weight: 700; color: var(--text); margin-bottom: 2px; }
+#cluster-tip .ct-sub { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
+#cluster-tip .ct-mon { color: var(--text2); padding: 2px 0; border-top: 1px solid var(--bg3); }
 
 /* ─── TABLE ─── */
 .table-scroll { overflow-x: auto; }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 /* Header sticks just below the sticky filter bar (nav + ~filter height). Solid
    background + border so rows never bleed through or overlap it. */
-.tbl th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 9px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: calc(var(--nav-h) + 62px); background: var(--bg2); z-index: 4; }
+.tbl th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 9px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: var(--th-top, calc(var(--nav-h) + 60px)); background: var(--bg2); z-index: 4; }
 .tbl th:hover { color: var(--text2); }
 .tbl th .arrow { color: var(--accent); margin-left: 2px; }
 .tbl th.num, .tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -336,75 +345,137 @@ function renderTable() {
   }
   el.innerHTML = html + '</tbody>';
   el.querySelectorAll('img[data-mid]').forEach(img => attachIconFallback(img, monFor(img.dataset.mid)));
+  syncHeaderOffset();
 }
 
+// The column header sticks just below the sticky filter bar. Measure the bar's
+// rendered height (it can wrap to 2 rows on narrow screens) and set the offset so
+// the header never overlaps a data row or floats mid-table.
+function syncHeaderOffset() {
+  const bar = document.getElementById('filter-bar');
+  if (!bar) return;
+  const navH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 49;
+  document.documentElement.style.setProperty('--th-top', (navH + bar.offsetHeight) + 'px');
+}
+window.addEventListener('resize', syncHeaderOffset);
+
 // ── SCATTER (hand-rolled SVG, no charting dependency) ──
-// X = selectable stat, Y = KOs (axes swapped). Points are Pokémon icons; icons that
-// share a coordinate are fanned out in a small cluster so they don't fully overlap.
+// X = selectable stat, Y = KOs (axes swapped). Each plotted coordinate gets an
+// outlined circle; the Pokémon icons sit on/around it. Clicking a circle opens a
+// tooltip listing the point's values and which Pokémon are there.
 const X_META = { faints: { label: 'Faints', get: r => r.faints }, gp: { label: 'Game Participation', get: r => r.gpCount }, mp: { label: 'Match Participation', get: r => r.mpCount } };
+let scatterClusters = [];   // current clusters, for click→tooltip lookup
+
+function niceTicks(max, count) {
+  // Produce up to `count` integer-ish tick values from 0..max.
+  if (max <= count) { const a = []; for (let i = 0; i <= max; i++) a.push(i); return a; }
+  const step = Math.ceil(max / count);
+  const a = []; for (let v = 0; v <= max; v += step) a.push(v);
+  if (a[a.length - 1] !== max) a.push(max);
+  return a;
+}
+
 function renderScatter() {
   const el = document.getElementById('scatter');
   const expanded = el.classList.contains('expanded');
   const xKey = document.getElementById('scatter-x').value;
   const xMeta = X_META[xKey];
-  // Bigger canvas when expanded.
   const W = expanded ? 1100 : 720, H = expanded ? 620 : 380;
-  const padL = 46, padB = 38, padT = 14, padR = 18;
+  const padL = 50, padB = 40, padT = 14, padR = 18;
   const plotW = W - padL - padR, plotH = H - padT - padB, x0 = padL, y0 = H - padB;
 
-  const pts = filtered.map(r => ({ x: xMeta.get(r), y: r.kos, id: r.pokemon_id, name: r.name, team: teamLabelText(r.team_id) }));
+  // A single-team filter naturally thins the field, so keep the 0-KO/0-faint mons.
+  // Otherwise drop them — they'd pile up uselessly at the origin.
+  const singleTeam = document.getElementById('f-team').value !== 'all';
+  let src = filtered;
+  if (!singleTeam) src = filtered.filter(r => r.kos > 0 || r.faints > 0);
+
+  const pts = src.map(r => ({ x: xMeta.get(r), y: r.kos, id: r.pokemon_id, name: r.name, team: teamLabelText(r.team_id) }));
   const maxX = Math.max(1, ...pts.map(p => p.x));
   const maxY = Math.max(1, ...pts.map(p => p.y));
-  const hasData = pts.some(p => p.x > 0 || p.y > 0);
+  const hasData = pts.length > 0;
 
   const sx = v => x0 + (v / maxX) * plotW;
   const sy = v => y0 - (v / maxY) * plotH;
-  const iconSize = expanded ? 26 : 20;
 
   let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img">';
-  // axes
+
+  // gridlines + tick labels
+  const xticks = niceTicks(maxX, 8), yticks = niceTicks(maxY, 8);
+  xticks.forEach(v => {
+    const x = sx(v);
+    svg += '<line class="grid-line" x1="' + x.toFixed(1) + '" y1="' + padT + '" x2="' + x.toFixed(1) + '" y2="' + y0 + '"/>';
+    svg += '<text class="tick-label" x="' + x.toFixed(1) + '" y="' + (y0 + 15) + '" text-anchor="middle">' + v + '</text>';
+  });
+  yticks.forEach(v => {
+    const y = sy(v);
+    svg += '<line class="grid-line" x1="' + x0 + '" y1="' + y.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + y.toFixed(1) + '"/>';
+    svg += '<text class="tick-label" x="' + (x0 - 7) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end">' + v + '</text>';
+  });
+  // axes (drawn over gridlines)
   svg += '<line class="axis-line" x1="' + x0 + '" y1="' + padT + '" x2="' + x0 + '" y2="' + y0 + '"/>';
   svg += '<line class="axis-line" x1="' + x0 + '" y1="' + y0 + '" x2="' + (W - padR) + '" y2="' + y0 + '"/>';
-  // tick labels (0, max on each axis)
-  svg += '<text class="tick-label" x="' + x0 + '" y="' + (y0 + 14) + '" text-anchor="middle">0</text>';
-  svg += '<text class="tick-label" x="' + (W - padR) + '" y="' + (y0 + 14) + '" text-anchor="end">' + maxX + '</text>';
-  svg += '<text class="tick-label" x="' + (x0 - 6) + '" y="' + (y0 + 3) + '" text-anchor="end">0</text>';
-  svg += '<text class="tick-label" x="' + (x0 - 6) + '" y="' + (padT + 8) + '" text-anchor="end">' + maxY + '</text>';
   // axis titles — X = selectable, Y = KOs
-  svg += '<text class="axis-label" x="' + (x0 + plotW / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + escapeHtml(xMeta.label) + '</text>';
-  svg += '<text class="axis-label" transform="translate(13,' + (padT + plotH / 2) + ') rotate(-90)" text-anchor="middle">KOs</text>';
+  svg += '<text class="axis-label" x="' + (x0 + plotW / 2) + '" y="' + (H - 5) + '" text-anchor="middle">' + escapeHtml(xMeta.label) + '</text>';
+  svg += '<text class="axis-label" transform="translate(14,' + (padT + plotH / 2) + ') rotate(-90)" text-anchor="middle">KOs</text>';
 
+  scatterClusters = [];
   if (!hasData) {
     svg += '<text class="scatter-empty" x="' + (x0 + plotW / 2) + '" y="' + (padT + plotH / 2) + '" text-anchor="middle">No game data yet</text>';
   } else {
-    // Group points that land on the same pixel cell so we can fan them out.
+    // Group points landing on the same pixel cell.
     const cells = {};
     pts.forEach(p => {
       const px = Math.round(sx(p.x)), py = Math.round(sy(p.y));
       const key = px + ',' + py;
-      (cells[key] = cells[key] || { px, py, items: [] }).items.push(p);
+      (cells[key] = cells[key] || { px, py, x: p.x, y: p.y, items: [] }).items.push(p);
     });
-    let imgs = '';
-    Object.values(cells).forEach(cell => {
+
+    let circles = '', icons = '';
+    Object.values(cells).forEach((cell, ci) => {
       const n = cell.items.length;
+      // Icon size shrinks as a cluster grows past 4.
+      const base = expanded ? 26 : 20;
+      const iconSize = n <= 4 ? base : Math.max(11, base - (n - 4) * 1.5);
+      const ring = n > 1 ? iconSize * 0.6 : 0;
+      // Outline circle sized to contain the cluster; clickable for the tooltip.
+      const rad = (n > 1 ? ring + iconSize * 0.6 : iconSize * 0.62);
+      scatterClusters.push({ x: cell.x, y: cell.y, items: cell.items.map(it => it.name) });
+      circles += '<circle class="cl-ring" cx="' + cell.px + '" cy="' + cell.py + '" r="' + rad.toFixed(1) + '" data-ci="' + ci + '" onclick="showClusterTip(event,' + ci + ')"/>';
       cell.items.forEach((p, i) => {
         let cx = cell.px, cy = cell.py;
-        if (n > 1) {
-          // fan the cluster around the shared point on a small ring
-          const ring = iconSize * 0.55;
-          const ang = (i / n) * Math.PI * 2;
-          cx += Math.cos(ang) * ring;
-          cy += Math.sin(ang) * ring;
-        }
-        imgs += '<image href="' + iconUrl(monFor(p.id)) + '" x="' + (cx - iconSize / 2).toFixed(1) + '" y="' + (cy - iconSize / 2).toFixed(1) + '"'
-          + ' width="' + iconSize + '" height="' + iconSize + '" style="image-rendering:pixelated">'
-          + '<title>' + escapeHtml(p.name) + (p.team ? ' — ' + escapeHtml(p.team) : '') + '\nKOs: ' + p.y + '  ·  ' + xMeta.label + ': ' + p.x + '</title></image>';
+        if (n > 1) { const ang = (i / n) * Math.PI * 2; cx += Math.cos(ang) * ring; cy += Math.sin(ang) * ring; }
+        icons += '<image href="' + iconUrl(monFor(p.id)) + '" x="' + (cx - iconSize / 2).toFixed(1) + '" y="' + (cy - iconSize / 2).toFixed(1) + '"'
+          + ' width="' + iconSize.toFixed(1) + '" height="' + iconSize.toFixed(1) + '" style="image-rendering:pixelated;pointer-events:none"/>';
       });
     });
-    svg += imgs;
+    svg += circles + icons;   // circles under icons
   }
   el.innerHTML = svg + '</svg>';
 }
+
+// Tooltip listing a cluster's coordinate values + the Pokémon located there.
+function showClusterTip(e, ci) {
+  e.stopPropagation();
+  const c = scatterClusters[ci];
+  if (!c) return;
+  const xKey = document.getElementById('scatter-x').value;
+  const xLabel = X_META[xKey].label;
+  const list = c.items.map(n => '<div class="ct-mon">' + escapeHtml(n) + '</div>').join('');
+  let tip = document.getElementById('cluster-tip');
+  if (!tip) { tip = document.createElement('div'); tip.id = 'cluster-tip'; document.body.appendChild(tip); }
+  tip.innerHTML = '<div class="ct-head">KOs ' + c.y + ' · ' + escapeHtml(xLabel) + ' ' + c.x + '</div>'
+    + '<div class="ct-sub">' + c.items.length + ' Pokémon</div>' + list;
+  tip.style.display = 'block';
+  const px = e.clientX, py = e.clientY;
+  const tr = tip.getBoundingClientRect();
+  let left = px + 12, top = py + 12;
+  if (left + tr.width > window.innerWidth - 8) left = px - tr.width - 12;
+  if (top + tr.height > window.innerHeight - 8) top = window.innerHeight - tr.height - 8;
+  tip.style.left = Math.max(8, left) + 'px';
+  tip.style.top = Math.max(8, top) + 'px';
+}
+document.addEventListener('click', function () { const t = document.getElementById('cluster-tip'); if (t) t.style.display = 'none'; });
 
 function toggleScatterExpand() {
   const el = document.getElementById('scatter');
