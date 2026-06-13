@@ -69,7 +69,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 #cluster-tip .ct-mon { color: var(--text2); padding: 2px 0; border-top: 1px solid var(--bg3); }
 
 /* ─── TABLE ─── */
-.table-scroll { overflow-x: auto; }
+/* No overflow here on desktop: an overflow value would trap the sticky header
+   inside this box instead of letting it stick to the page under the filter bar. */
+.table-scroll { overflow-x: visible; }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 /* Header sticks just below the sticky filter bar (nav + ~filter height). Solid
    background + border so rows never bleed through or overlap it. */
@@ -91,6 +93,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
 @media (max-width: 820px) {
   .toolbar input[type=text] { min-width: 120px; }
+  /* On small screens allow the wide table to scroll sideways. (The sticky header
+     trades page-stick for box-stick here, which is fine on mobile.) */
+  .table-scroll { overflow-x: auto; }
 }
 </style>
 </head>
