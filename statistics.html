@@ -45,6 +45,8 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 .viz-grid .viz-full { grid-column: 1 / -1; }
 .viz { min-width: 0; }
+/* Collapsed chart card hides its body, leaving just the header for skipping past. */
+.viz.collapsed .scatter-wrap { display: none; }
 
 /* ─── CHART HEADER (shared by every visual) ─── */
 .scatter-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -62,16 +64,19 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* ─── SHARED CHART MODAL ─── */
 .viz-modal { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column; }
 .viz-modal[hidden] { display: none; }
-.viz-modal-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg2); }
-.viz-modal-title { font-size: 14px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text); }
-.viz-modal-controls { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.viz-modal-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg2); }
+.viz-modal-title { font-size: 14px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text); white-space: nowrap; }
+/* Filter bar, relocated inline into the header: drop its sticky/card chrome. */
+.viz-modal-filter { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; flex-wrap: wrap; }
+.viz-modal-filter .filter-bar { position: static; margin: 0; border: none; padding: 0; background: transparent; gap: 8px; flex-wrap: wrap; }
+.viz-modal-filter .filter-bar .field { flex-direction: row; align-items: center; gap: 5px; }
+.viz-modal-filter .filter-bar input[type=text] { min-width: 130px; }
+.viz-modal-filter .filter-bar .count { display: none; }
+.viz-modal-controls { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .viz-modal-controls .field, .viz-modal-controls .hist-controls { display: flex; align-items: center; gap: 6px; flex-direction: row; }
 .viz-modal-controls label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; font-weight: 700; }
 .viz-modal-controls select, .viz-modal-controls input { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 6px 8px; outline: none; font-family: inherit; }
 .viz-modal-controls input[type=number] { width: 60px; }
-/* The shared filter bar, while relocated inside the modal, drops its sticky-ness. */
-.viz-modal-filter { padding: 10px 16px; border-bottom: 1px solid var(--border); }
-.viz-modal-filter .filter-bar { position: static; margin: 0; border: none; padding: 0; background: transparent; }
 .viz-modal-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; align-items: flex-start; justify-content: center; }
 .viz-modal-body svg { width: 100%; height: auto; max-width: 1280px; display: block; }
 .axis-line { stroke: var(--border); stroke-width: 1; }
@@ -87,6 +92,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .box-cluster { cursor: pointer; transition: fill-opacity .12s; }
 .box-cluster:hover { fill-opacity: 1; }
 .box-cluster-n { fill: #fff; font-size: 10px; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
+/* Inline box plot can be very tall (one row per team) — cap it and scroll. The
+   modal version renders into viz-modal-body, which is unaffected by this. */
+#boxplot { max-height: 460px; overflow-y: auto; }
 /* Team labels on the bubble chart: white with a dark outline to read over any color. */
 .pack-team { fill: #fff; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: 2.5px; cursor: pointer; }
 .pack-team:hover { fill: var(--accent); }
@@ -94,7 +102,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .mx-cell { stroke: var(--bg); stroke-width: 1; }
 .mx-cell:hover { stroke: var(--text); stroke-width: 1.5; }
 .mx-row { fill: var(--text2); font-size: 10px; }
-.mx-col { fill: var(--text2); font-size: 10px; text-anchor: end; }
+.mx-col { fill: var(--text2); font-size: 10px; text-anchor: start; }
 .mx-leg { fill: var(--text3); font-size: 11px; }
 /* Roster-breakdown tooltip rows: name left, value right. */
 #cluster-tip .ct-mon { display: flex; justify-content: space-between; gap: 14px; }
@@ -168,7 +176,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
   <div class="viz-grid">
     <div class="card viz" id="scatter-card">
       <div class="scatter-head">
-        <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('scatter')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
+        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('scatter-card')" title="Hide chart" aria-label="Hide chart">▾</button><button class="scatter-btn" onclick="openModal('scatter')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
         <div class="card-title scatter-title">KOs Scatter</div>
         <div class="field"><label>X axis</label>
           <select id="scatter-x" onchange="renderScatter()">
@@ -183,7 +191,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
     <div class="card viz" id="hist-card">
       <div class="scatter-head">
-        <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('hist')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
+        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('hist-card')" title="Hide chart" aria-label="Hide chart">▾</button><button class="scatter-btn" onclick="openModal('hist')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
         <div class="card-title scatter-title">Distribution</div>
         <div class="hist-controls">
           <div class="field"><label>Metric</label>
@@ -208,7 +216,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
     <div class="card viz" id="box-card">
       <div class="scatter-head">
-        <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('box')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
+        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('box-card')" title="Hide chart" aria-label="Hide chart">▾</button><button class="scatter-btn" onclick="openModal('box')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
         <div class="card-title scatter-title">Team Distribution</div>
         <div class="hist-controls">
           <div class="field"><label>Metric</label>
@@ -229,7 +237,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
     <div class="card viz" id="matrix-card">
       <div class="scatter-head">
-        <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('matrix')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
+        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('matrix-card')" title="Hide chart" aria-label="Hide chart">▾</button><button class="scatter-btn" onclick="openModal('matrix')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
         <div class="card-title scatter-title">Matchup Matrix</div>
         <div class="hist-controls">
           <div class="field"><label>Stage</label>
@@ -245,7 +253,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
     <div class="card viz viz-full" id="pack-card">
       <div class="scatter-head">
-        <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('pack')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
+        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('pack-card')" title="Hide chart" aria-label="Hide chart">▾</button><button class="scatter-btn" onclick="openModal('pack')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
         <div class="card-title scatter-title">Roster Bubbles</div>
         <div class="hist-controls">
           <div class="field"><label>Size by</label>
@@ -271,14 +279,14 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
 </div>
 
-<!-- Shared fullscreen modal: hosts any chart + a clone of the filter bar. -->
+<!-- Shared fullscreen modal: hosts any chart + the filter bar (in the header). -->
 <div class="viz-modal" id="viz-modal" hidden>
   <div class="viz-modal-bar">
     <button class="scatter-btn" onclick="closeModal()" title="Close" aria-label="Close">✕</button>
     <div class="viz-modal-title" id="viz-modal-title">Chart</div>
+    <div class="viz-modal-filter" id="viz-modal-filter"></div>
     <div class="viz-modal-controls" id="viz-modal-controls"></div>
   </div>
-  <div class="viz-modal-filter" id="viz-modal-filter"></div>
   <div class="viz-modal-body" id="viz-modal-body"></div>
 </div>
 
@@ -704,6 +712,13 @@ function closeModal() {
   CHART_REGISTRY[id].render();   // re-render the inline version
 }
 function fmtBin(v, dec) { return dec > 0 ? v.toFixed(dec) : String(Math.round(v)); }
+// Collapse/expand a chart card's body inline (to skip past it toward the table).
+function toggleCollapse(cardId) {
+  const card = document.getElementById(cardId);
+  const collapsed = card.classList.toggle('collapsed');
+  const btn = card.querySelector('.scatter-btns .scatter-btn');
+  if (btn) { btn.textContent = collapsed ? '▸' : '▾'; btn.title = collapsed ? 'Show chart' : 'Hide chart'; }
+}
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalChart) closeModal(); });
 
 // ── HISTOGRAM (equal-width value bins over the filtered instances) ──
@@ -1036,10 +1051,14 @@ function renderPack() {
   const teamPack = packCircles(teamData.map(t => t.R + 6));   // +6 gap between teams
   teamPack.nodes.forEach((n, i) => { teamData[i].cx = n.x; teamData[i].cy = n.y; });
 
-  // Fit everything into the SVG viewport.
+  // Fit everything into the SVG viewport. Cap the height so the (roughly square)
+  // cluster doesn't make the full-width card excessively tall; scale to whichever of
+  // width or max-height is the binding constraint and center within the box.
   const W = inModal ? 1100 : 720, margin = 8;
-  const scale = (W - margin * 2) / (teamPack.R * 2);
-  const H = teamPack.R * 2 * scale + margin * 2;
+  const maxH = inModal ? 720 : 440;
+  const cluster = teamPack.R * 2;
+  const scale = Math.min((W - margin * 2) / cluster, (maxH - margin * 2) / cluster);
+  const H = Math.min(maxH, cluster * scale + margin * 2);
   const ox = W / 2, oy = H / 2;
   const SX = v => ox + v * scale, SY = v => oy + v * scale;
 
@@ -1105,7 +1124,7 @@ function renderMatrix() {
     cell[rb + ',' + ra] = { state: bState, mine: m.team_b_score, theirs: m.team_a_score, id: m.id };
   });
 
-  const labelW = 130, headH = 96, pad = 6, W = inModal ? 1040 : 720;
+  const labelW = 130, headH = 120, pad = 6, W = inModal ? 1040 : 720;
   const grid = W - labelW - pad;
   const cs = Math.max(10, Math.floor(grid / N));
   const gridW = cs * N;
@@ -1114,9 +1133,13 @@ function renderMatrix() {
 
   matrixCells = [];
   let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" style="width:100%;height:auto">';
+  // Fully vertical column labels. Baseline sits just above the grid (headH - 4); the
+  // -90° rotation makes them read bottom-to-top, extending UP into the header area so
+  // they never overlap the first cell row.
   teams.forEach((t, c) => {
     const x = labelW + c * cs + cs / 2;
-    svg += '<text class="mx-col" x="' + x + '" y="' + (headH - 6) + '" transform="rotate(-45 ' + x + ' ' + (headH - 6) + ')">' + escapeHtml(shortName(t)) + '</text>';
+    const baseY = headH - 4;
+    svg += '<text class="mx-col" x="' + x + '" y="' + baseY + '" transform="rotate(-90 ' + x + ' ' + baseY + ')">' + escapeHtml(shortName(t)) + '</text>';
   });
   teams.forEach((tr, r) => {
     const y = headH + r * cs;
