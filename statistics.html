@@ -79,7 +79,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .box-team { fill: var(--text); font-size: 11px; font-weight: 600; }
 .box-cluster { cursor: pointer; transition: fill-opacity .12s; }
 .box-cluster:hover { fill-opacity: 1; }
-.box-cluster-n { fill: #fff; font-size: 12px; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
+.box-cluster-n { fill: #fff; font-size: 10px; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
 #box-card.collapsed .scatter-wrap { display: none; }
 /* Team labels on the bubble chart: white with a dark outline to read over any color. */
 .pack-team { fill: #fff; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: 2.5px; }
@@ -843,7 +843,7 @@ function renderBoxPlot() {
     // Icons per Pokémon. Group those landing on the same X pixel. Up to 3 fan
     // vertically; 4+ collapse into a filled count circle (clickable for the list)
     // so they never bleed into neighboring team rows.
-    const ICON = 9, STACK = 8;
+    const ICON = 18, STACK = 15;
     const buckets = {};
     byTeam[tid].forEach(r => { const px = Math.round(sx(valOf(r))); (buckets[px] = buckets[px] || []).push(r); });
     Object.keys(buckets).forEach(px => {
@@ -853,8 +853,8 @@ function renderBoxPlot() {
         const v = valOf(group[0]);
         const idx = boxClusters.length;
         boxClusters.push({ value: v, metricLabel: metric.label, dec: metric.dec, items: group.map(g => g.name) });
-        svg += '<circle class="box-cluster" cx="' + cx + '" cy="' + cy + '" r="13" fill="' + color + '" fill-opacity="0.9" stroke="' + color + '" stroke-width="1.5" onclick="showBoxCluster(event,' + idx + ')"/>';
-        svg += '<text class="box-cluster-n" x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle">' + group.length + '</text>';
+        svg += '<circle class="box-cluster" cx="' + cx + '" cy="' + cy + '" r="9" fill="' + color + '" fill-opacity="0.9" stroke="' + color + '" stroke-width="1.5" onclick="showBoxCluster(event,' + idx + ')"/>';
+        svg += '<text class="box-cluster-n" x="' + cx + '" y="' + (cy + 3) + '" text-anchor="middle">' + group.length + '</text>';
       } else {
         group.forEach((r, j) => {
           const v = valOf(r);
@@ -970,24 +970,22 @@ function renderPack() {
 
   const ramps = ['#534AB7', '#1D9E75', '#D85A30', '#378ADD', '#BA7517', '#D4537E', '#0F6E56', '#993C1D', '#8A5CD4', '#2E8B8B'];
 
-  // For each team: pack its Pokémon (radius ∝ √value), giving an intrinsic team radius.
-  const maxV = Math.max(0.0001, ...filtered.map(valOf));
+  // For each team: pack its Pokémon (radius ∝ √value, zeros excluded) into a group;
+  // the group is scaled later to fill the team bubble.
   const teamData = teamIds.map((tid, ti) => {
-    const mons = byTeam[tid].slice().sort((a, b) => valOf(b) - valOf(a));
-    // Pokémon circle radii (min radius so zero-value mons still show as a dot).
-    const radii = mons.map(r => Math.max(4, Math.sqrt(Math.max(0, valOf(r)) / maxV) * 34));
+    const mons = byTeam[tid].filter(r => valOf(r) > 0).sort((a, b) => valOf(b) - valOf(a));
+    const radii = mons.map(r => Math.sqrt(valOf(r)));   // relative; scaled to fill later
     const packed = packCircles(radii);
-    return { tid, ti, mons, packed, innerR: packed.R, color: ramps[ti % ramps.length],
-             total: mons.reduce((s, r) => s + Math.max(0, valOf(r)), 0) };
+    return { tid, ti, mons, packed, innerR: packed.R || 1, color: ramps[ti % ramps.length],
+             total: mons.reduce((s, r) => s + valOf(r), 0) };
   });
 
-  // Team bubble radius ∝ √(cumulative metric), but never smaller than what's needed to
-  // contain its packed Pokémon. Scale the cumulative-based size to a sensible range.
+  // Team bubble radius ∝ √(cumulative metric).
   const maxTotal = Math.max(0.0001, ...teamData.map(t => t.total));
   teamData.forEach(t => {
-    const byTotal = Math.sqrt(t.total / maxTotal) * 150;   // cumulative-score sizing
-    t.R = Math.max(t.innerR + 8, byTotal, 30);
-    t.pad = t.R - t.innerR;   // padding to center the packed group
+    t.R = Math.max(30, Math.sqrt(t.total / maxTotal) * 165);
+    // Scale factor that makes the packed Pokémon group fill this bubble (with padding).
+    t.fill = (t.R - 6) / t.innerR;
   });
 
   // Pack the team bubbles against each other (no overlaps), using their radii.
@@ -1007,18 +1005,19 @@ function renderPack() {
     svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + R.toFixed(1) + '" fill="' + t.color + '" fill-opacity="0.12" stroke="' + t.color + '" stroke-width="1.5"/>';
     t.mons.forEach((r, k) => {
       const node = t.packed.nodes[k];
-      const px = cx + node.x * scale, py = cy + node.y * scale, pr = node.r * scale;
+      // Scale the packed group to fill the team bubble, then to screen.
+      const px = cx + node.x * t.fill * scale, py = cy + node.y * t.fill * scale, pr = node.r * t.fill * scale;
       const v = valOf(r), vTxt = Number.isInteger(v) ? v : v.toFixed(2);
-      if (pr >= 11) {
-        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="' + t.color + '" fill-opacity="0.35" stroke="' + t.color + '" stroke-width="1"/>';
-        const isz = pr * 1.5;
+      svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="' + t.color + '" fill-opacity="0.4" stroke="' + t.color + '" stroke-width="1"><title>' + escapeHtml(r.name) + ' — ' + metric.label + ': ' + vTxt + '</title></circle>';
+      // Icon at a fixed fraction of the circle — drawn only if the circle is big
+      // enough to hold a legible icon (no icon scaling beyond the circle fit).
+      const isz = pr * 1.45;
+      if (isz >= 14) {
         svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + (px - isz / 2).toFixed(1) + '" y="' + (py - isz / 2).toFixed(1) + '" width="' + isz.toFixed(1) + '" height="' + isz.toFixed(1) + '" style="image-rendering:pixelated;pointer-events:none"/>';
-        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="transparent"><title>' + escapeHtml(r.name) + ' — ' + metric.label + ': ' + vTxt + '</title></circle>';
-      } else {
-        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="' + t.color + '" fill-opacity="0.65" stroke="' + t.color + '" stroke-width="0.8"><title>' + escapeHtml(r.name) + ' — ' + metric.label + ': ' + vTxt + '</title></circle>';
       }
     });
-    svg += '<text class="pack-team" x="' + cx.toFixed(1) + '" y="' + (cy - R - 4).toFixed(1) + '" text-anchor="middle">' + escapeHtml(teamLabelShort(t.tid)) + '</text>';
+    // team label tucked just inside the top edge of the bubble
+    svg += '<text class="pack-team" x="' + cx.toFixed(1) + '" y="' + (cy - R + 13).toFixed(1) + '" text-anchor="middle">' + escapeHtml(teamLabelShort(t.tid)) + '</text>';
   });
   el.innerHTML = svg + '</svg>';
 }
