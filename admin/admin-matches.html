@@ -68,7 +68,10 @@ select:focus, input:focus { border-color: var(--accent); }
 .summary { font-size: 12px; color: var(--text2); margin: 16px 0 10px; }
 .summary b { color: var(--text); }
 .week-group { margin-bottom: 14px; }
-.week-head { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; margin-bottom: 7px; }
+.week-head { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; margin-bottom: 7px; cursor: pointer; user-select: none; padding: 4px 2px; border-radius: 6px; }
+.week-head:hover { background: rgba(255,255,255,.02); }
+.week-head .caret { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+.week-head .wh-sub { margin-left: auto; font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--text3); white-space: nowrap; }
 .match-row { display: flex; align-items: center; gap: 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; margin-bottom: 6px; }
 .match-row .teams { flex: 1 1 auto; min-width: 0; font-size: 13px; }
 .match-row .teams .vs { color: var(--text3); margin: 0 5px; }
@@ -83,6 +86,20 @@ select:focus, input:focus { border-color: var(--accent); }
 .match-row .badge.final { background: rgba(96,165,250,.14); color: var(--blue); }
 .match-row .badge.upcoming { background: var(--bg2); color: var(--text3); border: 1px solid var(--border); }
 .empty-state { text-align: center; color: var(--text3); font-size: 13px; padding: 32px; font-style: italic; }
+
+/* ── POSTSEASON SEEDING ── */
+.seed-status { font-size: 11px; color: var(--text3); white-space: nowrap; }
+.seed-status.dirty { color: var(--accent); font-weight: 700; }
+.seed-slot { display: flex; align-items: center; gap: 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; margin-bottom: 6px; }
+.seed-slot .seed-num { width: 30px; flex-shrink: 0; font-size: 14px; font-weight: 800; color: var(--accent); text-align: center; font-variant-numeric: tabular-nums; }
+.seed-slot .seed-pick { flex: 1 1 auto; min-width: 0; }
+.seed-slot .seed-pick select { width: 100%; }
+.seed-slot.empty .seed-num { color: var(--text3); }
+.seed-add-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.seed-unplaced { margin-top: 12px; }
+.seed-unplaced .warn-box { border: 1px solid rgba(240,192,96,.5); background: rgba(240,192,96,.08); border-radius: 8px; padding: 9px 12px; font-size: 12px; color: var(--yellow); line-height: 1.5; }
+.seed-foot { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.seed-foot-note { font-size: 12px; color: var(--text3); line-height: 1.5; }
 
 /* ── COLLAPSIBLE PANEL (shared by coverage + match list) ── */
 .collapse { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 16px; }
@@ -281,6 +298,47 @@ select:focus, input:focus { border-color: var(--accent); }
     </div>
   </div>
 
+  <!-- ── POSTSEASON SEEDING ── -->
+  <div class="section">
+    <div class="section-head" onclick="toggleSeedingSection()">
+      <span class="caret" id="seeding-caret">▶</span>
+      <span class="section-title">Postseason Seeding</span>
+    </div>
+    <div id="seeding-body" hidden>
+      <div class="section-sub">Seed each bracket, then <b>Start Postseason</b> to publish it. Every team should land in exactly one bracket — Playoffs or Cup. The bracket fills in and advances automatically from these seeds and the match results entered below.</div>
+
+      <div class="controls">
+        <div class="group">
+          <label for="seed-bracket">Bracket</label>
+          <select id="seed-bracket" onchange="onSeedBracketChange()">
+            <option value="playoff">Playoffs</option>
+            <option value="cup">Cup</option>
+          </select>
+        </div>
+        <div class="spacer" style="flex:1"></div>
+        <span id="seed-status" class="seed-status"></span>
+      </div>
+
+      <div id="seed-slots"></div>
+
+      <div class="seed-add-row">
+        <button class="btn btn-sm" id="seed-add-btn" onclick="addSeedSlot()">+ Add slot</button>
+        <button class="btn btn-sm" id="seed-remove-btn" onclick="removeSeedSlot()">− Remove last slot</button>
+        <span class="spacer" style="flex:1"></span>
+        <button class="btn" id="seed-discard-btn" onclick="discardSeeding()" disabled>Discard changes</button>
+        <button class="btn btn-accent" id="seed-save-btn" onclick="saveSeeding()" disabled>Save Seeding</button>
+      </div>
+
+      <div id="seed-unplaced" class="seed-unplaced"></div>
+
+      <div class="seed-foot">
+        <span class="seed-foot-note" id="seed-publish-note"></span>
+        <span class="spacer" style="flex:1"></span>
+        <button class="btn btn-accent" id="seed-start-btn" onclick="openStartPostseason()">Start Postseason</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── MATCH DATA ENTRY ── -->
   <div class="section">
     <div class="section-head" onclick="toggleDataSection()">
@@ -319,6 +377,13 @@ let gamesCountByMatch = {};         // match_id -> number of games entered
 let coverageCollapsed = true;       // schedule-coverage panel starts collapsed
 let scheduleCollapsed = false;      // whole schedule section starts expanded
 let matchListCollapsed = true;      // individual-match list starts collapsed
+let collapsedScheduleWeeks = new Set(); // week numbers collapsed within Scheduled Matches
+
+// ── postseason seeding state ──
+let seedingCollapsed = true;        // section starts collapsed
+let seedBracket = 'playoff';        // 'playoff' | 'cup' — which bracket is being edited
+let seedSlots = [];                 // working copy: array of team_id|null, index 0 = seed 1
+let seedSaved = [];                 // committed snapshot for the active bracket (dirty diff baseline)
 
 // ── match-data-entry state ──
 let pokemonById  = {};              // pokemon.json id -> entry
@@ -445,7 +510,7 @@ async function loadSeasonData(seasonId) {
   if (!seasonId) { renderTool(); return; }
 
   const [teamsRes, ownersRes, matchRes, rosterRes] = await Promise.all([
-    sb.from('teams').select('id, name, slug, initial_seed').eq('season_id', seasonId),
+    sb.from('teams').select('id, name, slug, initial_seed, playoff_seed, cup_seed').eq('season_id', seasonId),
     sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('matches')
       .select('id, week, stage, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id')
@@ -497,6 +562,8 @@ function renderTool() {
   populateTeamSelects();
   renderCoverage();
   renderMatchList();
+  rebuildSeedSlotsFromDb();
+  renderSeeding();
   renderMatchData();
 }
 
@@ -577,38 +644,51 @@ function renderMatchList() {
     weeks.forEach(w => {
       const group = document.createElement('div');
       group.className = 'week-group';
-      group.innerHTML = '<div class="week-head">Week ' + w + '</div>';
+      const wCollapsed = collapsedScheduleWeeks.has(w);
+      const wMatches = matches.filter(m => m.week === w);
+      const wEntered = wMatches.filter(matchHasResults).length;
 
-      matches.filter(m => m.week === w)
-        .sort((a, b) => teamLabelText(a.team_a_id).localeCompare(teamLabelText(b.team_a_id)))
-        .forEach(m => {
-          const aWin = m.winner_team_id && m.winner_team_id === m.team_a_id;
-          const bWin = m.winner_team_id && m.winner_team_id === m.team_b_id;
-          const hasRes = matchHasResults(m);
+      const wHead = document.createElement('div');
+      wHead.className = 'week-head';
+      wHead.onclick = () => toggleScheduleWeek(w);
+      wHead.innerHTML = '<span class="caret">' + (wCollapsed ? '\u25B6' : '\u25BC') + '</span>'
+        + '<span class="wh-title">Week ' + w + '</span>'
+        + '<span class="wh-sub">' + wMatches.length + ' match' + (wMatches.length === 1 ? '' : 'es')
+        + (wEntered ? ' \u00B7 ' + wEntered + ' with results' : '') + '</span>';
+      group.appendChild(wHead);
 
-          const row = document.createElement('div');
-          row.className = 'match-row';
-          row.innerHTML =
-            '<div class="teams">' + teamLabelHtml(m.team_a_id) + '<span class="vs">vs</span>' + teamLabelHtml(m.team_b_id) + '</div>'
-            + '<div class="meta">Bo' + (m.series_length || 3) + '</div>'
-            + '<label class="row-date"><span class="rd-label">Date</span>'
-            +   '<input type="datetime-local" class="rd-input" value="' + toDatetimeLocal(m.match_date) + '"></label>'
-            + (hasRes
-                ? '<div class="result"><span class="' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
-                  + '–<span class="' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>'
-                  + '<span class="badge final">Final</span>'
-                : '<span class="badge upcoming">Upcoming</span>');
+      if (!wCollapsed) {
+        wMatches
+          .sort((a, b) => teamLabelText(a.team_a_id).localeCompare(teamLabelText(b.team_a_id)))
+          .forEach(m => {
+            const aWin = m.winner_team_id && m.winner_team_id === m.team_a_id;
+            const bWin = m.winner_team_id && m.winner_team_id === m.team_b_id;
+            const hasRes = matchHasResults(m);
 
-          row.querySelector('.rd-input').onchange = (e) => updateMatchDate(m.id, e.target.value);
+            const row = document.createElement('div');
+            row.className = 'match-row';
+            row.innerHTML =
+              '<div class="teams">' + teamLabelHtml(m.team_a_id) + '<span class="vs">vs</span>' + teamLabelHtml(m.team_b_id) + '</div>'
+              + '<div class="meta">Bo' + (m.series_length || 3) + '</div>'
+              + '<label class="row-date"><span class="rd-label">Date</span>'
+              +   '<input type="datetime-local" class="rd-input" value="' + toDatetimeLocal(m.match_date) + '"></label>'
+              + (hasRes
+                  ? '<div class="result"><span class="' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
+                    + '–<span class="' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>'
+                    + '<span class="badge final">Final</span>'
+                  : '<span class="badge upcoming">Upcoming</span>');
 
-          const rm = document.createElement('button');
-          rm.className = 'btn btn-sm btn-danger';
-          rm.textContent = 'Remove';
-          rm.onclick = () => confirmRemoveMatch(m.id);
-          row.appendChild(rm);
+            row.querySelector('.rd-input').onchange = (e) => updateMatchDate(m.id, e.target.value);
 
-          group.appendChild(row);
-        });
+            const rm = document.createElement('button');
+            rm.className = 'btn btn-sm btn-danger';
+            rm.textContent = 'Remove';
+            rm.onclick = () => confirmRemoveMatch(m.id);
+            row.appendChild(rm);
+
+            group.appendChild(row);
+          });
+      }
 
       body.appendChild(group);
     });
@@ -618,11 +698,256 @@ function renderMatchList() {
   el.appendChild(container);
 }
 function toggleMatchList() { matchListCollapsed = !matchListCollapsed; renderMatchList(); }
+function toggleScheduleWeek(w) {
+  if (collapsedScheduleWeeks.has(w)) collapsedScheduleWeeks.delete(w);
+  else collapsedScheduleWeeks.add(w);
+  renderMatchList();
+}
 
 function toggleScheduleSection() {
   scheduleCollapsed = !scheduleCollapsed;
   document.getElementById('schedule-body').hidden = scheduleCollapsed;
   document.getElementById('schedule-caret').textContent = scheduleCollapsed ? '\u25B6' : '\u25BC';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POSTSEASON SEEDING
+// ─────────────────────────────────────────────────────────────────────────────
+const SEED_FIELD = { playoff: 'playoff_seed', cup: 'cup_seed' };
+const OTHER_BRACKET = { playoff: 'cup', cup: 'playoff' };
+function bracketLabel(b) { return b === 'cup' ? 'Cup' : 'Playoffs'; }
+
+function toggleSeedingSection() {
+  seedingCollapsed = !seedingCollapsed;
+  document.getElementById('seeding-body').hidden = seedingCollapsed;
+  document.getElementById('seeding-caret').textContent = seedingCollapsed ? '\u25B6' : '\u25BC';
+}
+
+// Teams already committed to a bracket, ordered by their seed (index 0 = seed 1).
+function seededTeamIds(bracket) {
+  const f = SEED_FIELD[bracket];
+  return teams.filter(t => t[f] != null).sort((a, b) => a[f] - b[f]).map(t => t.id);
+}
+
+// Reconstruct the working slot list for the active bracket from committed DB seeds.
+// Slot count = highest assigned seed (min 2). Trailing empty slots aren't persisted.
+function rebuildSeedSlotsFromDb() {
+  const ids = seededTeamIds(seedBracket);
+  const f = SEED_FIELD[seedBracket];
+  // Place each seeded team at its (seed-1) index so gaps in seed numbers stay as empty slots.
+  const maxSeed = teams.reduce((mx, t) => (t[f] != null ? Math.max(mx, t[f]) : mx), 0);
+  const n = Math.max(2, maxSeed);
+  const slots = new Array(n).fill(null);
+  teams.forEach(t => { if (t[f] != null && t[f] >= 1 && t[f] <= n) slots[t[f] - 1] = t.id; });
+  seedSlots = slots;
+  seedSaved = slots.slice();
+}
+
+function seedingDirty() {
+  if (seedSlots.length !== seedSaved.length) return true;
+  for (let i = 0; i < seedSlots.length; i++) if (seedSlots[i] !== seedSaved[i]) return true;
+  return false;
+}
+
+// Team is available for a slot in the active bracket if it isn't seeded in the OTHER
+// bracket and isn't already placed in another slot of THIS working bracket.
+function availableForSlot(slotIndex) {
+  const otherF = SEED_FIELD[OTHER_BRACKET[seedBracket]];
+  const usedHere = new Set(seedSlots.filter((id, i) => id && i !== slotIndex));
+  return sortedTeams().filter(t => t[otherF] == null && !usedHere.has(t.id));
+}
+
+function renderSeeding() {
+  const slotsEl = document.getElementById('seed-slots');
+  if (!slotsEl) return;
+  document.getElementById('seed-bracket').value = seedBracket;
+
+  slotsEl.innerHTML = '';
+  seedSlots.forEach((teamId, i) => {
+    const slot = document.createElement('div');
+    slot.className = 'seed-slot' + (teamId ? '' : ' empty');
+    const avail = availableForSlot(i);
+    let opts = '<option value="">— unassigned —</option>';
+    avail.forEach(t => { opts += '<option value="' + t.id + '"' + (t.id === teamId ? ' selected' : '') + '>' + escapeHtml(teamLabelText(t.id)) + '</option>'; });
+    // If the current pick is somehow not in the available set (shouldn't happen), keep it visible.
+    if (teamId && !avail.some(t => t.id === teamId)) {
+      opts += '<option value="' + teamId + '" selected>' + escapeHtml(teamLabelText(teamId)) + '</option>';
+    }
+    slot.innerHTML = '<span class="seed-num">' + (i + 1) + '</span>'
+      + '<span class="seed-pick"><select data-slot="' + i + '">' + opts + '</select></span>';
+    slot.querySelector('select').onchange = (e) => { seedSlots[i] = e.target.value || null; renderSeeding(); };
+    slotsEl.appendChild(slot);
+  });
+
+  // status + dirty state
+  const dirty = seedingDirty();
+  const statusEl = document.getElementById('seed-status');
+  const placed = seedSlots.filter(Boolean).length;
+  statusEl.textContent = (dirty ? 'Unsaved \u00B7 ' : '') + placed + ' of ' + seedSlots.length + ' slot' + (seedSlots.length === 1 ? '' : 's') + ' filled';
+  statusEl.className = 'seed-status' + (dirty ? ' dirty' : '');
+  document.getElementById('seed-save-btn').disabled = !dirty;
+  document.getElementById('seed-discard-btn').disabled = !dirty;
+  document.getElementById('seed-remove-btn').disabled = seedSlots.length <= 2;
+
+  // cross-bracket unplaced advisory (live, across committed seeds + this working bracket)
+  renderSeedUnplaced();
+
+  // publish state note
+  const season = seasons.find(s => s.id === selectedSeasonId);
+  const note = document.getElementById('seed-publish-note');
+  const startBtn = document.getElementById('seed-start-btn');
+  if (season && season.postseason_published) {
+    note.innerHTML = '<span style="color:var(--blue)">\u25CF</span> Postseason is <b>published</b> and visible to everyone.';
+    startBtn.textContent = 'Re-check & Re-publish';
+  } else {
+    note.textContent = 'Postseason is hidden from the public until you start it.';
+    startBtn.textContent = 'Start Postseason';
+  }
+}
+
+// Teams in neither bracket, accounting for the active bracket's *working* (uncommitted) state.
+function unplacedTeamIds() {
+  const otherF = SEED_FIELD[OTHER_BRACKET[seedBracket]];
+  const inThis = new Set(seedSlots.filter(Boolean));
+  return teams.filter(t => t[otherF] == null && !inThis.has(t.id)).map(t => t.id);
+}
+
+function renderSeedUnplaced() {
+  const el = document.getElementById('seed-unplaced');
+  const unplaced = unplacedTeamIds();
+  if (!unplaced.length) { el.innerHTML = ''; return; }
+  const names = unplaced.map(id => teamLabelText(id)).sort((a, b) => a.localeCompare(b));
+  el.innerHTML = '<div class="warn-box">\u26A0 ' + names.length + ' team' + (names.length === 1 ? '' : 's')
+    + ' not yet seeded in either bracket: ' + escapeHtml(names.join(', ')) + '.</div>';
+}
+
+function onSeedBracketChange() {
+  const sel = document.getElementById('seed-bracket');
+  const next = sel.value;
+  if (next === seedBracket) return;
+  if (seedingDirty()) {
+    sel.value = seedBracket;   // revert the visible selection until the admin decides
+    openModal(
+      '<h3>Unsaved seeding changes</h3>'
+      + '<p>You have unsaved changes to the <b>' + bracketLabel(seedBracket) + '</b> bracket. '
+      + 'Switching to <b>' + bracketLabel(next) + '</b> will discard them.</p>'
+      + '<div class="modal-actions">'
+      +   '<button class="btn" onclick="closeModal()">Keep editing</button>'
+      +   '<button class="btn btn-accent btn-danger" id="seed-switch-go">Discard &amp; switch</button>'
+      + '</div>'
+    );
+    document.getElementById('seed-switch-go').onclick = () => {
+      closeModal();
+      seedBracket = next;
+      rebuildSeedSlotsFromDb();
+      renderSeeding();
+    };
+    return;
+  }
+  seedBracket = next;
+  rebuildSeedSlotsFromDb();
+  renderSeeding();
+}
+
+function addSeedSlot() { seedSlots.push(null); renderSeeding(); }
+
+function removeSeedSlot() {
+  if (seedSlots.length <= 2) return;
+  const last = seedSlots[seedSlots.length - 1];
+  if (last) {
+    openModal(
+      '<h3>Remove last slot?</h3>'
+      + '<p>Seed ' + seedSlots.length + ' currently holds <b>' + escapeHtml(teamLabelText(last)) + '</b>. '
+      + 'Removing the slot unassigns that team (you can re-add it). This is staged until you Save Seeding.</p>'
+      + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+      + '<button class="btn btn-accent btn-danger" id="seed-rm-go">Remove slot</button></div>'
+    );
+    document.getElementById('seed-rm-go').onclick = () => { closeModal(); seedSlots.pop(); renderSeeding(); };
+    return;
+  }
+  seedSlots.pop();
+  renderSeeding();
+}
+
+function discardSeeding() { rebuildSeedSlotsFromDb(); renderSeeding(); }
+
+// Commit the active bracket's slots: write seed = slot index+1 for filled slots,
+// null for any team that was seeded here before but isn't now.
+async function saveSeeding() {
+  const f = SEED_FIELD[seedBracket];
+  const btn = document.getElementById('seed-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  // Desired seed per team in this bracket after the edit.
+  const desired = {};                       // team_id -> seed number
+  seedSlots.forEach((id, i) => { if (id) desired[id] = i + 1; });
+
+  // Teams previously seeded in this bracket that need clearing or changing.
+  const updates = [];                       // { id, seed|null }
+  teams.forEach(t => {
+    const was = t[f];
+    const now = desired[t.id] != null ? desired[t.id] : null;
+    if ((was ?? null) !== (now ?? null)) updates.push({ id: t.id, seed: now });
+  });
+
+  try {
+    for (const u of updates) {
+      const { error } = await sb.from('teams').update({ [f]: u.seed }).eq('id', u.id);
+      if (error) throw error;
+    }
+    // Reflect locally so the UI + cross-bracket filters stay correct without a full reload.
+    updates.forEach(u => { const t = teamById[u.id]; if (t) t[f] = u.seed; });
+    seedSaved = seedSlots.slice();
+    showToast('Saved ' + bracketLabel(seedBracket) + ' seeding.', 'ok');
+    renderSeeding();
+  } catch (err) {
+    console.error(err);
+    showToast('Could not save seeding: ' + (err.message || err), 'err');
+  } finally {
+    if (btn) btn.textContent = 'Save Seeding';
+    renderSeeding();
+  }
+}
+
+function openStartPostseason() {
+  if (seedingDirty()) {
+    openModal('<h3>Save seeding first</h3><p>You have unsaved changes to the <b>' + bracketLabel(seedBracket)
+      + '</b> bracket. Save or discard them before starting the postseason.</p>'
+      + '<div class="modal-actions"><button class="btn" onclick="closeModal()">OK</button></div>');
+    return;
+  }
+  // Cross-bracket unplaced check uses committed seeds only (both fields from the DB).
+  const unplaced = teams.filter(t => t.playoff_seed == null && t.cup_seed == null)
+    .map(t => teamLabelText(t.id)).sort((a, b) => a.localeCompare(b));
+  const season = seasons.find(s => s.id === selectedSeasonId);
+  const already = season && season.postseason_published;
+
+  openModal(
+    '<h3>' + (already ? 'Re-publish postseason?' : 'Start the postseason?') + '</h3>'
+    + (already ? '<p>The postseason is already published. This just re-confirms the seeding is live.</p>'
+               : '<p>This publishes both brackets to the public Postseason page. You can keep entering results afterward.</p>')
+    + (unplaced.length
+        ? '<p class="warn">\u26A0 ' + unplaced.length + ' team' + (unplaced.length === 1 ? '' : 's')
+          + ' seeded in neither bracket: ' + escapeHtml(unplaced.join(', ')) + '. They won\u2019t appear in any bracket.</p>'
+        : '')
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" id="start-ps-go">' + (already ? 'Re-publish' : 'Start Postseason') + '</button></div>'
+  );
+  document.getElementById('start-ps-go').onclick = () => { closeModal(); startPostseason(); };
+}
+
+async function startPostseason() {
+  try {
+    const { error } = await sb.from('seasons').update({ postseason_published: true }).eq('id', selectedSeasonId);
+    if (error) throw error;
+    const season = seasons.find(s => s.id === selectedSeasonId);
+    if (season) season.postseason_published = true;
+    showToast('Postseason published.', 'ok');
+    renderSeeding();
+  } catch (err) {
+    console.error(err);
+    showToast('Could not start postseason: ' + (err.message || err), 'err');
+  }
 }
 
 // Pre-fill the add-match week with the latest week in the schedule (or 1 if empty).
