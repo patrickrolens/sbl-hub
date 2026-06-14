@@ -843,7 +843,7 @@ function renderBoxPlot() {
     // Icons per Pokémon. Group those landing on the same X pixel. Up to 3 fan
     // vertically; 4+ collapse into a filled count circle (clickable for the list)
     // so they never bleed into neighboring team rows.
-    const ICON = 18, STACK = 15;
+    const ICON = 9, STACK = 8;
     const buckets = {};
     byTeam[tid].forEach(r => { const px = Math.round(sx(valOf(r))); (buckets[px] = buckets[px] || []).push(r); });
     Object.keys(buckets).forEach(px => {
@@ -877,7 +877,8 @@ function teamLabelShort(tid) {
 }
 
 // ── CIRCLE PACKING ("Roster Bubbles") — season → teams → Pokémon, sized by metric.
-//    Teams are laid out in a grid; within each, Pokémon circles are spiral-packed.
+//    Team bubble area ∝ the team's cumulative metric; Pokémon circle area ∝ value.
+//    Both levels are packed so circles never overlap (front-chain packing).
 const PACK_META = {
   kpg: { label: 'KOs / Game', get: r => r.kpg }, kos: { label: 'KOs', get: r => r.kos },
   mb: { label: 'Matches Brought', get: r => r.mbCount }, mp: { label: 'Match Participation', get: r => r.mpCount },
@@ -889,67 +890,136 @@ function togglePackCollapse() {
   document.getElementById('pack-collapse').textContent = collapsed ? '▸' : '▾';
   document.getElementById('pack-collapse').title = collapsed ? 'Show chart' : 'Hide chart';
 }
+
+// Pack circles (given their radii) with no overlaps, centered near the origin.
+// Front-chain algorithm: place each new circle tangent to two existing ones, choosing
+// the spot nearest the centroid; falls back to a radial push if no tangent fits.
+function packCircles(radii) {
+  const nodes = radii.map(r => ({ r, x: 0, y: 0 }));
+  if (!nodes.length) return { nodes, R: 0 };
+  if (nodes.length === 1) { return { nodes, R: nodes[0].r }; }
+  // seed first three
+  nodes[0].x = 0; nodes[0].y = 0;
+  nodes[1].x = nodes[0].r + nodes[1].r; nodes[1].y = 0;
+  if (nodes[2]) place3(nodes[0], nodes[1], nodes[2]);
+  const placed = nodes.slice(0, Math.min(3, nodes.length));
+  for (let i = 3; i < nodes.length; i++) {
+    const c = nodes[i];
+    let best = null, bestD = Infinity;
+    // try tangent to each pair of already-placed circles
+    for (let a = 0; a < placed.length; a++) {
+      for (let b = a + 1; b < placed.length; b++) {
+        const cand = tangentTo(placed[a], placed[b], c.r);
+        for (const pt of cand) {
+          if (collides(pt, c.r, placed, 0.01)) continue;
+          const d = Math.hypot(pt.x, pt.y);
+          if (d < bestD) { bestD = d; best = pt; }
+        }
+      }
+    }
+    if (!best) {
+      // radial fallback: push outward from centroid until clear
+      let ang = (i * 2.39996), rr = 0; const stepR = c.r;
+      do { rr += stepR; best = { x: Math.cos(ang) * rr, y: Math.sin(ang) * rr }; ang += 0.7; }
+      while (collides(best, c.r, placed, 0.01) && rr < 100000);
+    }
+    c.x = best.x; c.y = best.y; placed.push(c);
+  }
+  // recenter on centroid of extents, compute enclosing radius
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  nodes.forEach(n => { minX = Math.min(minX, n.x - n.r); maxX = Math.max(maxX, n.x + n.r); minY = Math.min(minY, n.y - n.r); maxY = Math.max(maxY, n.y + n.r); });
+  const ox = (minX + maxX) / 2, oy = (minY + maxY) / 2;
+  nodes.forEach(n => { n.x -= ox; n.y -= oy; });
+  let R = 0; nodes.forEach(n => { R = Math.max(R, Math.hypot(n.x, n.y) + n.r); });
+  return { nodes, R };
+}
+function place3(a, b, c) {
+  // position c tangent to both a and b
+  const d = Math.hypot(b.x - a.x, b.y - a.y);
+  const ra = a.r + c.r, rb = b.r + c.r;
+  const x = (d * d + ra * ra - rb * rb) / (2 * d);
+  const h = Math.sqrt(Math.max(0, ra * ra - x * x));
+  const ux = (b.x - a.x) / d, uy = (b.y - a.y) / d;
+  c.x = a.x + ux * x - uy * h; c.y = a.y + uy * x + ux * h;
+}
+function tangentTo(a, b, r) {
+  const d = Math.hypot(b.x - a.x, b.y - a.y);
+  const ra = a.r + r, rb = b.r + r;
+  if (d > ra + rb || d < Math.abs(ra - rb) || d === 0) return [];
+  const x = (d * d + ra * ra - rb * rb) / (2 * d);
+  const h2 = ra * ra - x * x; if (h2 < 0) return [];
+  const h = Math.sqrt(h2);
+  const ux = (b.x - a.x) / d, uy = (b.y - a.y) / d;
+  const mx = a.x + ux * x, my = a.y + uy * x;
+  return [{ x: mx - uy * h, y: my + ux * h }, { x: mx + uy * h, y: my - ux * h }];
+}
+function collides(pt, r, list, eps) {
+  for (const n of list) { if (Math.hypot(pt.x - n.x, pt.y - n.y) < n.r + r - eps) return true; }
+  return false;
+}
+
 function renderPack() {
   const el = document.getElementById('pack');
   const metric = PACK_META[document.getElementById('pack-metric').value];
   const valOf = metric.get;
 
-  // Group filtered instances by team.
   const byTeam = {};
   filtered.forEach(r => { (byTeam[r.team_id] = byTeam[r.team_id] || []).push(r); });
   const teamIds = Object.keys(byTeam);
   if (!teamIds.length) { el.innerHTML = '<svg viewBox="0 0 720 120"><text class="scatter-empty" x="360" y="60" text-anchor="middle">No data for these filters</text></svg>'; return; }
 
-  // Grid layout for the team bubbles.
-  const W = 720;
-  const cols = teamIds.length <= 4 ? teamIds.length : (teamIds.length <= 9 ? 3 : (teamIds.length <= 16 ? 4 : 5));
-  const rows = Math.ceil(teamIds.length / cols);
-  const cellW = W / cols, cellH = cellW;        // square cells
-  const H = rows * cellH + 10;
-  const teamR = cellW * 0.44;
-
-  // Max metric value across all plotted mons → consistent circle scaling (area ∝ value).
-  const maxV = Math.max(1, ...filtered.map(valOf));
   const ramps = ['#534AB7', '#1D9E75', '#D85A30', '#378ADD', '#BA7517', '#D4537E', '#0F6E56', '#993C1D', '#8A5CD4', '#2E8B8B'];
 
-  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" style="width:100%;height:auto">';
-
-  teamIds.forEach((tid, ti) => {
-    const col = ti % cols, row = Math.floor(ti / cols);
-    const cx = col * cellW + cellW / 2, cy = row * cellH + cellH / 2;
-    const color = ramps[ti % ramps.length];
-    const mons = byTeam[tid].slice().sort((a, b) => valOf(b) - valOf(a));   // big first
-
-    // team bubble
-    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + teamR.toFixed(1) + '" fill="' + color + '" fill-opacity="0.12" stroke="' + color + '" stroke-width="1.5"/>';
-
-    // Pokémon circles: radius ∝ sqrt(value) so area encodes the metric. Spiral-pack
-    // from the bubble center outward (sunflower angle) to fill the team bubble.
-    const innerR = teamR - 6;
-    mons.forEach((r, k) => {
-      const v = valOf(r);
-      const pr = Math.max(5, Math.sqrt(v / maxV) * (innerR * 0.5));
-      // sunflower placement
-      const golden = Math.PI * (3 - Math.sqrt(5));
-      const t = k + 0.5;
-      const rad = (innerR - pr) * Math.sqrt(t / mons.length);
-      const ang = t * golden;
-      const px = cx + Math.cos(ang) * rad, py = cy + Math.sin(ang) * rad;
-      const showIcon = pr >= 11;
-      if (showIcon) {
-        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="' + color + '" fill-opacity="0.4" stroke="' + color + '" stroke-width="1"/>';
-        const isz = pr * 1.5;
-        svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + (px - isz / 2).toFixed(1) + '" y="' + (py - isz / 2).toFixed(1) + '" width="' + isz.toFixed(1) + '" height="' + isz.toFixed(1) + '" style="image-rendering:pixelated;pointer-events:none"/>';
-        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="transparent"><title>' + escapeHtml(r.name) + ' — ' + metric.label + ': ' + (Number.isInteger(v) ? v : v.toFixed(2)) + '</title></circle>';
-      } else {
-        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="' + color + '" fill-opacity="0.65" stroke="' + color + '" stroke-width="1"><title>' + escapeHtml(r.name) + ' — ' + metric.label + ': ' + (Number.isInteger(v) ? v : v.toFixed(2)) + '</title></circle>';
-      }
-    });
-
-    // team label — white with a dark outline so it reads over any bubble color
-    svg += '<text class="pack-team" x="' + cx + '" y="' + (cy - teamR + 13).toFixed(1) + '" text-anchor="middle">' + escapeHtml(teamLabelShort(tid)) + '</text>';
+  // For each team: pack its Pokémon (radius ∝ √value), giving an intrinsic team radius.
+  const maxV = Math.max(0.0001, ...filtered.map(valOf));
+  const teamData = teamIds.map((tid, ti) => {
+    const mons = byTeam[tid].slice().sort((a, b) => valOf(b) - valOf(a));
+    // Pokémon circle radii (min radius so zero-value mons still show as a dot).
+    const radii = mons.map(r => Math.max(4, Math.sqrt(Math.max(0, valOf(r)) / maxV) * 34));
+    const packed = packCircles(radii);
+    return { tid, ti, mons, packed, innerR: packed.R, color: ramps[ti % ramps.length],
+             total: mons.reduce((s, r) => s + Math.max(0, valOf(r)), 0) };
   });
 
+  // Team bubble radius ∝ √(cumulative metric), but never smaller than what's needed to
+  // contain its packed Pokémon. Scale the cumulative-based size to a sensible range.
+  const maxTotal = Math.max(0.0001, ...teamData.map(t => t.total));
+  teamData.forEach(t => {
+    const byTotal = Math.sqrt(t.total / maxTotal) * 150;   // cumulative-score sizing
+    t.R = Math.max(t.innerR + 8, byTotal, 30);
+    t.pad = t.R - t.innerR;   // padding to center the packed group
+  });
+
+  // Pack the team bubbles against each other (no overlaps), using their radii.
+  const teamPack = packCircles(teamData.map(t => t.R + 6));   // +6 gap between teams
+  teamPack.nodes.forEach((n, i) => { teamData[i].cx = n.x; teamData[i].cy = n.y; });
+
+  // Fit everything into the SVG viewport.
+  const W = 720, margin = 8;
+  const scale = (W - margin * 2) / (teamPack.R * 2);
+  const H = teamPack.R * 2 * scale + margin * 2;
+  const ox = W / 2, oy = H / 2;
+  const SX = v => ox + v * scale, SY = v => oy + v * scale;
+
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H.toFixed(0) + '" role="img" style="width:100%;height:auto">';
+  teamData.forEach(t => {
+    const cx = SX(t.cx), cy = SY(t.cy), R = t.R * scale;
+    svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + R.toFixed(1) + '" fill="' + t.color + '" fill-opacity="0.12" stroke="' + t.color + '" stroke-width="1.5"/>';
+    t.mons.forEach((r, k) => {
+      const node = t.packed.nodes[k];
+      const px = cx + node.x * scale, py = cy + node.y * scale, pr = node.r * scale;
+      const v = valOf(r), vTxt = Number.isInteger(v) ? v : v.toFixed(2);
+      if (pr >= 11) {
+        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="' + t.color + '" fill-opacity="0.35" stroke="' + t.color + '" stroke-width="1"/>';
+        const isz = pr * 1.5;
+        svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + (px - isz / 2).toFixed(1) + '" y="' + (py - isz / 2).toFixed(1) + '" width="' + isz.toFixed(1) + '" height="' + isz.toFixed(1) + '" style="image-rendering:pixelated;pointer-events:none"/>';
+        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="transparent"><title>' + escapeHtml(r.name) + ' — ' + metric.label + ': ' + vTxt + '</title></circle>';
+      } else {
+        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="' + t.color + '" fill-opacity="0.65" stroke="' + t.color + '" stroke-width="0.8"><title>' + escapeHtml(r.name) + ' — ' + metric.label + ': ' + vTxt + '</title></circle>';
+      }
+    });
+    svg += '<text class="pack-team" x="' + cx.toFixed(1) + '" y="' + (cy - R - 4).toFixed(1) + '" text-anchor="middle">' + escapeHtml(teamLabelShort(t.tid)) + '</text>';
+  });
   el.innerHTML = svg + '</svg>';
 }
 
