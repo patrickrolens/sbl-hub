@@ -98,10 +98,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .box-cluster:hover { fill-opacity: 1; }
 .box-cluster-n { fill: #fff; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
 /* Box card fills its grid cell so its scroll area can match the taller neighbor. */
-/* Inline box plot: a fixed-height scroll viewport. The SVG inside keeps its natural
-   pixel height (set per-render) so the container actually scrolls instead of the SVG
-   shrinking to fit. Height is tuned to roughly match the matrix neighbor. */
-#boxplot { height: 580px; overflow-y: auto; overflow-x: hidden; }
+/* Inline box plot and matrix are both taller than the other charts; lock them to the
+   same fixed height and let each scroll, so the 2×2 row stays even with no dead space. */
+#boxplot, #matrix { height: 560px; overflow-y: auto; overflow-x: hidden; }
 /* Team labels on the bubble chart: white with a dark outline to read over any color. */
 .pack-team { fill: #fff; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: 2.5px; cursor: pointer; }
 .pack-team:hover { fill: var(--accent); }
