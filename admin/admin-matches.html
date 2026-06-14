@@ -143,6 +143,9 @@ select:focus, input:focus { border-color: var(--accent); }
 .md-score .pend { font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); }
 .md-dirty-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
 .md-body { padding: 12px; border-top: 1px solid var(--border); background: var(--bg2); }
+.md-series-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.md-series-row label { font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); }
+.md-series-row select { font-size: 12px; padding: 5px 8px; }
 .md-loading { color: var(--text3); font-size: 12px; font-style: italic; padding: 10px 2px; }
 
 /* brought six (aggregated) */
@@ -390,6 +393,7 @@ let pokemonById  = {};              // pokemon.json id -> entry
 let rosterByTeam = {};              // team_id -> [{pokemon_id, acquired_week, released_week}]
 let expandedMatches = new Set();    // match ids whose data-entry card is expanded
 let collapsedDataGroups = new Set(); // group keys (week / stage+week) collapsed in Match & Game Results
+let autoCollapseInit = false;       // whether default-collapse has been seeded for the current load
 let matchModels = {};               // match_id -> editable model {loaded, loading, dirty, games[], manualBrought{a,b}}
 
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
@@ -429,6 +433,9 @@ function teamLabelText(id) {
 function matchHasResults(m) {
   return (gamesCountByMatch[m.id] || 0) > 0 || (m.team_a_score || 0) > 0 || (m.team_b_score || 0) > 0 || !!m.winner_team_id;
 }
+// Regular-season subset — Scheduled Matches, coverage, and the CSV importer only concern themselves
+// with regular matches. (`matches` also holds postseason matches, which are managed via the bracket.)
+function regularMatches() { return matches.filter(m => m.stage === 'regular'); }
 function sortedTeams() {
   return [...teams].sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name));
 }
@@ -507,14 +514,16 @@ function populateSeasonDropdown() {
 async function loadSeasonData(seasonId) {
   teams = []; teamById = {}; coachByTeam = {}; nameToTeam = {}; ambiguousNames = new Set();
   matches = []; gamesCountByMatch = {}; rosterByTeam = {};
+  // Re-seed default-collapse on each load (a season switch should re-evaluate which weeks are done).
+  collapsedScheduleWeeks = new Set(); collapsedDataGroups = new Set(); autoCollapseInit = false;
   if (!seasonId) { renderTool(); return; }
 
   const [teamsRes, ownersRes, matchRes, rosterRes] = await Promise.all([
     sb.from('teams').select('id, name, slug, initial_seed, playoff_seed, cup_seed').eq('season_id', seasonId),
     sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('matches')
-      .select('id, week, stage, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id')
-      .eq('season_id', seasonId).eq('stage', 'regular'),
+      .select('id, week, stage, postseason_round, bracket_position, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id')
+      .eq('season_id', seasonId).in('stage', ['regular', 'playoffs', 'cup']),
     sb.from('team_pokemon').select('team_id, pokemon_id, acquired_week, released_week'),
   ]);
   for (const r of [teamsRes, ownersRes, matchRes, rosterRes]) if (r.error) throw r.error;
@@ -547,7 +556,33 @@ async function loadSeasonData(seasonId) {
     (games || []).forEach(g => { gamesCountByMatch[g.match_id] = (gamesCountByMatch[g.match_id] || 0) + 1; });
   }
 
+  seedDefaultCollapse();
   renderTool();
+}
+
+// On a fresh load, collapse any week / postseason group whose matches are all entered,
+// so attention defaults to the weeks that still need results. Runs once per load; manual
+// toggles afterward are preserved.
+function seedDefaultCollapse() {
+  if (autoCollapseInit) return;
+  autoCollapseInit = true;
+
+  // Scheduled Matches: regular-season weeks only.
+  const regWeeks = [...new Set(matches.filter(m => m.stage === 'regular').map(m => m.week))];
+  regWeeks.forEach(w => {
+    const wMatches = matches.filter(m => m.stage === 'regular' && m.week === w);
+    if (wMatches.length && wMatches.every(matchHasResults)) collapsedScheduleWeeks.add(w);
+  });
+
+  // Match & Game Results: same grouping keys used by renderMatchData.
+  const byKey = {};
+  matches.forEach(m => {
+    const key = m.stage === 'regular' ? 'regular|' + m.week : m.stage + '|' + m.week;
+    (byKey[key] = byKey[key] || []).push(m);
+  });
+  Object.entries(byKey).forEach(([key, group]) => {
+    if (group.length && group.every(matchHasResults)) collapsedDataGroups.add(key);
+  });
 }
 
 function onSeasonChange() {
@@ -571,11 +606,12 @@ function renderTool() {
 // A team is "complete" (blue) if it has a match in each of those weeks, else "missing" (red).
 function renderCoverage() {
   const el = document.getElementById('coverage-panel');
-  if (!matches.length || !teams.length) { el.innerHTML = ''; return; }
+  const reg = regularMatches();
+  if (!reg.length || !teams.length) { el.innerHTML = ''; return; }
 
-  const weeks = [...new Set(matches.map(m => m.week))].sort((a, b) => a - b);
+  const weeks = [...new Set(reg.map(m => m.week))].sort((a, b) => a - b);
   const rows = sortedTeams().map(t => {
-    const tw = new Set(matches.filter(m => m.team_a_id === t.id || m.team_b_id === t.id).map(m => m.week));
+    const tw = new Set(reg.filter(m => m.team_a_id === t.id || m.team_b_id === t.id).map(m => m.week));
     const missing = weeks.filter(w => !tw.has(w));
     return { t, missing, ok: missing.length === 0 };
   });
@@ -614,7 +650,8 @@ function renderMatchList() {
   const el = document.getElementById('match-list');
   el.innerHTML = '';
 
-  if (!matches.length) {
+  const reg = regularMatches();
+  if (!reg.length) {
     const s = document.createElement('div');
     s.className = 'summary';
     s.innerHTML = '<span style="color:var(--text3)">No schedule for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet — import a CSV or add matches above.</span>';
@@ -622,9 +659,9 @@ function renderMatchList() {
     return;
   }
 
-  const weeks = [...new Set(matches.map(m => m.week))].sort((a, b) => a - b);
-  const withResults = matches.filter(matchHasResults).length;
-  const summaryText = matches.length + ' matches across ' + weeks.length + ' week' + (weeks.length === 1 ? '' : 's')
+  const weeks = [...new Set(reg.map(m => m.week))].sort((a, b) => a - b);
+  const withResults = reg.filter(matchHasResults).length;
+  const summaryText = reg.length + ' matches across ' + weeks.length + ' week' + (weeks.length === 1 ? '' : 's')
     + (withResults ? ' \u00B7 ' + withResults + ' with results entered' : '');
 
   const container = document.createElement('div');
@@ -645,7 +682,7 @@ function renderMatchList() {
       const group = document.createElement('div');
       group.className = 'week-group';
       const wCollapsed = collapsedScheduleWeeks.has(w);
-      const wMatches = matches.filter(m => m.week === w);
+      const wMatches = reg.filter(m => m.week === w);
       const wEntered = wMatches.filter(matchHasResults).length;
 
       const wHead = document.createElement('div');
@@ -943,6 +980,14 @@ async function startPostseason() {
     const season = seasons.find(s => s.id === selectedSeasonId);
     if (season) season.postseason_published = true;
     showToast('Postseason published.', 'ok');
+    // Bootstrap the opening round(s) from the saved seeds.
+    try {
+      const n = await createPendingPostseasonMatches();
+      if (n) renderMatchData();
+    } catch (e) {
+      console.error(e);
+      showToast('Published, but could not create the opening matches: ' + (e.message || e), 'err');
+    }
     renderSeeding();
   } catch (err) {
     console.error(err);
@@ -950,9 +995,161 @@ async function startPostseason() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POSTSEASON BRACKET ENGINE
+// (seedSlotsOrder / buildBracket / resolveBracket ported from postseason.html so the
+//  admin tool computes the exact bracket the public page renders.)
+// ─────────────────────────────────────────────────────────────────────────────
+function pairKey(a, b) { return [a, b].sort().join('|'); }
+
+// Standard single-elim seed order for `size` slots: size 8 -> [1,8,4,5,2,7,3,6].
+function seedSlotsOrder(size) {
+  let pls = [1, 2];
+  while (pls.length < size) {
+    const sum = pls.length * 2 + 1;
+    const out = [];
+    for (const p of pls) out.push(p, sum - p);
+    pls = out;
+  }
+  return pls;
+}
+
+// Build the round/node tree from a seeded team-id list (index 0 = top seed).
+function buildBracket(seeded) {
+  const N = seeded.length;
+  if (N < 2) return null;
+  const size = 1 << Math.ceil(Math.log2(N));
+  const order = seedSlotsOrder(size);
+  const slotTeam = order.map(seedNum => (seedNum <= N ? seeded[seedNum - 1] : null)); // null = BYE
+
+  const rounds = [];
+  const round0 = [];
+  for (let i = 0; i < size / 2; i++) {
+    round0.push({ round: 0, index: i, slotA: slotTeam[2 * i], slotB: slotTeam[2 * i + 1], childA: null, childB: null });
+  }
+  rounds.push(round0);
+  const totalRounds = Math.log2(size);
+  for (let r = 1; r < totalRounds; r++) {
+    const prev = rounds[r - 1], cur = [];
+    for (let i = 0; i < prev.length / 2; i++) {
+      cur.push({ round: r, index: i, slotA: null, slotB: null, childA: prev[2 * i], childB: prev[2 * i + 1] });
+    }
+    rounds.push(cur);
+  }
+  return rounds;
+}
+
+// Forward pass: resolve each node's two teams, attach a match by participating pair, advance winners/byes.
+function resolveBracket(rounds, stage) {
+  const matchByPair = {};
+  matches.filter(m => m.stage === stage).forEach(m => { matchByPair[pairKey(m.team_a_id, m.team_b_id)] = m; });
+
+  for (let r = 0; r < rounds.length; r++) {
+    for (const node of rounds[r]) {
+      if (r === 0) {
+        node.aTeam = node.slotA; node.bTeam = node.slotB;
+        node.aBye = node.slotA == null; node.bBye = node.slotB == null;
+      } else {
+        node.aTeam = node.childA.winnerTeam || null; node.bTeam = node.childB.winnerTeam || null;
+        node.aBye = false; node.bBye = false;
+      }
+      node.match = null; node.winnerTeam = null; node.resolved = false; node.isBye = false;
+
+      if (node.aBye && node.bTeam) { node.winnerTeam = node.bTeam; node.resolved = true; node.isBye = true; }
+      else if (node.bBye && node.aTeam) { node.winnerTeam = node.aTeam; node.resolved = true; node.isBye = true; }
+      else if (node.aTeam && node.bTeam) {
+        const m = matchByPair[pairKey(node.aTeam, node.bTeam)] || null;
+        node.match = m;
+        if (m && m.winner_team_id) { node.winnerTeam = m.winner_team_id; node.resolved = true; }
+      }
+    }
+  }
+  return rounds;
+}
+
+// Round name mirrors postseason.html's roundHeader, prefixed by stage for archive readability.
+function postseasonRoundName(stage, ri, totalRounds) {
+  const fromEnd = totalRounds - 1 - ri;
+  let base;
+  if (fromEnd === 0) base = 'Finals';
+  else if (fromEnd === 1) base = 'Semifinals';
+  else if (fromEnd === 2) base = 'Quarterfinals';
+  else base = 'Round of ' + Math.pow(2, totalRounds - ri);
+  return bracketLabel(stage === 'cup' ? 'cup' : 'playoff') + ' ' + base;
+}
+
+// Default series length per round: Bo7 finals, Bo5 earlier rounds (admin-editable afterward).
+function defaultSeriesForRound(ri, totalRounds) { return (ri === totalRounds - 1) ? 7 : 5; }
+
+// Postseason weeks pick up after the regular season: round 0 -> maxRegWeek+1, etc.
+function postseasonWeekBase() {
+  const reg = regularMatches();
+  return (reg.length ? Math.max(...reg.map(m => m.week)) : 0) + 1;
+}
+
+// Structural position letter A,B,C… assigned round-by-round top-to-bottom (mirrors public posLetter).
+function assignBracketPositions(rounds) {
+  let i = 0;
+  rounds.forEach(round => round.forEach(node => { node.posLetter = String.fromCharCode(65 + (i++ % 26)); }));
+}
+
+// For one stage: compute which node pairings are now known (both teams resolved, not a bye)
+// but have no matches row yet. Returns insert-ready row objects.
+function pendingMatchRowsForStage(stage) {
+  const field = stage === 'cup' ? 'cup' : 'playoff';
+  const seeded = seededTeamIds(field);
+  const rounds = buildBracket(seeded);
+  if (!rounds) return [];
+  resolveBracket(rounds, stage);
+  assignBracketPositions(rounds);
+
+  const total = rounds.length;
+  const weekBase = postseasonWeekBase();
+  const existingPairs = new Set(matches.filter(m => m.stage === stage).map(m => pairKey(m.team_a_id, m.team_b_id)));
+
+  const rows = [];
+  rounds.forEach((round, ri) => {
+    round.forEach(node => {
+      if (node.isBye) return;
+      if (!node.aTeam || !node.bTeam) return;            // pairing not yet determined
+      if (node.match) return;                            // already has a matches row
+      const key = pairKey(node.aTeam, node.bTeam);
+      if (existingPairs.has(key)) return;
+      existingPairs.add(key);                            // guard against dup within this pass
+      rows.push({
+        season_id: selectedSeasonId, stage,
+        week: weekBase + ri,
+        postseason_round: postseasonRoundName(stage, ri, total),
+        bracket_position: node.posLetter,
+        team_a_id: node.aTeam, team_b_id: node.bTeam,
+        team_a_score: 0, team_b_score: 0,
+        series_length: defaultSeriesForRound(ri, total),
+        match_date: null,
+      });
+    });
+  });
+  return rows;
+}
+
+// Insert any newly-knowable postseason matches across both brackets; toast what was created.
+// Returns the number of rows inserted.
+async function createPendingPostseasonMatches() {
+  const rows = [...pendingMatchRowsForStage('playoffs'), ...pendingMatchRowsForStage('cup')];
+  if (!rows.length) return 0;
+  const { data, error } = await sb.from('matches').insert(rows).select(
+    'id, week, stage, postseason_round, bracket_position, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id');
+  if (error) throw error;
+  const created = data || [];
+  created.forEach(m => { matches.push(m); });
+  const names = created.map(m => teamLabelText(m.team_a_id) + ' vs ' + teamLabelText(m.team_b_id)).join(' \u00B7 ');
+  showToast('Created ' + created.length + ' postseason match' + (created.length === 1 ? '' : 'es') + ': ' + names, 'ok');
+  return created.length;
+}
+
 // Pre-fill the add-match week with the latest week in the schedule (or 1 if empty).
 function setDefaultWeek() {
-  const wk = matches.length ? Math.max(...matches.map(m => m.week)) : 1;
+  const reg = regularMatches();
+  const wk = reg.length ? Math.max(...reg.map(m => m.week)) : 1;
   document.getElementById('add-week').value = wk;
 }
 
@@ -1162,6 +1359,18 @@ function renderMatchCard(m) {
 }
 
 function buildMatchBody(body, m, model) {
+  // Postseason matches carry a per-match series length (Bo5/Bo7 vary by round and season).
+  if (m.stage && m.stage !== 'regular') {
+    const sr = document.createElement('div');
+    sr.className = 'md-series-row';
+    sr.innerHTML = '<label>Series</label>';
+    const sel = document.createElement('select');
+    [3, 5, 7].forEach(n => { sel.innerHTML += '<option value="' + n + '"' + ((m.series_length || 5) === n ? ' selected' : '') + '>Best of ' + n + '</option>'; });
+    sel.onchange = () => updateSeriesLength(m.id, parseInt(sel.value, 10));
+    sr.appendChild(sel);
+    body.appendChild(sr);
+  }
+
   const broughtWrap = document.createElement('div');
   broughtWrap.className = 'brought-wrap';
   ['a', 'b'].forEach(side => broughtWrap.appendChild(renderBroughtTeam(m, model, side)));
@@ -1432,6 +1641,17 @@ async function saveMatch(matchId) {
     await refreshMatchRow(matchId);
     await loadMatchChildren(matchId);   // reload from DB → clears dirty
     showToast('Match data saved.', 'ok');
+
+    // If this was a postseason match that now has a winner, see if it unlocks the next round.
+    if (m.stage && m.stage !== 'regular' && m.winner_team_id) {
+      try {
+        const n = await createPendingPostseasonMatches();
+        if (n) renderMatchData();
+      } catch (e) {
+        console.error(e);
+        showToast('Saved, but could not create the next round: ' + (e.message || e), 'err');
+      }
+    }
   } catch (err) {
     console.error(err); showToast('Save failed: ' + (err.message || err), 'err');
   }
@@ -1543,8 +1763,9 @@ function resolveScheduleRows(parsed) {
 }
 
 function confirmImport(resolved, problems) {
-  const existing = matches.length;
-  const resultCount = matches.filter(matchHasResults).length;
+  const reg = regularMatches();
+  const existing = reg.length;
+  const resultCount = reg.filter(matchHasResults).length;
   const skipNote = problems.length
     ? '<div class="skiplist"><b>' + problems.length + ' row(s) skipped:</b><br>' + problems.map(escapeHtml).join('<br>') + '</div>'
     : '';
@@ -1655,6 +1876,23 @@ async function updateMatchDate(matchId, rawValue) {
   } catch (err) {
     console.error(err);
     showToast('Could not update date: ' + (err.message || err), 'err');
+  }
+}
+
+// Persist a per-match series-length change (postseason matches only). Re-renders so the
+// score-decided threshold in the card header reflects the new best-of count.
+async function updateSeriesLength(matchId, n) {
+  if (![3, 5, 7].includes(n)) return;
+  try {
+    const { error } = await sb.from('matches').update({ series_length: n }).eq('id', matchId);
+    if (error) throw error;
+    const mm = matches.find(x => x.id === matchId);
+    if (mm) mm.series_length = n;
+    showToast('Series length set to Best of ' + n + '.', 'ok');
+    renderMatchData();
+  } catch (err) {
+    console.error(err);
+    showToast('Could not update series length: ' + (err.message || err), 'err');
   }
 }
 
