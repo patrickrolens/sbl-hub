@@ -77,8 +77,8 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .viz-modal-controls label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; font-weight: 700; }
 .viz-modal-controls select, .viz-modal-controls input { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 6px 8px; outline: none; font-family: inherit; }
 .viz-modal-controls input[type=number] { width: 60px; }
-.viz-modal-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; align-items: flex-start; justify-content: center; }
-.viz-modal-body svg { width: 100%; height: auto; max-width: 1280px; display: block; }
+.viz-modal-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; align-items: stretch; justify-content: center; }
+.viz-modal-body svg { width: 100%; height: 100%; display: block; }
 .axis-line { stroke: var(--border); stroke-width: 1; }
 .grid-line { stroke: var(--border); stroke-opacity: .35; stroke-width: 1; }
 .axis-label { fill: var(--text3); font-size: 11px; font-weight: 600; }
@@ -557,8 +557,9 @@ function renderScatter() {
   const el = inModal ? document.getElementById('viz-modal-body') : document.getElementById('scatter');
   const xKey = document.getElementById('scatter-x').value;
   const xMeta = X_META[xKey];
-  // Modal renders large to fill the viewport; the inline card stays compact.
-  const W = inModal ? 1280 : 720, H = inModal ? 720 : 380;
+  // Modal renders to the real body size to fill the view; inline stays compact.
+  const sz = inModal ? modalBodySize() : null;
+  const W = inModal ? sz.w : 720, H = inModal ? sz.h : 380;
   const expanded = inModal;
   const padL = 50, padB = 40, padT = 14, padR = 18;
   const plotW = W - padL - padR, plotH = H - padT - padB, x0 = padL, y0 = H - padB;
@@ -694,7 +695,8 @@ function openModal(id) {
   document.getElementById('viz-modal-filter').appendChild(fb);
   document.getElementById('viz-modal').hidden = false;
   document.body.style.overflow = 'hidden';
-  reg.render();
+  // Render after layout so modalBodySize() reads real dimensions (fills the view).
+  requestAnimationFrame(() => reg.render());
 }
 function closeModal() {
   if (!modalChart) return;
@@ -712,6 +714,13 @@ function closeModal() {
   CHART_REGISTRY[id].render();   // re-render the inline version
 }
 function fmtBin(v, dec) { return dec > 0 ? v.toFixed(dec) : String(Math.round(v)); }
+// Actual drawable size of the modal body (minus its padding), so charts render their
+// viewBox to the real aspect ratio and fill the whole view instead of letterboxing.
+function modalBodySize() {
+  const b = document.getElementById('viz-modal-body');
+  const pad = 32;   // 16px padding each side
+  return { w: Math.max(320, (b.clientWidth || 1200) - pad), h: Math.max(280, (b.clientHeight || 700) - pad) };
+}
 // Collapse/expand a chart card's body inline (to skip past it toward the table).
 function toggleCollapse(cardId) {
   const card = document.getElementById(cardId);
@@ -720,6 +729,7 @@ function toggleCollapse(cardId) {
   if (btn) { btn.textContent = collapsed ? '▸' : '▾'; btn.title = collapsed ? 'Show chart' : 'Hide chart'; }
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalChart) closeModal(); });
+window.addEventListener('resize', () => { if (modalChart) CHART_REGISTRY[modalChart].render(); });
 
 // ── HISTOGRAM (equal-width value bins over the filtered instances) ──
 const HIST_META = {
@@ -745,7 +755,8 @@ function renderHistogram() {
 
   // Min-games is the global filter now, already applied to `filtered`.
   const rows = filtered;
-  const W = inModal ? 1280 : 720, H = inModal ? 680 : 380, padL = 44, padB = 46, padT = 14, padR = 14;
+  const sz = inModal ? modalBodySize() : null;
+  const W = inModal ? sz.w : 720, H = inModal ? sz.h : 380, padL = 44, padB = 46, padT = 14, padR = 14;
   const plotW = W - padL - padR, plotH = H - padT - padB, x0 = padL, y0 = H - padB;
 
   let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img">';
@@ -851,7 +862,7 @@ function renderBoxPlot() {
     .sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name))
     .map(t => t.id).filter(id => byTeam[id]);
 
-  const rowH = 76, padT = 28, padB = 40, padL = 150, padR = 24, W = inModal ? 1180 : 720;
+  const rowH = 76, padT = 28, padB = 40, padL = 150, padR = 24, W = inModal ? Math.max(720, modalBodySize().w) : 720;
   const H = padT + padB + teamIds.length * rowH;
   const plotW = W - padL - padR, x0 = padL;
   const allVals = filtered.map(valOf);
@@ -1054,8 +1065,8 @@ function renderPack() {
   // Fit everything into the SVG viewport. Cap the height so the (roughly square)
   // cluster doesn't make the full-width card excessively tall; scale to whichever of
   // width or max-height is the binding constraint and center within the box.
-  const W = inModal ? 1100 : 720, margin = 8;
-  const maxH = inModal ? 720 : 440;
+  const W = inModal ? Math.max(900, modalBodySize().w) : 720, margin = 8;
+  const maxH = inModal ? (modalBodySize().h) : 440;
   const cluster = teamPack.R * 2;
   const scale = Math.min((W - margin * 2) / cluster, (maxH - margin * 2) / cluster);
   const H = Math.min(maxH, cluster * scale + margin * 2);
@@ -1124,7 +1135,7 @@ function renderMatrix() {
     cell[rb + ',' + ra] = { state: bState, mine: m.team_b_score, theirs: m.team_a_score, id: m.id };
   });
 
-  const labelW = 130, headH = 120, pad = 6, W = inModal ? 1040 : 720;
+  const labelW = 130, headH = 120, pad = 6, W = inModal ? Math.max(720, modalBodySize().w) : 720;
   const grid = W - labelW - pad;
   const cs = Math.max(10, Math.floor(grid / N));
   const gridW = cs * N;
