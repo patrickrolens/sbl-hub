@@ -297,6 +297,17 @@ function kfSortValue(kos, faints) { return faints > 0 ? kos / faints : (kos > 0 
 function monFor(id) { return pokemonById[id] || { id: id, name: id }; }
 function teamLabelHtml(id) { const t = teamById[id]; if (!t) return '—'; const c = coachByTeam[id]; return escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : ''); }
 function teamLabelText(id) { const t = teamById[id]; if (!t) return ''; const c = coachByTeam[id]; return t.name + (c ? ' (' + c + ')' : ''); }
+
+// Shared 20-color palette + a stable team→color map used by every chart so a given
+// team is always the same color (box plot, circle packing, future bump chart).
+const TEAM_PALETTE = ['#e6194B','#3cb44b','#ffe119','#4363d8','#f58231','#911eb4','#42d4f4','#f032e6','#bfef45','#fabed4','#469990','#dcbeff','#9A6324','#fffac8','#800000','#aaffc3','#808000','#ffd8b1','#000075','#a9a9a9'];
+let teamColorMap = {};
+function buildTeamColors() {
+  teamColorMap = {};
+  const ordered = [...allTeams].sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name));
+  ordered.forEach((t, i) => { teamColorMap[t.id] = TEAM_PALETTE[i % TEAM_PALETTE.length]; });
+}
+function teamColor(tid) { return teamColorMap[tid] || '#a9a9a9'; }
 function pctText(count, whole) { return whole > 0 ? Math.round((count / whole) * 100) + '% (' + count + ')' : '— (' + count + ')'; }
 function pctSort(count, whole) { return whole > 0 ? count / whole : -1; }
 
@@ -325,6 +336,9 @@ async function loadData() {
   allTeams = teamsRes.data || [];
   teamById = {}; allTeams.forEach(t => { teamById[t.id] = t; });
   const teamIds = allTeams.map(t => t.id);
+  // Stable team→color map (consistent across every chart). Keyed by seed order so a
+  // team always gets the same color regardless of filtering or render order.
+  buildTeamColors();
   allOwners = (ownersRes.data || []).filter(o => teamIds.includes(o.team_id));
   coachByTeam = {};
   allOwners.filter(o => o.ended_week == null).forEach(o => { if (o.players) coachByTeam[o.team_id] = o.players.display_name; });
@@ -824,10 +838,9 @@ function renderBoxPlot() {
   });
   svg += '<text class="axis-label" x="' + (x0 + plotW / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + escapeHtml(metric.label) + '</text>';
 
-  const ramps = ['#534AB7', '#1D9E75', '#D85A30', '#378ADD', '#BA7517', '#D4537E', '#0F6E56', '#993C1D'];
   teamIds.forEach((tid, ti) => {
     const cy = padT + ti * rowH + rowH / 2;
-    const color = ramps[ti % ramps.length];
+    const color = teamColor(tid);
     const vals = byTeam[tid].map(valOf).sort((a, b) => a - b);
     const q1 = quantile(vals, 0.25), med = quantile(vals, 0.5), q3 = quantile(vals, 0.75);
     const lo = vals[0], top = vals[vals.length - 1];
@@ -968,15 +981,13 @@ function renderPack() {
   const teamIds = Object.keys(byTeam);
   if (!teamIds.length) { el.innerHTML = '<svg viewBox="0 0 720 120"><text class="scatter-empty" x="360" y="60" text-anchor="middle">No data for these filters</text></svg>'; return; }
 
-  const ramps = ['#534AB7', '#1D9E75', '#D85A30', '#378ADD', '#BA7517', '#D4537E', '#0F6E56', '#993C1D', '#8A5CD4', '#2E8B8B'];
-
   // For each team: pack its Pokémon (radius ∝ √value, zeros excluded) into a group;
   // the group is scaled later to fill the team bubble.
   const teamData = teamIds.map((tid, ti) => {
     const mons = byTeam[tid].filter(r => valOf(r) > 0).sort((a, b) => valOf(b) - valOf(a));
     const radii = mons.map(r => Math.sqrt(valOf(r)));   // relative; scaled to fill later
     const packed = packCircles(radii);
-    return { tid, ti, mons, packed, innerR: packed.R || 1, color: ramps[ti % ramps.length],
+    return { tid, ti, mons, packed, innerR: packed.R || 1, color: teamColor(tid),
              total: mons.reduce((s, r) => s + valOf(r), 0) };
   });
 
