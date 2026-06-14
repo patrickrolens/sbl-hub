@@ -88,6 +88,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .grid-line { stroke: var(--border); stroke-opacity: .35; stroke-width: 1; }
 .axis-label { fill: var(--text3); font-size: 11px; font-weight: 600; }
 .tick-label { fill: var(--text3); font-size: 10px; }
+/* In the expanded modal, axis titles and tick labels scale up to match the big chart. */
+#viz-modal-body .axis-label { font-size: 18px; }
+#viz-modal-body .tick-label { font-size: 15px; }
 .scatter-empty { fill: var(--text3); font-size: 13px; font-style: italic; }
 /* Histogram bars. */
 .hist-bar { fill: var(--accent); fill-opacity: .7; transition: fill-opacity .12s; cursor: pointer; }
@@ -109,7 +112,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .mx-cell:hover { stroke: var(--text); stroke-width: 1.5; }
 .mx-row { fill: var(--text2); }
 .mx-col { fill: var(--text2); }
-.mx-leg { fill: var(--text3); font-size: 11px; }
+.mx-leg { fill: var(--text3); }
 /* Roster-breakdown tooltip rows: name left, value right. */
 #cluster-tip .ct-mon { display: flex; justify-content: space-between; gap: 14px; }
 #cluster-tip .ct-mon .ct-v { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -883,10 +886,13 @@ function renderBoxPlot() {
 
   // Modal gives each team much more room: taller rows, bigger icons + labels so the
   // chart reads at the expanded size rather than looking shrunk in a wide viewBox.
-  const rowH = inModal ? 130 : 76, padT = 28, padB = 40, padL = inModal ? 230 : 150, padR = 24;
+  const rowH = inModal ? 130 : 76, padT = 28, padB = inModal ? 56 : 40, padR = 24;
   const W = inModal ? Math.max(900, modalBodySize().w) : 720;
   const lblSize = inModal ? 22 : 11;
   const ICON = inModal ? 40 : 18, STACK = inModal ? 32 : 15;
+  const axisSize = inModal ? 18 : 11, tickSize = inModal ? 15 : 10;
+  // Gutter for team labels + a gap so value-0 points/circles clear the labels.
+  const padL = (inModal ? 230 : 150) + ICON;
   const H = padT + padB + teamIds.length * rowH;
   const plotW = W - padL - padR, x0 = padL;
   const allVals = filtered.map(valOf);
@@ -904,7 +910,7 @@ function renderBoxPlot() {
   xticks.forEach(v => {
     const x = sx(v);
     svg += '<line class="grid-line" x1="' + x.toFixed(1) + '" y1="' + padT + '" x2="' + x.toFixed(1) + '" y2="' + (H - padB) + '"/>';
-    svg += '<text class="tick-label" x="' + x.toFixed(1) + '" y="' + (H - padB + 15) + '" text-anchor="middle">' + fmtBin(v, metric.dec) + '</text>';
+    svg += '<text class="tick-label" x="' + x.toFixed(1) + '" y="' + (H - padB + tickSize + 4) + '" text-anchor="middle">' + fmtBin(v, metric.dec) + '</text>';
   });
   svg += '<text class="axis-label" x="' + (x0 + plotW / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + escapeHtml(metric.label) + '</text>';
 
@@ -1166,7 +1172,7 @@ function renderMatrix() {
   const grid = W - labelW - pad;
   const cs = Math.max(10, Math.floor(grid / N));
   const gridW = cs * N;
-  const H = headH + gridW + 34;
+  const H = headH + gridW + 10;
   const COL = { win: '#4363d8', loss: '#e6194B', upcoming: '#ffe119', self: '#2e3248' };
   const lblSize = inModal ? 20 : 10;
 
@@ -1199,13 +1205,14 @@ function renderMatrix() {
     svg += '<text class="mx-col" x="' + x + '" y="' + baseY + '" font-size="' + lblSize + '" text-anchor="start" transform="rotate(-45 ' + x + ' ' + baseY + ')">' + escapeHtml(shortName(t)) + '</text>';
   });
 
-  const ly = headH + gridW + 22;
+  // Legend in the empty top-left area (above the rows, left of the columns).
   const leg = [['win', 'Win'], ['loss', 'Loss'], ['upcoming', 'Upcoming'], ['self', 'Self']];
-  let lx = labelW;
-  leg.forEach(([k, lbl]) => {
-    svg += '<rect x="' + lx + '" y="' + (ly - 10) + '" width="12" height="12" rx="2" fill="' + COL[k] + '"/>';
-    svg += '<text class="mx-leg" x="' + (lx + 17) + '" y="' + ly + '">' + lbl + '</text>';
-    lx += 31 + lbl.length * 7;
+  const legSize = inModal ? 16 : 10, sw0 = inModal ? 16 : 12, lh = inModal ? 24 : 17;
+  const lx = 6, lyTop = inModal ? 18 : 12;
+  leg.forEach(([k, lbl], i) => {
+    const yy = lyTop + i * lh;
+    svg += '<rect x="' + lx + '" y="' + yy + '" width="' + sw0 + '" height="' + sw0 + '" rx="2" fill="' + COL[k] + '"/>';
+    svg += '<text class="mx-leg" x="' + (lx + sw0 + 6) + '" y="' + (yy + sw0 - 3) + '" font-size="' + legSize + '">' + lbl + '</text>';
   });
 
   el.innerHTML = svg + '</svg>';
