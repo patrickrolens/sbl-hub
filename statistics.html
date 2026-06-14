@@ -45,8 +45,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 .viz-grid .viz-full { grid-column: 1 / -1; }
 .viz { min-width: 0; }
-/* Collapsed chart card hides its body, leaving just the header for skipping past. */
-.viz.collapsed .scatter-wrap { display: none; }
+/* Collapse-all bar above the 2×2 grid. */
+.grid-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.grid-bar-label { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); }
+.viz-grid.collapsed { display: none; }
+/* Collapsed full-width pack card hides its body, leaving just the header. */
+#pack-card.collapsed .scatter-wrap { display: none; }
 
 /* ─── CHART HEADER (shared by every visual) ─── */
 .scatter-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -92,9 +96,8 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .box-cluster { cursor: pointer; transition: fill-opacity .12s; }
 .box-cluster:hover { fill-opacity: 1; }
 .box-cluster-n { fill: #fff; font-size: 10px; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
-/* Inline box plot can be very tall (one row per team) — cap it and scroll. The
-   modal version renders into viz-modal-body, which is unaffected by this. */
-#boxplot { max-height: 460px; overflow-y: auto; }
+/* Inline box plot can be very tall (one row per team) — cap it and scroll. */
+#boxplot { max-height: 620px; overflow-y: auto; }
 /* Team labels on the bubble chart: white with a dark outline to read over any color. */
 .pack-team { fill: #fff; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: 2.5px; cursor: pointer; }
 .pack-team:hover { fill: var(--accent); }
@@ -102,7 +105,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .mx-cell { stroke: var(--bg); stroke-width: 1; }
 .mx-cell:hover { stroke: var(--text); stroke-width: 1.5; }
 .mx-row { fill: var(--text2); font-size: 10px; }
-.mx-col { fill: var(--text2); font-size: 10px; text-anchor: start; }
+.mx-col { fill: var(--text2); font-size: 10px; text-anchor: end; }
 .mx-leg { fill: var(--text3); font-size: 11px; }
 /* Roster-breakdown tooltip rows: name left, value right. */
 #cluster-tip .ct-mon { display: flex; justify-content: space-between; gap: 14px; }
@@ -173,10 +176,14 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
     <span class="count" id="row-count"></span>
   </div>
 
-  <div class="viz-grid">
+  <div class="grid-bar">
+    <button class="scatter-btn" id="grid-collapse" onclick="toggleGridCollapse()" title="Hide these charts" aria-label="Hide these charts">▾</button>
+    <span class="grid-bar-label">Visualizations</span>
+  </div>
+  <div class="viz-grid" id="viz-grid">
     <div class="card viz" id="scatter-card">
       <div class="scatter-head">
-        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('scatter-card')" title="Hide chart" aria-label="Hide chart">▾</button><button class="scatter-btn" onclick="openModal('scatter')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
+        <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('scatter')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
         <div class="card-title scatter-title">KOs Scatter</div>
         <div class="field"><label>X axis</label>
           <select id="scatter-x" onchange="renderScatter()">
@@ -191,7 +198,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
     <div class="card viz" id="hist-card">
       <div class="scatter-head">
-        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('hist-card')" title="Hide chart" aria-label="Hide chart">▾</button><button class="scatter-btn" onclick="openModal('hist')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
+        <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('hist')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
         <div class="card-title scatter-title">Distribution</div>
         <div class="hist-controls">
           <div class="field"><label>Metric</label>
@@ -216,7 +223,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
     <div class="card viz" id="box-card">
       <div class="scatter-head">
-        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('box-card')" title="Hide chart" aria-label="Hide chart">▾</button><button class="scatter-btn" onclick="openModal('box')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
+        <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('box')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
         <div class="card-title scatter-title">Team Distribution</div>
         <div class="hist-controls">
           <div class="field"><label>Metric</label>
@@ -237,7 +244,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
     <div class="card viz" id="matrix-card">
       <div class="scatter-head">
-        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('matrix-card')" title="Hide chart" aria-label="Hide chart">▾</button><button class="scatter-btn" onclick="openModal('matrix')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
+        <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('matrix')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
         <div class="card-title scatter-title">Matchup Matrix</div>
         <div class="hist-controls">
           <div class="field"><label>Stage</label>
@@ -624,7 +631,7 @@ function renderScatter() {
     Object.values(cells).forEach((cell, ci) => {
       const n = cell.items.length;
       // Icon size shrinks as a cluster grows past 4.
-      const base = expanded ? 26 : 20;
+      const base = expanded ? 40 : 20;
       const iconSize = n <= 4 ? base : Math.max(11, base - (n - 4) * 1.5);
       const ring = n > 1 ? iconSize * 0.6 : 0;
       // Outline circle sized to contain the cluster; clickable for the tooltip.
@@ -721,12 +728,20 @@ function modalBodySize() {
   const pad = 32;   // 16px padding each side
   return { w: Math.max(320, (b.clientWidth || 1200) - pad), h: Math.max(280, (b.clientHeight || 700) - pad) };
 }
-// Collapse/expand a chart card's body inline (to skip past it toward the table).
+// Collapse/expand a single chart card's body (used by the full-width pack chart).
 function toggleCollapse(cardId) {
   const card = document.getElementById(cardId);
   const collapsed = card.classList.toggle('collapsed');
   const btn = card.querySelector('.scatter-btns .scatter-btn');
   if (btn) { btn.textContent = collapsed ? '▸' : '▾'; btn.title = collapsed ? 'Show chart' : 'Hide chart'; }
+}
+// Collapse/expand all four charts in the 2×2 grid at once.
+function toggleGridCollapse() {
+  const grid = document.getElementById('viz-grid');
+  const collapsed = grid.classList.toggle('collapsed');
+  const btn = document.getElementById('grid-collapse');
+  btn.textContent = collapsed ? '▸' : '▾';
+  btn.title = collapsed ? 'Show these charts' : 'Hide these charts';
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalChart) closeModal(); });
 window.addEventListener('resize', () => { if (modalChart) CHART_REGISTRY[modalChart].render(); });
@@ -804,7 +819,9 @@ function renderHistogram() {
     // smaller, down to a 9px floor).
     const n = members.length;
     let iconW = 22;
-    if (n > 60) iconW = Math.max(9, Math.round(22 - (n - 60) / 12));
+    // Inline view shrinks crowded bins to stay on-screen; the modal has the room to
+    // keep icons full size.
+    if (!inModal && n > 60) iconW = Math.max(9, Math.round(22 - (n - 60) / 12));
     const drawW = iconW - 2;
     const perRow = Math.max(1, Math.floor((bw - 2) / iconW));
     const colCenter = bx + bw / 2;
@@ -1062,11 +1079,12 @@ function renderPack() {
   const teamPack = packCircles(teamData.map(t => t.R + 6));   // +6 gap between teams
   teamPack.nodes.forEach((n, i) => { teamData[i].cx = n.x; teamData[i].cy = n.y; });
 
-  // Fit everything into the SVG viewport. Cap the height so the (roughly square)
+  // Fit everything into the SVG viewport. Cap the height so the (roughly circular)
   // cluster doesn't make the full-width card excessively tall; scale to whichever of
-  // width or max-height is the binding constraint and center within the box.
+  // width or max-height binds and center within the box. The modal fits to its body
+  // height so the cluster grows to fill the available vertical space.
   const W = inModal ? Math.max(900, modalBodySize().w) : 720, margin = 8;
-  const maxH = inModal ? (modalBodySize().h) : 440;
+  const maxH = inModal ? modalBodySize().h : 360;
   const cluster = teamPack.R * 2;
   const scale = Math.min((W - margin * 2) / cluster, (maxH - margin * 2) / cluster);
   const H = Math.min(maxH, cluster * scale + margin * 2);
@@ -1135,26 +1153,26 @@ function renderMatrix() {
     cell[rb + ',' + ra] = { state: bState, mine: m.team_b_score, theirs: m.team_a_score, id: m.id };
   });
 
-  const labelW = 130, headH = 120, pad = 6, W = inModal ? Math.max(720, modalBodySize().w) : 720;
+  const labelW = inModal ? 170 : 130, headH = inModal ? 150 : 110, pad = 6, W = inModal ? Math.max(720, modalBodySize().w) : 720;
   const grid = W - labelW - pad;
   const cs = Math.max(10, Math.floor(grid / N));
   const gridW = cs * N;
   const H = headH + gridW + 34;
   const COL = { win: '#4363d8', loss: '#e6194B', upcoming: '#ffe119', self: '#2e3248' };
+  const lblSize = inModal ? 15 : 10;
 
   matrixCells = [];
   let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" style="width:100%;height:auto">';
-  // Fully vertical column labels. Baseline sits just above the grid (headH - 4); the
-  // -90° rotation makes them read bottom-to-top, extending UP into the header area so
-  // they never overlap the first cell row.
+  // Diagonal (45°) column labels. Baseline sits just above the grid so the rotated
+  // text rises up-and-left into the header area, clear of the first cell row.
   teams.forEach((t, c) => {
     const x = labelW + c * cs + cs / 2;
-    const baseY = headH - 4;
-    svg += '<text class="mx-col" x="' + x + '" y="' + baseY + '" transform="rotate(-90 ' + x + ' ' + baseY + ')">' + escapeHtml(shortName(t)) + '</text>';
+    const baseY = headH - 6;
+    svg += '<text class="mx-col" x="' + x + '" y="' + baseY + '" font-size="' + lblSize + '" transform="rotate(-45 ' + x + ' ' + baseY + ')">' + escapeHtml(shortName(t)) + '</text>';
   });
   teams.forEach((tr, r) => {
     const y = headH + r * cs;
-    svg += '<text class="mx-row" x="' + (labelW - 8) + '" y="' + (y + cs / 2 + 3) + '" text-anchor="end">' + escapeHtml(shortName(tr)) + '</text>';
+    svg += '<text class="mx-row" x="' + (labelW - 8) + '" y="' + (y + cs / 2 + 3) + '" font-size="' + lblSize + '" text-anchor="end">' + escapeHtml(shortName(tr)) + '</text>';
     teams.forEach((tc, c) => {
       const x = labelW + c * cs;
       if (r === c) { svg += '<rect class="mx-cell" x="' + x + '" y="' + y + '" width="' + (cs - 2) + '" height="' + (cs - 2) + '" rx="2" fill="' + COL.self + '"/>'; return; }
