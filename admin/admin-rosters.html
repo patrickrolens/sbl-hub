@@ -114,6 +114,7 @@ select:disabled { opacity: .5; }
 .er-fields label { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); }
 .er-fields input, .er-fields select { font-size: 12px; padding: 4px 6px; }
 .er-fields .er-aw { width: 52px; }
+.er-fields .er-pick { width: 60px; }
 .er-fields .er-notes { width: 150px; text-transform: none; }
 .er-actions { display: flex; flex-wrap: wrap; gap: 5px; flex-shrink: 0; justify-content: flex-end; }
 
@@ -124,6 +125,7 @@ select:disabled { opacity: .5; }
 .add-fld.grow { flex: 1 1 220px; min-width: 180px; }
 .add-fld.grow .fa-box { width: 100%; }
 #add-week { width: 72px; }
+#add-pick { width: 90px; }
 .editor-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
 .editor-foot .spacer { flex: 1 1 auto; }
 .er-row.removing { opacity: .6; }
@@ -240,10 +242,6 @@ select:disabled { opacity: .5; }
     </div>
 
     <div class="txn-foot">
-      <label class="chk">
-        <input type="checkbox" id="exclude-inactive">
-        Exclude from Inactive Pokémon (hard-remove the given-up mon instead of keeping it as inactive)
-      </label>
       <span class="spacer"></span>
       <button class="btn btn-accent" id="apply-btn" onclick="openConfirm()" disabled>Apply Transaction</button>
     </div>
@@ -279,11 +277,15 @@ select:disabled { opacity: .5; }
         </div>
         <div class="add-fld">
           <label for="add-via">Acquired via</label>
-          <select id="add-via">
+          <select id="add-via" onchange="onAddViaChange()">
             <option value="draft">draft</option>
             <option value="free_agency">free_agency</option>
             <option value="trade">trade</option>
           </select>
+        </div>
+        <div class="add-fld" id="add-pick-fld">
+          <label for="add-pick">Draft pick #</label>
+          <input type="number" id="add-pick" min="1" step="1" placeholder="optional">
         </div>
         <button class="btn btn-accent" id="add-btn" onclick="addRosterRow()" disabled>+ Add</button>
       </div>
@@ -670,7 +672,6 @@ function closeFaResults() {
 function openConfirm() {
   const m = mode();
   const aTeam = teamAId(), aDrop = dropAId(), w = effWeek();
-  const exclude = document.getElementById('exclude-inactive').checked;
 
   let title, swapHtml, recvId;
   if (m === 'trade') {
@@ -703,7 +704,6 @@ function openConfirm() {
   openModal(
     '<h3>' + title + '</h3>'
     + '<div class="swap">' + swapHtml + '<div style="margin-top:6px;color:var(--text3)">Effective Week ' + w + '</div></div>'
-    + (exclude ? '<p class="warn">The given-up Pokémon will be removed entirely, not kept as inactive.</p>' : '')
     + (warnLines.length ? '<p class="warn">\u26A0 ' + warnLines.map(escapeHtml).join('<br>\u26A0 ') + '</p>' : '')
     + '<div class="modal-actions">'
     +   '<button class="btn" onclick="closeModal()">Cancel</button>'
@@ -718,7 +718,9 @@ async function applyTransaction() {
 
   const m = mode();
   const w = effWeek();
-  const exclude = document.getElementById('exclude-inactive').checked;
+  // The "exclude from inactive" option was removed; given-up Pokémon are always kept as
+  // inactive rows. (Week-1 releases are filtered out on the Team page instead.)
+  const exclude = false;
   const notes = (document.getElementById('txn-notes').value || '').trim() || null;
 
   try {
@@ -757,7 +759,6 @@ function resetSelectionsKeepContext() {
   document.getElementById('drop-b').value = '';
   document.getElementById('fa-input').value = '';
   document.getElementById('txn-notes').value = '';
-  document.getElementById('exclude-inactive').checked = false;
   faSelected = null;
 }
 
@@ -784,7 +785,7 @@ function onEditorTeamChange() {
 async function loadEditorTeam(teamId) {
   try {
     const { data, error } = await sb.from('team_pokemon')
-      .select('id, pokemon_id, acquired_week, released_week, acquired_via, notes')
+      .select('id, pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number, notes')
       .eq('team_id', teamId);
     if (error) throw error;
     editorRows = data || [];
@@ -807,6 +808,7 @@ function buildWorkFromRows() {
     acquired_week: o.acquired_week,
     released_week: o.released_week,
     acquired_via: o.acquired_via,
+    draft_pick_number: o.draft_pick_number,
     notes: o.notes,
     isNew: false, isDeleted: false,
   }));
@@ -846,6 +848,7 @@ function editorRowHtml(r) {
     +   '<div class="er-fields">'
     +     '<label>Wk added <input type="number" class="er-aw" min="1" step="1" value="' + (r.acquired_week == null ? '' : r.acquired_week) + '"></label>'
     +     '<label>Via <select class="er-via">' + viaOptionsHtml(r.acquired_via) + '</select></label>'
+    +     '<label class="er-pick-lbl"' + (r.acquired_via === 'draft' ? '' : ' hidden') + '>Pick # <input type="number" class="er-pick" min="1" step="1" placeholder="—" value="' + (r.draft_pick_number == null ? '' : r.draft_pick_number) + '"></label>'
     +     '<label>Notes <input type="text" class="er-notes" value="' + escapeHtml(r.notes || '') + '"></label>'
     +   '</div>'
     + '</div>'
@@ -890,7 +893,9 @@ function renderEditor() {
     const undo = row.querySelector('.er-undo');
     if (undo) { undo.addEventListener('click', () => undoRemove(key)); return; }
     row.querySelector('.er-aw').addEventListener('input', e => onFieldInput(key, 'acquired_week', e.target.value));
-    row.querySelector('.er-via').addEventListener('change', e => onFieldInput(key, 'acquired_via', e.target.value));
+    row.querySelector('.er-via').addEventListener('change', e => onViaChange(key, e.target.value, row));
+    const pickInp = row.querySelector('.er-pick');
+    if (pickInp) pickInp.addEventListener('input', e => onFieldInput(key, 'draft_pick_number', e.target.value));
     row.querySelector('.er-notes').addEventListener('input', e => onFieldInput(key, 'notes', e.target.value));
     row.querySelector('.er-toggle').addEventListener('click', () => toggleWork(key));
     row.querySelector('.er-remove').addEventListener('click', () => removeWork(key));
@@ -905,7 +910,25 @@ function onFieldInput(key, field, value) {
   if (!r) return;
   if (field === 'acquired_week') r.acquired_week = (value === '' ? null : parseInt(value, 10));
   else if (field === 'acquired_via') r.acquired_via = value;
+  else if (field === 'draft_pick_number') r.draft_pick_number = (value === '' ? null : parseInt(value, 10));
   else if (field === 'notes') r.notes = (value.trim() === '' ? null : value);
+  refreshEditorFooter();
+}
+
+// Via change toggles the pick field's visibility in place; leaving "draft" clears the pick.
+function onViaChange(key, value, row) {
+  const r = workByKey(key);
+  if (!r) return;
+  r.acquired_via = value;
+  const lbl = row.querySelector('.er-pick-lbl');
+  const pickInp = row.querySelector('.er-pick');
+  if (value === 'draft') {
+    if (lbl) lbl.hidden = false;
+  } else {
+    if (lbl) lbl.hidden = true;
+    if (pickInp) pickInp.value = '';
+    r.draft_pick_number = null;
+  }
   refreshEditorFooter();
 }
 
@@ -921,7 +944,7 @@ function openMoveToInactive(key) {
   if (!r) return;
   const aw = r.acquired_week || 1;
   let def = effWeek();
-  if (!Number.isInteger(def) || def <= aw) def = aw + 1;
+  if (!Number.isInteger(def) || def < aw) def = aw;
   openModal(
     '<h3>Move to Inactive</h3>'
     + '<p>Set the week ' + escapeHtml(monName(r.pokemon_id)) + ' was dropped. It stays in the inactive roster and keeps contributing its game stats to this team. (Staged until you Confirm Changes.)</p>'
@@ -939,7 +962,7 @@ function confirmMoveToInactive(key) {
   const aw = r.acquired_week || 1;
   const w = parseInt(document.getElementById('mti-week').value, 10);
   if (!Number.isInteger(w) || w < 1) { showToast('Enter a valid week.', 'err'); return; }
-  if (w <= aw) { showToast('Dropped week must be after the week added (' + aw + ').', 'err'); return; }
+  if (w < aw) { showToast('Dropped week can\u2019t be before the week added (' + aw + ').', 'err'); return; }
   r.released_week = w;
   closeModal();
   renderEditor();
@@ -965,6 +988,7 @@ function rowChanged(r) {
   return (o.acquired_week ?? null) !== (r.acquired_week ?? null)
       || (o.released_week ?? null) !== (r.released_week ?? null)
       || (o.acquired_via ?? null) !== (r.acquired_via ?? null)
+      || (o.draft_pick_number ?? null) !== (r.draft_pick_number ?? null)
       || (o.notes || null) !== (r.notes || null);
 }
 
@@ -1015,8 +1039,8 @@ function editorValidationError() {
     if (!Number.isInteger(r.acquired_week) || r.acquired_week < 1) {
       return monName(r.pokemon_id) + ': week added must be 1 or greater.';
     }
-    if (r.released_week != null && r.released_week <= r.acquired_week) {
-      return monName(r.pokemon_id) + ': dropped week must be after the week added.';
+    if (r.released_week != null && r.released_week < r.acquired_week) {
+      return monName(r.pokemon_id) + ': dropped week can\u2019t be before the week added.';
     }
   }
   return null;
@@ -1074,7 +1098,8 @@ async function applyEditorChanges() {
     }
     for (const r of updates) {
       const { error } = await sb.from('team_pokemon')
-        .update({ acquired_week: r.acquired_week, released_week: r.released_week, acquired_via: r.acquired_via, notes: r.notes })
+        .update({ acquired_week: r.acquired_week, released_week: r.released_week, acquired_via: r.acquired_via,
+          draft_pick_number: r.acquired_via === 'draft' ? (r.draft_pick_number ?? null) : null, notes: r.notes })
         .eq('id', r.id);
       if (error) throw error;
     }
@@ -1082,7 +1107,9 @@ async function applyEditorChanges() {
       const { error } = await sb.from('team_pokemon').insert({
         team_id: editorTeamId, pokemon_id: r.pokemon_id,
         acquired_week: r.acquired_week, released_week: r.released_week,
-        acquired_via: r.acquired_via, draft_pick_number: null, notes: r.notes,
+        acquired_via: r.acquired_via,
+        draft_pick_number: r.acquired_via === 'draft' ? (r.draft_pick_number ?? null) : null,
+        notes: r.notes,
       });
       if (error) throw error;
     }
@@ -1135,6 +1162,8 @@ function closeAddResults() { document.getElementById('add-results').classList.re
 function resetAddPicker() {
   const inp = document.getElementById('add-input');
   if (inp) inp.value = '';
+  const pickEl = document.getElementById('add-pick');
+  if (pickEl) pickEl.value = '';
   addSelected = null;
   closeAddResults();
   updateAddBtn();
@@ -1160,13 +1189,30 @@ function addRosterRow() {
   const w = parseInt(document.getElementById('add-week').value, 10);
   const via = document.getElementById('add-via').value;
   if (!Number.isInteger(w) || w < 1) { showToast('Week added must be 1 or greater.', 'err'); return; }
+  // Draft pick number only applies to draft acquisitions; ignored otherwise.
+  let pick = null;
+  if (via === 'draft') {
+    const raw = document.getElementById('add-pick').value;
+    if (raw !== '') {
+      pick = parseInt(raw, 10);
+      if (!Number.isInteger(pick) || pick < 1) { showToast('Draft pick # must be 1 or greater (or blank).', 'err'); return; }
+    }
+  }
   editorWork.push({
     key: 'new-' + (++editorKeySeq), id: null,
     pokemon_id: addSelected, acquired_week: w, released_week: null,
-    acquired_via: via, notes: null, isNew: true, isDeleted: false,
+    acquired_via: via, draft_pick_number: pick, notes: null, isNew: true, isDeleted: false,
   });
   resetAddPicker();
   renderEditor();
+}
+
+// Show the draft-pick field only when "draft" is the acquisition method.
+function onAddViaChange() {
+  const via = document.getElementById('add-via').value;
+  const fld = document.getElementById('add-pick-fld');
+  if (fld) fld.hidden = (via !== 'draft');
+  if (via !== 'draft') document.getElementById('add-pick').value = '';
 }
 
 function wireAddInput() {
