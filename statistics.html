@@ -92,20 +92,21 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .hist-bar { fill: var(--accent); fill-opacity: .7; transition: fill-opacity .12s; cursor: pointer; }
 .hist-bar:hover { fill-opacity: 1; }
 .hist-bar.open { fill-opacity: .22; stroke: var(--accent); stroke-width: 1.5; }
-.box-team { fill: var(--text); font-size: 11px; font-weight: 600; }
+.box-team { fill: var(--text); font-weight: 600; }
 .box-cluster { cursor: pointer; transition: fill-opacity .12s; }
 .box-cluster:hover { fill-opacity: 1; }
-.box-cluster-n { fill: #fff; font-size: 10px; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
-/* Inline box plot can be very tall (one row per team) — cap it and scroll. */
-#boxplot { max-height: 620px; overflow-y: auto; }
+.box-cluster-n { fill: #fff; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
+/* Box card fills its grid cell so its scroll area can match the taller neighbor. */
+#box-card { display: flex; flex-direction: column; }
+#box-card .scatter-wrap#boxplot { flex: 1; min-height: 260px; max-height: none; overflow-y: auto; }
 /* Team labels on the bubble chart: white with a dark outline to read over any color. */
 .pack-team { fill: #fff; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: 2.5px; cursor: pointer; }
 .pack-team:hover { fill: var(--accent); }
 /* Matchup matrix. */
 .mx-cell { stroke: var(--bg); stroke-width: 1; }
 .mx-cell:hover { stroke: var(--text); stroke-width: 1.5; }
-.mx-row { fill: var(--text2); font-size: 10px; }
-.mx-col { fill: var(--text2); font-size: 10px; text-anchor: end; }
+.mx-row { fill: var(--text2); }
+.mx-col { fill: var(--text2); text-anchor: end; }
 .mx-leg { fill: var(--text3); font-size: 11px; }
 /* Roster-breakdown tooltip rows: name left, value right. */
 #cluster-tip .ct-mon { display: flex; justify-content: space-between; gap: 14px; }
@@ -818,9 +819,8 @@ function renderHistogram() {
     // Shrink icons for crowded bins so the stack stays on-screen (>60 → progressively
     // smaller, down to a 9px floor).
     const n = members.length;
-    let iconW = 22;
-    // Inline view shrinks crowded bins to stay on-screen; the modal has the room to
-    // keep icons full size.
+    // Modal has room for larger icons; inline shrinks crowded bins to stay on-screen.
+    let iconW = inModal ? 34 : 22;
     if (!inModal && n > 60) iconW = Math.max(9, Math.round(22 - (n - 60) / 12));
     const drawW = iconW - 2;
     const perRow = Math.max(1, Math.floor((bw - 2) / iconW));
@@ -879,7 +879,11 @@ function renderBoxPlot() {
     .sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name))
     .map(t => t.id).filter(id => byTeam[id]);
 
-  const rowH = 76, padT = 28, padB = 40, padL = 150, padR = 24, W = inModal ? Math.max(720, modalBodySize().w) : 720;
+  // Modal gives each team more vertical room (taller rows, bigger icons + labels).
+  const rowH = inModal ? 104 : 76, padT = 28, padB = 40, padL = inModal ? 190 : 150, padR = 24;
+  const W = inModal ? Math.max(900, modalBodySize().w) : 720;
+  const lblSize = inModal ? 15 : 11;
+  const ICON = inModal ? 26 : 18, STACK = inModal ? 22 : 15;
   const H = padT + padB + teamIds.length * rowH;
   const plotW = W - padL - padR, x0 = padL;
   const allVals = filtered.map(valOf);
@@ -908,7 +912,7 @@ function renderBoxPlot() {
     const q1 = quantile(vals, 0.25), med = quantile(vals, 0.5), q3 = quantile(vals, 0.75);
     const lo = vals[0], top = vals[vals.length - 1];
 
-    svg += '<text class="box-team" x="' + (padL - 12) + '" y="' + (cy + 3) + '" text-anchor="end">' + escapeHtml(teamLabelShort(tid)) + '</text>';
+    svg += '<text class="box-team" x="' + (padL - 12) + '" y="' + (cy + 4) + '" font-size="' + lblSize + '" text-anchor="end">' + escapeHtml(teamLabelShort(tid)) + '</text>';
     // whisker
     svg += '<line x1="' + sx(lo).toFixed(1) + '" y1="' + cy + '" x2="' + sx(top).toFixed(1) + '" y2="' + cy + '" stroke="' + color + '" stroke-width="1.5"/>';
     svg += '<line x1="' + sx(lo).toFixed(1) + '" y1="' + (cy - 6) + '" x2="' + sx(lo).toFixed(1) + '" y2="' + (cy + 6) + '" stroke="' + color + '" stroke-width="1.5"/>';
@@ -919,7 +923,7 @@ function renderBoxPlot() {
     // Icons per Pokémon. Group those landing on the same X pixel. Up to 3 fan
     // vertically; 4+ collapse into a filled count circle (clickable for the list)
     // so they never bleed into neighboring team rows.
-    const ICON = 18, STACK = 15;
+    const cRad = inModal ? 13 : 9;
     const buckets = {};
     byTeam[tid].forEach(r => { const px = Math.round(sx(valOf(r))); (buckets[px] = buckets[px] || []).push(r); });
     Object.keys(buckets).forEach(px => {
@@ -929,8 +933,8 @@ function renderBoxPlot() {
         const v = valOf(group[0]);
         const idx = boxClusters.length;
         boxClusters.push({ value: v, metricLabel: metric.label, dec: metric.dec, items: group.map(g => g.name) });
-        svg += '<circle class="box-cluster" cx="' + cx + '" cy="' + cy + '" r="9" fill="' + color + '" fill-opacity="0.9" stroke="' + color + '" stroke-width="1.5" onclick="showBoxCluster(event,' + idx + ')"/>';
-        svg += '<text class="box-cluster-n" x="' + cx + '" y="' + (cy + 3) + '" text-anchor="middle">' + group.length + '</text>';
+        svg += '<circle class="box-cluster" cx="' + cx + '" cy="' + cy + '" r="' + cRad + '" fill="' + color + '" fill-opacity="0.9" stroke="' + color + '" stroke-width="1.5" onclick="showBoxCluster(event,' + idx + ')"/>';
+        svg += '<text class="box-cluster-n" x="' + cx + '" y="' + (cy + 4) + '" font-size="' + (inModal ? 13 : 10) + '" text-anchor="middle">' + group.length + '</text>';
       } else {
         group.forEach((r, j) => {
           const v = valOf(r);
@@ -1163,13 +1167,7 @@ function renderMatrix() {
 
   matrixCells = [];
   let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" style="width:100%;height:auto">';
-  // Diagonal (45°) column labels. Baseline sits just above the grid so the rotated
-  // text rises up-and-left into the header area, clear of the first cell row.
-  teams.forEach((t, c) => {
-    const x = labelW + c * cs + cs / 2;
-    const baseY = headH - 6;
-    svg += '<text class="mx-col" x="' + x + '" y="' + baseY + '" font-size="' + lblSize + '" transform="rotate(-45 ' + x + ' ' + baseY + ')">' + escapeHtml(shortName(t)) + '</text>';
-  });
+  // Cells + row labels first…
   teams.forEach((tr, r) => {
     const y = headH + r * cs;
     svg += '<text class="mx-row" x="' + (labelW - 8) + '" y="' + (y + cs / 2 + 3) + '" font-size="' + lblSize + '" text-anchor="end">' + escapeHtml(shortName(tr)) + '</text>';
@@ -1186,6 +1184,13 @@ function renderMatrix() {
       }
       svg += '<rect class="mx-cell" x="' + x + '" y="' + y + '" width="' + (cs - 2) + '" height="' + (cs - 2) + '" rx="2" fill="' + fill + '"' + clickAttr + '></rect>';
     });
+  });
+  // …then diagonal (45°) column labels ON TOP, with their baseline lifted clear of
+  // the grid so the text rises up-and-left into the reserved header area.
+  const colBaseY = headH - 12;
+  teams.forEach((t, c) => {
+    const x = labelW + c * cs + cs / 2;
+    svg += '<text class="mx-col" x="' + x + '" y="' + colBaseY + '" font-size="' + lblSize + '" transform="rotate(-45 ' + x + ' ' + colBaseY + ')">' + escapeHtml(shortName(t)) + '</text>';
   });
 
   const ly = headH + gridW + 22;
