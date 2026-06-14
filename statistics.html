@@ -77,7 +77,13 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .hist-bar:hover { fill-opacity: 1; }
 .hist-bar.open { fill-opacity: .22; stroke: var(--accent); stroke-width: 1.5; }
 .box-team { fill: var(--text); font-size: 11px; font-weight: 600; }
+.box-cluster { cursor: pointer; transition: fill-opacity .12s; }
+.box-cluster:hover { fill-opacity: 1; }
+.box-cluster-n { fill: #fff; font-size: 12px; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
 #box-card.collapsed .scatter-wrap { display: none; }
+/* Team labels on the bubble chart: white with a dark outline to read over any color. */
+.pack-team { fill: #fff; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: 2.5px; }
+#pack-card.collapsed .scatter-wrap { display: none; }
 .hist-count { fill: var(--text2); font-size: 10px; font-weight: 600; }
 .hist-controls { justify-self: end; display: flex; align-items: center; gap: 10px; }
 .hist-controls .field { display: flex; align-items: center; gap: 6px; }
@@ -221,6 +227,27 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
       </div>
     </div>
     <div class="scatter-wrap" id="boxplot"></div>
+  </div>
+
+  <div class="card" id="pack-card">
+    <div class="scatter-head">
+      <div class="scatter-btns">
+        <button class="scatter-btn" id="pack-collapse" onclick="togglePackCollapse()" title="Hide chart" aria-label="Hide chart">▾</button>
+      </div>
+      <div class="card-title scatter-title">Roster Bubbles</div>
+      <div class="hist-controls">
+        <div class="field"><label>Size by</label>
+          <select id="pack-metric" onchange="renderPack()">
+            <option value="kpg" selected>KOs / Game</option>
+            <option value="kos">KOs</option>
+            <option value="mb">Matches Brought</option>
+            <option value="mp">Match Participation</option>
+            <option value="gp">Game Participation</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="scatter-wrap" id="pack"></div>
   </div>
 
   <div class="card table-card">
@@ -408,6 +435,7 @@ function applyFilters() {
   renderScatter();
   renderHistogram();
   renderBoxPlot();
+  renderPack();
 }
 
 const SORT_ACCESSORS = {
@@ -731,6 +759,23 @@ function renderHistogram() {
 
 // ── BOX PLOT (per-team distribution of a metric, with each Pokémon as an icon) ──
 const BOX_META = HIST_META;   // same metric set
+let boxClusters = [];         // dense same-point groups, for click→tooltip
+function showBoxCluster(e, idx) {
+  e.stopPropagation();
+  const c = boxClusters[idx]; if (!c) return;
+  const list = c.items.map(n => '<div class="ct-mon">' + escapeHtml(n) + '</div>').join('');
+  let tip = document.getElementById('cluster-tip');
+  if (!tip) { tip = document.createElement('div'); tip.id = 'cluster-tip'; document.body.appendChild(tip); }
+  tip.innerHTML = '<div class="ct-head">' + escapeHtml(c.metricLabel) + ' ' + fmtBin(c.value, c.dec) + '</div>'
+    + '<div class="ct-sub">' + c.items.length + ' Pokémon</div>' + list;
+  tip.style.display = 'block';
+  const tr = tip.getBoundingClientRect();
+  let left = e.clientX + 12, top = e.clientY + 12;
+  if (left + tr.width > window.innerWidth - 8) left = e.clientX - tr.width - 12;
+  if (top + tr.height > window.innerHeight - 8) top = window.innerHeight - tr.height - 8;
+  tip.style.left = Math.max(8, left) + 'px';
+  tip.style.top = Math.max(8, top) + 'px';
+}
 function toggleBoxCollapse() {
   const card = document.getElementById('box-card');
   const collapsed = card.classList.toggle('collapsed');
@@ -747,6 +792,7 @@ function renderBoxPlot() {
   const metric = BOX_META[document.getElementById('box-metric').value];
   const minGp = Math.max(0, parseInt(document.getElementById('box-mingp').value, 10) || 0);
   const valOf = metric.get;
+  boxClusters = [];
 
   // Group the filtered instances by team (respecting the games-played floor).
   const byTeam = {};
@@ -794,21 +840,30 @@ function renderBoxPlot() {
     // box
     svg += '<rect x="' + sx(q1).toFixed(1) + '" y="' + (cy - 11) + '" width="' + Math.max(1, sx(q3) - sx(q1)).toFixed(1) + '" height="22" rx="3" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.5"/>';
     svg += '<line x1="' + sx(med).toFixed(1) + '" y1="' + (cy - 11) + '" x2="' + sx(med).toFixed(1) + '" y2="' + (cy + 11) + '" stroke="' + color + '" stroke-width="2.5"/>';
-    // Icons per Pokémon. Group those landing on the same X pixel and fan them
-    // vertically (alternating above/below the axis) so equal-value mons don't overlap.
+    // Icons per Pokémon. Group those landing on the same X pixel. Up to 3 fan
+    // vertically; 4+ collapse into a filled count circle (clickable for the list)
+    // so they never bleed into neighboring team rows.
     const ICON = 18, STACK = 15;
     const buckets = {};
     byTeam[tid].forEach(r => { const px = Math.round(sx(valOf(r))); (buckets[px] = buckets[px] || []).push(r); });
     Object.keys(buckets).forEach(px => {
       const group = buckets[px];
-      group.forEach((r, j) => {
-        const v = valOf(r);
-        // 0, +1, -1, +2, -2 … pattern around the center line
-        const step = Math.ceil(j / 2) * (j % 2 === 1 ? 1 : -1);
-        const ix = (+px) - ICON / 2;
-        const iy = cy - ICON / 2 + step * STACK;
-        svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + ix.toFixed(1) + '" y="' + iy.toFixed(1) + '" width="' + ICON + '" height="' + ICON + '" style="image-rendering:pixelated"><title>' + escapeHtml(r.name) + ' — ' + fmtBin(v, metric.dec) + '</title></image>';
-      });
+      const cx = +px;
+      if (group.length > 3) {
+        const v = valOf(group[0]);
+        const idx = boxClusters.length;
+        boxClusters.push({ value: v, metricLabel: metric.label, dec: metric.dec, items: group.map(g => g.name) });
+        svg += '<circle class="box-cluster" cx="' + cx + '" cy="' + cy + '" r="13" fill="' + color + '" fill-opacity="0.9" stroke="' + color + '" stroke-width="1.5" onclick="showBoxCluster(event,' + idx + ')"/>';
+        svg += '<text class="box-cluster-n" x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle">' + group.length + '</text>';
+      } else {
+        group.forEach((r, j) => {
+          const v = valOf(r);
+          const step = Math.ceil(j / 2) * (j % 2 === 1 ? 1 : -1);   // 0, +1, -1
+          const ix = cx - ICON / 2;
+          const iy = cy - ICON / 2 + step * STACK;
+          svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + ix.toFixed(1) + '" y="' + iy.toFixed(1) + '" width="' + ICON + '" height="' + ICON + '" style="image-rendering:pixelated"><title>' + escapeHtml(r.name) + ' — ' + fmtBin(v, metric.dec) + '</title></image>';
+        });
+      }
     });
   });
 
@@ -819,6 +874,83 @@ function teamLabelShort(tid) {
   if (!t) return '—';
   const c = coachByTeam[tid];
   return c || t.name;
+}
+
+// ── CIRCLE PACKING ("Roster Bubbles") — season → teams → Pokémon, sized by metric.
+//    Teams are laid out in a grid; within each, Pokémon circles are spiral-packed.
+const PACK_META = {
+  kpg: { label: 'KOs / Game', get: r => r.kpg }, kos: { label: 'KOs', get: r => r.kos },
+  mb: { label: 'Matches Brought', get: r => r.mbCount }, mp: { label: 'Match Participation', get: r => r.mpCount },
+  gp: { label: 'Game Participation', get: r => r.gpCount },
+};
+function togglePackCollapse() {
+  const card = document.getElementById('pack-card');
+  const collapsed = card.classList.toggle('collapsed');
+  document.getElementById('pack-collapse').textContent = collapsed ? '▸' : '▾';
+  document.getElementById('pack-collapse').title = collapsed ? 'Show chart' : 'Hide chart';
+}
+function renderPack() {
+  const el = document.getElementById('pack');
+  const metric = PACK_META[document.getElementById('pack-metric').value];
+  const valOf = metric.get;
+
+  // Group filtered instances by team.
+  const byTeam = {};
+  filtered.forEach(r => { (byTeam[r.team_id] = byTeam[r.team_id] || []).push(r); });
+  const teamIds = Object.keys(byTeam);
+  if (!teamIds.length) { el.innerHTML = '<svg viewBox="0 0 720 120"><text class="scatter-empty" x="360" y="60" text-anchor="middle">No data for these filters</text></svg>'; return; }
+
+  // Grid layout for the team bubbles.
+  const W = 720;
+  const cols = teamIds.length <= 4 ? teamIds.length : (teamIds.length <= 9 ? 3 : (teamIds.length <= 16 ? 4 : 5));
+  const rows = Math.ceil(teamIds.length / cols);
+  const cellW = W / cols, cellH = cellW;        // square cells
+  const H = rows * cellH + 10;
+  const teamR = cellW * 0.44;
+
+  // Max metric value across all plotted mons → consistent circle scaling (area ∝ value).
+  const maxV = Math.max(1, ...filtered.map(valOf));
+  const ramps = ['#534AB7', '#1D9E75', '#D85A30', '#378ADD', '#BA7517', '#D4537E', '#0F6E56', '#993C1D', '#8A5CD4', '#2E8B8B'];
+
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" style="width:100%;height:auto">';
+
+  teamIds.forEach((tid, ti) => {
+    const col = ti % cols, row = Math.floor(ti / cols);
+    const cx = col * cellW + cellW / 2, cy = row * cellH + cellH / 2;
+    const color = ramps[ti % ramps.length];
+    const mons = byTeam[tid].slice().sort((a, b) => valOf(b) - valOf(a));   // big first
+
+    // team bubble
+    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + teamR.toFixed(1) + '" fill="' + color + '" fill-opacity="0.12" stroke="' + color + '" stroke-width="1.5"/>';
+
+    // Pokémon circles: radius ∝ sqrt(value) so area encodes the metric. Spiral-pack
+    // from the bubble center outward (sunflower angle) to fill the team bubble.
+    const innerR = teamR - 6;
+    mons.forEach((r, k) => {
+      const v = valOf(r);
+      const pr = Math.max(5, Math.sqrt(v / maxV) * (innerR * 0.5));
+      // sunflower placement
+      const golden = Math.PI * (3 - Math.sqrt(5));
+      const t = k + 0.5;
+      const rad = (innerR - pr) * Math.sqrt(t / mons.length);
+      const ang = t * golden;
+      const px = cx + Math.cos(ang) * rad, py = cy + Math.sin(ang) * rad;
+      const showIcon = pr >= 11;
+      if (showIcon) {
+        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="' + color + '" fill-opacity="0.4" stroke="' + color + '" stroke-width="1"/>';
+        const isz = pr * 1.5;
+        svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + (px - isz / 2).toFixed(1) + '" y="' + (py - isz / 2).toFixed(1) + '" width="' + isz.toFixed(1) + '" height="' + isz.toFixed(1) + '" style="image-rendering:pixelated;pointer-events:none"/>';
+        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="transparent"><title>' + escapeHtml(r.name) + ' — ' + metric.label + ': ' + (Number.isInteger(v) ? v : v.toFixed(2)) + '</title></circle>';
+      } else {
+        svg += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="' + pr.toFixed(1) + '" fill="' + color + '" fill-opacity="0.65" stroke="' + color + '" stroke-width="1"><title>' + escapeHtml(r.name) + ' — ' + metric.label + ': ' + (Number.isInteger(v) ? v : v.toFixed(2)) + '</title></circle>';
+      }
+    });
+
+    // team label — white with a dark outline so it reads over any bubble color
+    svg += '<text class="pack-team" x="' + cx + '" y="' + (cy - teamR + 13).toFixed(1) + '" text-anchor="middle">' + escapeHtml(teamLabelShort(tid)) + '</text>';
+  });
+
+  el.innerHTML = svg + '</svg>';
 }
 
 // ── populate filter dropdowns ──
