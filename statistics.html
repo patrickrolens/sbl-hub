@@ -81,8 +81,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .viz-modal-controls label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; font-weight: 700; }
 .viz-modal-controls select, .viz-modal-controls input { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 6px 8px; outline: none; font-family: inherit; }
 .viz-modal-controls input[type=number] { width: 60px; }
-.viz-modal-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; align-items: stretch; justify-content: center; }
-.viz-modal-body svg { width: 100%; height: 100%; display: block; }
+.viz-modal-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: block; }
+.viz-modal-body svg { display: block; margin: 0 auto; }
+.viz-modal-body > svg { width: 100%; }
 .axis-line { stroke: var(--border); stroke-width: 1; }
 .grid-line { stroke: var(--border); stroke-opacity: .35; stroke-width: 1; }
 .axis-label { fill: var(--text3); font-size: 11px; font-weight: 600; }
@@ -97,8 +98,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .box-cluster:hover { fill-opacity: 1; }
 .box-cluster-n { fill: #fff; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
 /* Box card fills its grid cell so its scroll area can match the taller neighbor. */
-#box-card { display: flex; flex-direction: column; }
-#box-card .scatter-wrap#boxplot { flex: 1; min-height: 260px; max-height: none; overflow-y: auto; }
+/* Inline box plot: a fixed-height scroll viewport. The SVG inside keeps its natural
+   pixel height (set per-render) so the container actually scrolls instead of the SVG
+   shrinking to fit. Height is tuned to roughly match the matrix neighbor. */
+#boxplot { height: 580px; overflow-y: auto; overflow-x: hidden; }
 /* Team labels on the bubble chart: white with a dark outline to read over any color. */
 .pack-team { fill: #fff; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: 2.5px; cursor: pointer; }
 .pack-team:hover { fill: var(--accent); }
@@ -106,7 +109,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .mx-cell { stroke: var(--bg); stroke-width: 1; }
 .mx-cell:hover { stroke: var(--text); stroke-width: 1.5; }
 .mx-row { fill: var(--text2); }
-.mx-col { fill: var(--text2); text-anchor: end; }
+.mx-col { fill: var(--text2); }
 .mx-leg { fill: var(--text3); font-size: 11px; }
 /* Roster-breakdown tooltip rows: name left, value right. */
 #cluster-tip .ct-mon { display: flex; justify-content: space-between; gap: 14px; }
@@ -1185,12 +1188,13 @@ function renderMatrix() {
       svg += '<rect class="mx-cell" x="' + x + '" y="' + y + '" width="' + (cs - 2) + '" height="' + (cs - 2) + '" rx="2" fill="' + fill + '"' + clickAttr + '></rect>';
     });
   });
-  // …then diagonal (45°) column labels ON TOP, with their baseline lifted clear of
-  // the grid so the text rises up-and-left into the reserved header area.
-  const colBaseY = headH - 12;
+  // …then diagonal column labels ON TOP. Anchor at the column's grid-top point and
+  // rotate -45°: with start-anchoring the text reads up-and-to-the-right, sitting
+  // entirely in the reserved header band above the first cell row.
   teams.forEach((t, c) => {
     const x = labelW + c * cs + cs / 2;
-    svg += '<text class="mx-col" x="' + x + '" y="' + colBaseY + '" font-size="' + lblSize + '" transform="rotate(-45 ' + x + ' ' + colBaseY + ')">' + escapeHtml(shortName(t)) + '</text>';
+    const baseY = headH - 8;   // a hair above the grid
+    svg += '<text class="mx-col" x="' + x + '" y="' + baseY + '" font-size="' + lblSize + '" text-anchor="start" transform="rotate(-45 ' + x + ' ' + baseY + ')">' + escapeHtml(shortName(t)) + '</text>';
   });
 
   const ly = headH + gridW + 22;
