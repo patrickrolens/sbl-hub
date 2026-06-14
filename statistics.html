@@ -136,14 +136,16 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* ─── TABLE ─── */
 /* No overflow here on desktop: an overflow value would trap the sticky header
    inside this box instead of letting it stick to the page under the filter bar. */
-.table-scroll { overflow-x: visible; }
+/* Vertical scroll: show ~25 Pokémon at a time so the page isn't over-long. The
+   sticky header sticks to the top of this scroll box (not the page). */
+.table-scroll { overflow-x: visible; max-height: 1120px; overflow-y: auto; }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 /* Header sticks just below the sticky filter bar (nav + ~filter height). Solid
    background + border so rows never bleed through or overlap it. */
-.tbl th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 9px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: var(--nav-h); background: var(--bg2); z-index: 4; }
+.tbl th { text-align: center; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 9px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--bg2); z-index: 4; }
 .tbl th:hover { color: var(--text2); }
 .tbl th .arrow { color: var(--accent); margin-left: 2px; }
-.tbl th.num, .tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tbl td { padding: 7px 8px; border-bottom: 1px solid var(--bg3); white-space: nowrap; }
 .tbl tbody tr:hover { background: var(--bg3); }
 .tbl .pl { color: var(--text3); font-weight: 400; }
@@ -519,7 +521,7 @@ function renderTable() {
 
   let html = '<thead><tr>'
     + '<th onclick="sortBy(\'pokemon\')">Pokémon' + arrow('pokemon') + '</th>'
-    + '<th onclick="sortBy(\'team\')">Team (Player)' + arrow('team') + '</th>'
+    + '<th onclick="sortBy(\'team\')">Team (Coach)' + arrow('team') + '</th>'
     + '<th class="num" onclick="sortBy(\'kos\')">KOs' + arrow('kos') + '</th>'
     + '<th class="num" onclick="sortBy(\'faints\')">Faints' + arrow('faints') + '</th>'
     + '<th class="num" onclick="sortBy(\'kf\')">K/F' + arrow('kf') + '</th>'
