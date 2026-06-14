@@ -82,8 +82,24 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .box-cluster-n { fill: #fff; font-size: 10px; font-weight: 800; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,.5); stroke-width: 2px; }
 #box-card.collapsed .scatter-wrap { display: none; }
 /* Team labels on the bubble chart: white with a dark outline to read over any color. */
-.pack-team { fill: #fff; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: 2.5px; }
+.pack-team { fill: #fff; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: rgba(0,0,0,.75); stroke-width: 2.5px; cursor: pointer; }
+.pack-team:hover { fill: var(--accent); }
 #pack-card.collapsed .scatter-wrap { display: none; }
+/* Matchup matrix. */
+.mx-cell { stroke: var(--bg); stroke-width: 1; }
+.mx-cell:hover { stroke: var(--text); stroke-width: 1.5; }
+.mx-row { fill: var(--text2); font-size: 10px; }
+.mx-col { fill: var(--text2); font-size: 10px; text-anchor: end; }
+.mx-leg { fill: var(--text3); font-size: 11px; }
+#matrix-card.collapsed .scatter-wrap { display: none; }
+/* Bump chart. */
+.bump-wk { fill: var(--text2); font-size: 11px; font-weight: 600; }
+.bump-rank { fill: var(--text3); font-size: 10px; }
+.bump-label { font-size: 10px; font-weight: 600; }
+#bump-card.collapsed .scatter-wrap { display: none; }
+/* Roster-breakdown tooltip rows: name left, value right. */
+#cluster-tip .ct-mon { display: flex; justify-content: space-between; gap: 14px; }
+#cluster-tip .ct-mon .ct-v { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
 .hist-count { fill: var(--text2); font-size: 10px; font-weight: 600; }
 .hist-controls { justify-self: end; display: flex; align-items: center; gap: 10px; }
 .hist-controls .field { display: flex; align-items: center; gap: 6px; }
@@ -250,6 +266,43 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
     <div class="scatter-wrap" id="pack"></div>
   </div>
 
+  <div class="card" id="matrix-card">
+    <div class="scatter-head">
+      <div class="scatter-btns">
+        <button class="scatter-btn" id="matrix-collapse" onclick="toggleMatrixCollapse()" title="Hide chart" aria-label="Hide chart">▾</button>
+      </div>
+      <div class="card-title scatter-title">Matchup Matrix</div>
+      <div class="hist-controls">
+        <div class="field"><label>Stage</label>
+          <select id="matrix-stage" onchange="renderMatrix()">
+            <option value="regular" selected>Regular season</option>
+            <option value="all">All matches</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="scatter-wrap" id="matrix"></div>
+  </div>
+
+  <div class="card" id="bump-card">
+    <div class="scatter-head">
+      <div class="scatter-btns">
+        <button class="scatter-btn" id="bump-collapse" onclick="toggleBumpCollapse()" title="Hide chart" aria-label="Hide chart">▾</button>
+      </div>
+      <div class="card-title scatter-title">Standings Over Time</div>
+      <div class="hist-controls">
+        <div class="field"><label>Track</label>
+          <select id="bump-metric" onchange="renderBump()">
+            <option value="standings" selected>Standings (W–L)</option>
+            <option value="kos">Top KOs</option>
+            <option value="kfd">Top KF Δ</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="scatter-wrap" id="bump"></div>
+  </div>
+
   <div class="card table-card">
     <div class="toolbar" id="filter-bar">
       <div class="field"><label>Search</label><input type="text" id="f-search" placeholder="Pokémon name…" oninput="applyFilters()"></div>
@@ -329,7 +382,7 @@ async function loadData() {
   const [teamsRes, ownersRes, matchRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,initial_seed').eq('season_id', season.id),
     sb.from('team_owners').select('team_id, ended_week, players(display_name)'),
-    sb.from('matches').select('id, stage, week, team_a_id, team_b_id').eq('season_id', season.id),
+    sb.from('matches').select('id, stage, week, team_a_id, team_b_id, team_a_score, team_b_score, winner_team_id').eq('season_id', season.id),
   ]);
   for (const r of [teamsRes, ownersRes, matchRes]) if (r.error) throw r.error;
 
@@ -903,6 +956,24 @@ function togglePackCollapse() {
   document.getElementById('pack-collapse').textContent = collapsed ? '▸' : '▾';
   document.getElementById('pack-collapse').title = collapsed ? 'Show chart' : 'Hide chart';
 }
+let packTeamTips = [];
+function fmtPackVal(v) { return Number.isInteger(v) ? v : v.toFixed(2); }
+function showPackTip(e, ti) {
+  e.stopPropagation();
+  const d = packTeamTips[ti]; if (!d) return;
+  const rows = d.rows.map(r => '<div class="ct-mon"><span>' + escapeHtml(r.name) + '</span><span class="ct-v">' + fmtPackVal(r.v) + '</span></div>').join('');
+  let tip = document.getElementById('cluster-tip');
+  if (!tip) { tip = document.createElement('div'); tip.id = 'cluster-tip'; document.body.appendChild(tip); }
+  tip.innerHTML = '<div class="ct-head">' + escapeHtml(d.label) + '</div>'
+    + '<div class="ct-sub">' + escapeHtml(d.metricLabel) + ' total: ' + fmtPackVal(d.total) + '</div>' + rows;
+  tip.style.display = 'block';
+  const tr = tip.getBoundingClientRect();
+  let left = e.clientX + 12, top = e.clientY + 12;
+  if (left + tr.width > window.innerWidth - 8) left = e.clientX - tr.width - 12;
+  if (top + tr.height > window.innerHeight - 8) top = window.innerHeight - tr.height - 8;
+  tip.style.left = Math.max(8, left) + 'px';
+  tip.style.top = Math.max(8, top) + 'px';
+}
 
 // Pack circles (given their radii) with no overlaps, centered near the origin.
 // Front-chain algorithm: place each new circle tangent to two existing ones, choosing
@@ -1011,6 +1082,7 @@ function renderPack() {
   const SX = v => ox + v * scale, SY = v => oy + v * scale;
 
   let svg = '<svg viewBox="0 0 ' + W + ' ' + H.toFixed(0) + '" role="img" style="width:100%;height:auto">';
+  packTeamTips = [];
   teamData.forEach(t => {
     const cx = SX(t.cx), cy = SY(t.cy), R = t.R * scale;
     svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + R.toFixed(1) + '" fill="' + t.color + '" fill-opacity="0.12" stroke="' + t.color + '" stroke-width="1.5"/>';
@@ -1027,9 +1099,203 @@ function renderPack() {
         svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + (px - isz / 2).toFixed(1) + '" y="' + (py - isz / 2).toFixed(1) + '" width="' + isz.toFixed(1) + '" height="' + isz.toFixed(1) + '" style="image-rendering:pixelated;pointer-events:none"/>';
       }
     });
-    // team label tucked just inside the top edge of the bubble
-    svg += '<text class="pack-team" x="' + cx.toFixed(1) + '" y="' + (cy - R + 13).toFixed(1) + '" text-anchor="middle">' + escapeHtml(teamLabelShort(t.tid)) + '</text>';
+    // team label tucked just inside the top edge of the bubble — click for a roster
+    // breakdown (cumulative total + each Pokémon by score, descending).
+    const ti = packTeamTips.length;
+    packTeamTips.push({
+      label: teamLabelShort(t.tid),
+      metricLabel: metric.label,
+      total: t.total,
+      rows: t.mons.map(r => ({ name: r.name, v: valOf(r) })),   // already sorted desc
+    });
+    svg += '<text class="pack-team" x="' + cx.toFixed(1) + '" y="' + (cy - R + 13).toFixed(1) + '" text-anchor="middle" onclick="showPackTip(event,' + ti + ')">' + escapeHtml(teamLabelShort(t.tid)) + '</text>';
   });
+  el.innerHTML = svg + '</svg>';
+}
+
+// ── MATCHUP MATRIX (teams × teams; blue=win, red=loss, yellow=upcoming) ──
+function toggleMatrixCollapse() {
+  const card = document.getElementById('matrix-card');
+  const collapsed = card.classList.toggle('collapsed');
+  document.getElementById('matrix-collapse').textContent = collapsed ? '▸' : '▾';
+  document.getElementById('matrix-collapse').title = collapsed ? 'Show chart' : 'Hide chart';
+}
+function shortName(t) { const c = coachByTeam[t.id]; return c || t.name; }
+function scoreStr(a, b) { return (a == null || b == null) ? '' : a + '–' + b; }
+function renderMatrix() {
+  const el = document.getElementById('matrix');
+  const stage = document.getElementById('matrix-stage').value;
+  const teams = [...allTeams].sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name));
+  if (teams.length < 2) { el.innerHTML = '<svg viewBox="0 0 720 120"><text class="scatter-empty" x="360" y="60" text-anchor="middle">Not enough teams</text></svg>'; return; }
+  const idx = {}; teams.forEach((t, i) => idx[t.id] = i);
+  const N = teams.length;
+
+  // Row = team's perspective; mirror for the column team.
+  const cell = {};
+  const rel = stage === 'all' ? matches : matches.filter(m => m.stage === 'regular');
+  rel.forEach(m => {
+    const ra = idx[m.team_a_id], rb = idx[m.team_b_id];
+    if (ra == null || rb == null) return;
+    const hasResult = m.winner_team_id != null || (m.team_a_score != null && m.team_b_score != null && (m.team_a_score || m.team_b_score));
+    let aState, bState;
+    if (!hasResult) { aState = bState = 'upcoming'; }
+    else {
+      const aWon = m.winner_team_id ? m.winner_team_id === m.team_a_id : (m.team_a_score > m.team_b_score);
+      aState = aWon ? 'win' : 'loss'; bState = aWon ? 'loss' : 'win';
+    }
+    cell[ra + ',' + rb] = { state: aState, info: scoreStr(m.team_a_score, m.team_b_score) };
+    cell[rb + ',' + ra] = { state: bState, info: scoreStr(m.team_b_score, m.team_a_score) };
+  });
+
+  const labelW = 130, headH = 96, pad = 6, W = 720;
+  const grid = W - labelW - pad;
+  const cs = Math.max(10, Math.floor(grid / N));
+  const gridW = cs * N;
+  const H = headH + gridW + 34;
+  const COL = { win: '#4363d8', loss: '#e6194B', upcoming: '#ffe119', self: '#2e3248' };
+
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" style="width:100%;height:auto">';
+  teams.forEach((t, c) => {
+    const x = labelW + c * cs + cs / 2;
+    svg += '<text class="mx-col" x="' + x + '" y="' + (headH - 6) + '" transform="rotate(-45 ' + x + ' ' + (headH - 6) + ')">' + escapeHtml(shortName(t)) + '</text>';
+  });
+  teams.forEach((tr, r) => {
+    const y = headH + r * cs;
+    svg += '<text class="mx-row" x="' + (labelW - 8) + '" y="' + (y + cs / 2 + 3) + '" text-anchor="end">' + escapeHtml(shortName(tr)) + '</text>';
+    teams.forEach((tc, c) => {
+      const x = labelW + c * cs;
+      let fill, title;
+      if (r === c) { fill = COL.self; title = ''; }
+      else {
+        const cl = cell[r + ',' + c];
+        if (!cl) { fill = 'var(--bg3)'; title = shortName(tr) + ' vs ' + shortName(tc) + ' — not scheduled'; }
+        else { fill = COL[cl.state]; title = shortName(tr) + ' vs ' + shortName(tc) + (cl.state === 'upcoming' ? ' — upcoming' : ' — ' + (cl.state === 'win' ? 'Won' : 'Lost') + ' ' + cl.info); }
+      }
+      svg += '<rect class="mx-cell" x="' + x + '" y="' + y + '" width="' + (cs - 2) + '" height="' + (cs - 2) + '" rx="2" fill="' + fill + '"><title>' + escapeHtml(title) + '</title></rect>';
+    });
+  });
+
+  const ly = headH + gridW + 22;
+  const leg = [['win', 'Win'], ['loss', 'Loss'], ['upcoming', 'Upcoming'], ['self', 'Self']];
+  let lx = labelW;
+  leg.forEach(([k, lbl]) => {
+    svg += '<rect x="' + lx + '" y="' + (ly - 10) + '" width="12" height="12" rx="2" fill="' + COL[k] + '"/>';
+    svg += '<text class="mx-leg" x="' + (lx + 17) + '" y="' + ly + '">' + lbl + '</text>';
+    lx += 31 + lbl.length * 7;
+  });
+
+  el.innerHTML = svg + '</svg>';
+}
+
+// ── BUMP CHART (rank over weeks: standings, or top-15 stat races) ──
+function toggleBumpCollapse() {
+  const card = document.getElementById('bump-card');
+  const collapsed = card.classList.toggle('collapsed');
+  document.getElementById('bump-collapse').textContent = collapsed ? '▸' : '▾';
+  document.getElementById('bump-collapse').title = collapsed ? 'Show chart' : 'Hide chart';
+}
+// Weeks that actually have regular-season matches, ascending.
+function regularWeeks() {
+  const ws = new Set(matches.filter(m => m.stage === 'regular').map(m => m.week));
+  return [...ws].sort((a, b) => a - b);
+}
+// Cumulative team standings through week W (wins, then game-diff as tiebreak).
+function standingsThroughWeek(w) {
+  const rec = {}; allTeams.forEach(t => rec[t.id] = { w: 0, l: 0, gd: 0 });
+  matches.filter(m => m.stage === 'regular' && m.week <= w).forEach(m => {
+    if (rec[m.team_a_id] == null || rec[m.team_b_id] == null) return;
+    const hasResult = m.winner_team_id != null || (m.team_a_score != null && m.team_b_score != null && (m.team_a_score || m.team_b_score));
+    if (!hasResult) return;
+    const aWon = m.winner_team_id ? m.winner_team_id === m.team_a_id : (m.team_a_score > m.team_b_score);
+    const gd = (m.team_a_score || 0) - (m.team_b_score || 0);
+    rec[m.team_a_id].gd += gd; rec[m.team_b_id].gd -= gd;
+    if (aWon) { rec[m.team_a_id].w++; rec[m.team_b_id].l++; }
+    else { rec[m.team_b_id].w++; rec[m.team_a_id].l++; }
+  });
+  // Only teams that have played by now get a rank.
+  const played = allTeams.filter(t => rec[t.id].w + rec[t.id].l > 0);
+  played.sort((a, b) => rec[b.id].w - rec[a.id].w || rec[b.id].gd - rec[a.id].gd || a.name.localeCompare(b.name));
+  const rank = {}; played.forEach((t, i) => rank[t.id] = i + 1);
+  return { rank, rec };
+}
+// Cumulative per-Pokémon stat through week W → top-15 instances ranked.
+function statRaceThroughWeek(w, which) {
+  const upTo = new Set(matches.filter(m => m.week <= w).map(m => m.id));
+  const tot = {};   // key team|pid -> {kos, faints, name}
+  statRows.forEach(s => {
+    const mid = gameToMatch[s.game_id]; if (!mid || !upTo.has(mid)) return;
+    const key = s.team_id + '|' + s.pokemon_id;
+    const o = tot[key] = tot[key] || { kos: 0, faints: 0, team_id: s.team_id, pid: s.pokemon_id };
+    o.kos += s.kills || 0; o.faints += s.deaths || 0;
+  });
+  const arr = Object.values(tot).map(o => ({ ...o, val: which === 'kfd' ? o.kos - o.faints : o.kos, name: monName(o.pid) }));
+  arr.sort((a, b) => b.val - a.val || a.name.localeCompare(b.name));
+  const top = arr.filter(o => o.val > 0).slice(0, 15);
+  const rank = {}; top.forEach((o, i) => rank[o.team_id + '|' + o.pid] = { rank: i + 1, val: o.val, name: o.name, team_id: o.team_id });
+  return rank;
+}
+function renderBump() {
+  const el = document.getElementById('bump');
+  const mode = document.getElementById('bump-metric').value;
+  const weeks = regularWeeks();
+  if (weeks.length < 1) { el.innerHTML = '<svg viewBox="0 0 720 120"><text class="scatter-empty" x="360" y="60" text-anchor="middle">No weeks played yet</text></svg>'; return; }
+
+  // Build per-week rank maps and the set of entities ever ranked.
+  const series = {};   // entityKey -> [{week, rank, label, color, val}]
+  const labelOf = {}, colorOf = {};
+  weeks.forEach(w => {
+    if (mode === 'standings') {
+      const { rank } = standingsThroughWeek(w);
+      Object.keys(rank).forEach(tid => {
+        (series[tid] = series[tid] || []).push({ week: w, rank: rank[tid] });
+        labelOf[tid] = shortName(teamById[tid]); colorOf[tid] = teamColor(tid);
+      });
+    } else {
+      const rank = statRaceThroughWeek(w, mode);
+      Object.keys(rank).forEach(key => {
+        (series[key] = series[key] || []).push({ week: w, rank: rank[key].rank });
+        labelOf[key] = rank[key].name; colorOf[key] = teamColor(rank[key].team_id);
+      });
+    }
+  });
+
+  const keys = Object.keys(series);
+  if (!keys.length) { el.innerHTML = '<svg viewBox="0 0 720 120"><text class="scatter-empty" x="360" y="60" text-anchor="middle">No ranked data yet</text></svg>'; return; }
+  const maxRank = Math.max(...keys.flatMap(k => series[k].map(p => p.rank)));
+
+  const padL = 30, padR = 150, padT = 28, padB = 30, W = 720;
+  const rowH = 26;
+  const H = padT + padB + maxRank * rowH;
+  const plotW = W - padL - padR;
+  const wx = w => weeks.length === 1 ? padL + plotW / 2 : padL + (weeks.indexOf(w) / (weeks.length - 1)) * plotW;
+  const ry = rank => padT + (rank - 0.5) * rowH;
+
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" style="width:100%;height:auto">';
+  // week headers + rank guide labels
+  weeks.forEach(w => { svg += '<text class="bump-wk" x="' + wx(w).toFixed(1) + '" y="18" text-anchor="middle">Wk ' + w + '</text>'; });
+  for (let r = 1; r <= maxRank; r++) {
+    svg += '<text class="bump-rank" x="' + (padL - 6) + '" y="' + (ry(r) + 3).toFixed(1) + '" text-anchor="end">' + r + '</text>';
+    svg += '<line class="grid-line" x1="' + padL + '" y1="' + ry(r).toFixed(1) + '" x2="' + (W - padR) + '" y2="' + ry(r).toFixed(1) + '"/>';
+  }
+
+  // lines (with gaps where an entity isn't ranked that week)
+  keys.forEach(k => {
+    const pts = series[k].slice().sort((a, b) => a.week - b.week);
+    const color = colorOf[k];
+    // break the polyline into contiguous week runs
+    let d = '', prevWeekIdx = -2;
+    pts.forEach(p => {
+      const wi = weeks.indexOf(p.week);
+      d += (wi === prevWeekIdx + 1 ? ' L' : ' M') + wx(p.week).toFixed(1) + ',' + ry(p.rank).toFixed(1);
+      prevWeekIdx = wi;
+    });
+    svg += '<path d="' + d.trim() + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>';
+    pts.forEach(p => { svg += '<circle cx="' + wx(p.week).toFixed(1) + '" cy="' + ry(p.rank).toFixed(1) + '" r="4" fill="' + color + '"><title>' + escapeHtml(labelOf[k]) + ' — Wk ' + p.week + ', rank ' + p.rank + '</title></circle>'; });
+    // label at the last week the entity appears
+    const last = pts[pts.length - 1];
+    svg += '<text class="bump-label" x="' + (wx(last.week) + 9).toFixed(1) + '" y="' + (ry(last.rank) + 3).toFixed(1) + '" fill="' + color + '">' + escapeHtml(labelOf[k]) + '</text>';
+  });
+
   el.innerHTML = svg + '</svg>';
 }
 
@@ -1054,6 +1320,8 @@ async function init() {
     buildInstances();
     populateFilters();
     applyFilters();
+    renderMatrix();
+    renderBump();
     banner.hidden = true;
     document.getElementById('wrap').hidden = false;
   } catch (err) {
