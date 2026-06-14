@@ -706,14 +706,20 @@ function renderHistogram() {
   if (histOpenBin >= 0 && binMembers[histOpenBin] && binMembers[histOpenBin].length) {
     const members = binMembers[histOpenBin];
     const bx = x0 + histOpenBin * bw;
-    const iconW = 22, perRow = Math.max(1, Math.floor((bw - 4) / iconW));
+    // Shrink icons for crowded bins so the stack stays on-screen (>60 → progressively
+    // smaller, down to a 9px floor).
+    const n = members.length;
+    let iconW = 22;
+    if (n > 60) iconW = Math.max(9, Math.round(22 - (n - 60) / 12));
+    const drawW = iconW - 2;
+    const perRow = Math.max(1, Math.floor((bw - 2) / iconW));
     const colCenter = bx + bw / 2;
     members.forEach((r, k) => {
       const row = Math.floor(k / perRow), col = k % perRow;
       const rowW = Math.min(perRow, members.length - row * perRow) * iconW;
       const ix = colCenter - rowW / 2 + col * iconW;
       const iy = y0 - (row + 1) * iconW + 2;   // stack upward from the axis, overflow above
-      svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + ix.toFixed(1) + '" y="' + iy.toFixed(1) + '" width="20" height="20" style="image-rendering:pixelated;pointer-events:none"><title>' + escapeHtml(r.name) + '</title></image>';
+      svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + ix.toFixed(1) + '" y="' + iy.toFixed(1) + '" width="' + drawW + '" height="' + drawW + '" style="image-rendering:pixelated;pointer-events:none"><title>' + escapeHtml(r.name) + '</title></image>';
     });
   }
 
@@ -750,7 +756,7 @@ function renderBoxPlot() {
     return mb - ma;   // teams with the highest single value on top
   });
 
-  const rowH = 56, padT = 28, padB = 40, padL = 150, padR = 24, W = 720;
+  const rowH = 76, padT = 28, padB = 40, padL = 150, padR = 24, W = 720;
   const H = padT + padB + teamIds.length * rowH;
   const plotW = W - padL - padR, x0 = padL;
   const allVals = filtered.filter(r => r.gpCount >= minGp).map(valOf);
@@ -788,12 +794,21 @@ function renderBoxPlot() {
     // box
     svg += '<rect x="' + sx(q1).toFixed(1) + '" y="' + (cy - 11) + '" width="' + Math.max(1, sx(q3) - sx(q1)).toFixed(1) + '" height="22" rx="3" fill="' + color + '" fill-opacity="0.18" stroke="' + color + '" stroke-width="1.5"/>';
     svg += '<line x1="' + sx(med).toFixed(1) + '" y1="' + (cy - 11) + '" x2="' + sx(med).toFixed(1) + '" y2="' + (cy + 11) + '" stroke="' + color + '" stroke-width="2.5"/>';
-    // icons per Pokémon, jittered vertically a touch to reduce overlap at equal values
-    byTeam[tid].forEach((r, k) => {
-      const v = valOf(r);
-      const jitter = ((k % 3) - 1) * 7;   // -7, 0, +7 cycle
-      const ix = sx(v) - 9, iy = cy - 9 + jitter;
-      svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + ix.toFixed(1) + '" y="' + iy.toFixed(1) + '" width="18" height="18" style="image-rendering:pixelated"><title>' + escapeHtml(r.name) + ' — ' + fmtBin(v, metric.dec) + '</title></image>';
+    // Icons per Pokémon. Group those landing on the same X pixel and fan them
+    // vertically (alternating above/below the axis) so equal-value mons don't overlap.
+    const ICON = 18, STACK = 15;
+    const buckets = {};
+    byTeam[tid].forEach(r => { const px = Math.round(sx(valOf(r))); (buckets[px] = buckets[px] || []).push(r); });
+    Object.keys(buckets).forEach(px => {
+      const group = buckets[px];
+      group.forEach((r, j) => {
+        const v = valOf(r);
+        // 0, +1, -1, +2, -2 … pattern around the center line
+        const step = Math.ceil(j / 2) * (j % 2 === 1 ? 1 : -1);
+        const ix = (+px) - ICON / 2;
+        const iy = cy - ICON / 2 + step * STACK;
+        svg += '<image href="' + iconUrl(monFor(r.pokemon_id)) + '" x="' + ix.toFixed(1) + '" y="' + iy.toFixed(1) + '" width="' + ICON + '" height="' + ICON + '" style="image-rendering:pixelated"><title>' + escapeHtml(r.name) + ' — ' + fmtBin(v, metric.dec) + '</title></image>';
+      });
     });
   });
 
