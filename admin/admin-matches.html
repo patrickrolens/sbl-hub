@@ -74,6 +74,9 @@ select:focus, input:focus { border-color: var(--accent); }
 .match-row .teams .vs { color: var(--text3); margin: 0 5px; }
 .match-row .teams .pl { color: var(--text3); font-weight: 400; }
 .match-row .meta { font-size: 11px; color: var(--text3); white-space: nowrap; }
+.match-row .row-date { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.match-row .row-date .rd-label { font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); }
+.match-row .row-date .rd-input { font-size: 11px; padding: 4px 6px; }
 .match-row .result { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .match-row .result .win { color: var(--blue); }
 .match-row .badge { font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
@@ -101,6 +104,13 @@ select:focus, input:focus { border-color: var(--accent); }
 .cov-missing { flex: 0 0 auto; font-size: 11px; color: var(--text3); text-align: right; min-width: 110px; }
 
 /* ── MATCH DATA ENTRY ── */
+.md-week { margin-bottom: 10px; }
+.md-week-head { display: flex; align-items: center; gap: 9px; padding: 7px 10px; cursor: pointer; user-select: none; border-radius: 7px; }
+.md-week-head:hover { background: rgba(255,255,255,.02); }
+.md-week-head .caret { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+.md-week-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text2); }
+.md-week-sub { font-size: 11px; color: var(--text3); margin-left: auto; white-space: nowrap; }
+.md-week-body { padding: 4px 0 6px 6px; }
 .md-card { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; background: var(--bg3); }
 .md-card.dirty { border-color: var(--accent); }
 .md-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none; }
@@ -261,10 +271,6 @@ select:focus, input:focus { border-color: var(--accent); }
           <label for="add-series">Series</label>
           <input type="number" id="add-series" min="1" step="2" value="3">
         </div>
-        <div class="field grow">
-          <label for="add-date">Date (optional)</label>
-          <input type="datetime-local" id="add-date">
-        </div>
         <button class="btn btn-accent" onclick="addMatch()">+ Add match</button>
       </div>
     </div>
@@ -318,6 +324,7 @@ let matchListCollapsed = true;      // individual-match list starts collapsed
 let pokemonById  = {};              // pokemon.json id -> entry
 let rosterByTeam = {};              // team_id -> [{pokemon_id, acquired_week, released_week}]
 let expandedMatches = new Set();    // match ids whose data-entry card is expanded
+let collapsedDataGroups = new Set(); // group keys (week / stage+week) collapsed in Match & Game Results
 let matchModels = {};               // match_id -> editable model {loaded, loading, dirty, games[], manualBrought{a,b}}
 
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
@@ -333,6 +340,14 @@ function fmtDateTime(s) {
   if (isNaN(d.getTime())) return 'TBD';
   const p = n => String(n).padStart(2, '0');
   return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+// ISO/timestamptz -> "YYYY-MM-DDTHH:MM" in local time for <input type=datetime-local>.
+function toDatetimeLocal(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 function teamLabelHtml(id) {
   const t = teamById[id];
@@ -575,12 +590,16 @@ function renderMatchList() {
           row.className = 'match-row';
           row.innerHTML =
             '<div class="teams">' + teamLabelHtml(m.team_a_id) + '<span class="vs">vs</span>' + teamLabelHtml(m.team_b_id) + '</div>'
-            + '<div class="meta">Bo' + (m.series_length || 3) + ' · ' + escapeHtml(fmtDateTime(m.match_date)) + '</div>'
+            + '<div class="meta">Bo' + (m.series_length || 3) + '</div>'
+            + '<label class="row-date"><span class="rd-label">Date</span>'
+            +   '<input type="datetime-local" class="rd-input" value="' + toDatetimeLocal(m.match_date) + '"></label>'
             + (hasRes
                 ? '<div class="result"><span class="' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
                   + '–<span class="' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>'
                   + '<span class="badge final">Final</span>'
                 : '<span class="badge upcoming">Upcoming</span>');
+
+          row.querySelector('.rd-input').onchange = (e) => updateMatchDate(m.id, e.target.value);
 
           const rm = document.createElement('button');
           rm.className = 'btn btn-sm btn-danger';
@@ -716,8 +735,56 @@ function renderMatchData() {
   const ordered = [...matches].sort((a, b) =>
     (stageOrder[a.stage] ?? 0) - (stageOrder[b.stage] ?? 0) || a.week - b.week
     || teamLabelText(a.team_a_id).localeCompare(teamLabelText(b.team_a_id)));
+
+  // Group into collapsible sub-sections. Regular-season groups are keyed by week;
+  // postseason groups are keyed by stage+week so each bracket round gets its own header.
+  const groups = [];
+  const byKey = {};
+  ordered.forEach(m => {
+    const key = m.stage === 'regular' ? 'regular|' + m.week : m.stage + '|' + m.week;
+    if (!byKey[key]) { byKey[key] = { key, stage: m.stage, week: m.week, matches: [] }; groups.push(byKey[key]); }
+    byKey[key].matches.push(m);
+  });
+
   el.innerHTML = '';
-  ordered.forEach(m => el.appendChild(renderMatchCard(m)));
+  groups.forEach(g => {
+    const wrap = document.createElement('div');
+    wrap.className = 'md-week';
+    const collapsed = collapsedDataGroups.has(g.key);
+    const entered = g.matches.filter(matchHasResults).length;
+
+    const head = document.createElement('div');
+    head.className = 'md-week-head';
+    head.onclick = () => toggleDataGroup(g.key);
+    head.innerHTML = '<span class="caret">' + (collapsed ? '\u25B6' : '\u25BC') + '</span>'
+      + '<span class="md-week-title">' + escapeHtml(dataGroupLabel(g)) + '</span>'
+      + '<span class="md-week-sub">' + g.matches.length + ' match' + (g.matches.length === 1 ? '' : 'es')
+      + (entered ? ' \u00B7 ' + entered + ' entered' : '') + '</span>';
+    wrap.appendChild(head);
+
+    if (!collapsed) {
+      const bodyWrap = document.createElement('div');
+      bodyWrap.className = 'md-week-body';
+      g.matches.forEach(m => bodyWrap.appendChild(renderMatchCard(m)));
+      wrap.appendChild(bodyWrap);
+    }
+    el.appendChild(wrap);
+  });
+}
+
+// Header label for a match-data group. Regular season -> "Week N"; postseason ->
+// the derived round name (e.g. "Playoffs Semifinals") shared with the public bracket.
+function dataGroupLabel(g) {
+  if (g.stage === 'regular') return 'Week ' + g.week;
+  const m = g.matches[0];
+  if (m && m.postseason_round) return m.postseason_round;
+  return stageLabel(g.stage) + ' \u00B7 Week ' + g.week;
+}
+
+function toggleDataGroup(key) {
+  if (collapsedDataGroups.has(key)) collapsedDataGroups.delete(key);
+  else collapsedDataGroups.add(key);
+  renderMatchData();
 }
 
 function renderMatchCard(m) {
@@ -752,7 +819,7 @@ function renderMatchCard(m) {
     '<span class="caret">' + (expanded ? '\u25BC' : '\u25B6') + '</span>'
     + (model && model.dirty ? '<span class="md-dirty-dot" title="Unsaved changes"></span>' : '')
     + '<span class="md-matchup">' + teamLabelHtml(m.team_a_id) + '<span class="vs">vs</span>' + teamLabelHtml(m.team_b_id) + '</span>'
-    + '<span class="md-tags"><span class="md-badge">' + escapeHtml(stageLabel(m.stage)) + '</span><span class="md-badge">Wk ' + m.week + '</span></span>'
+    + (m.stage && m.stage !== 'regular' ? '<span class="md-tags"><span class="md-badge">' + escapeHtml(stageLabel(m.stage)) + '</span></span>' : '')
     + '<span class="md-score">' + scoreHtml + '</span>';
   card.appendChild(head);
 
@@ -1030,8 +1097,12 @@ async function saveMatch(matchId) {
     if (mpRows.length) { const { error } = await sb.from('match_pokemon').insert(mpRows); if (error) throw error; }
 
     const sc = scoreFromModel(model);
-    const { error: msErr } = await sb.from('matches').update({ team_a_score: sc.a, team_b_score: sc.b }).eq('id', matchId);
+    // Backfill the match date on first results entry if it was never scheduled.
+    const mUpdate = { team_a_score: sc.a, team_b_score: sc.b };
+    if (!m.match_date) mUpdate.match_date = new Date().toISOString();
+    const { error: msErr } = await sb.from('matches').update(mUpdate).eq('id', matchId);
     if (msErr) throw msErr;
+    if (mUpdate.match_date) m.match_date = mUpdate.match_date;
 
     await refreshMatchRow(matchId);
     await loadMatchChildren(matchId);   // reload from DB → clears dirty
@@ -1218,7 +1289,6 @@ async function addMatch() {
   const aId    = document.getElementById('add-team-a').value;
   const bId    = document.getElementById('add-team-b').value;
   const series = parseInt(document.getElementById('add-series').value, 10);
-  const dateRaw = document.getElementById('add-date').value;
 
   if (!Number.isInteger(week) || week < 1) { showToast('Enter a valid week number.', 'err'); return; }
   if (!aId || !bId) { showToast('Pick both teams.', 'err'); return; }
@@ -1229,7 +1299,7 @@ async function addMatch() {
     season_id: selectedSeasonId, stage: 'regular', week,
     team_a_id: aId, team_b_id: bId,
     series_length: series, team_a_score: 0, team_b_score: 0,
-    match_date: dateRaw ? new Date(dateRaw).toISOString() : null,
+    match_date: null,
   };
   try {
     const { error } = await sb.from('matches').insert(row);
@@ -1240,11 +1310,26 @@ async function addMatch() {
     document.getElementById('add-team-a').value = '';
     document.getElementById('add-team-b').value = '';
     document.getElementById('add-series').value = '3';
-    document.getElementById('add-date').value = '';
     showToast('Match added.', 'ok');
   } catch (err) {
     console.error(err);
     showToast('Could not add match: ' + (err.message || err), 'err');
+  }
+}
+
+// Persist an inline schedule-date edit. Empty clears the date (back to null);
+// the results-save path will still backfill now() if it's null at that point.
+async function updateMatchDate(matchId, rawValue) {
+  const iso = rawValue ? new Date(rawValue).toISOString() : null;
+  try {
+    const { error } = await sb.from('matches').update({ match_date: iso }).eq('id', matchId);
+    if (error) throw error;
+    const m = matches.find(x => x.id === matchId);
+    if (m) m.match_date = iso;
+    showToast(iso ? 'Match date updated.' : 'Match date cleared.', 'ok');
+  } catch (err) {
+    console.error(err);
+    showToast('Could not update date: ' + (err.message || err), 'err');
   }
 }
 
