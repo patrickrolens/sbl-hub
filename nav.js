@@ -41,7 +41,7 @@
     { key: "planner",    label: "Planner",     href: PLANNER_URL, external: true },
   ];
 
-  // ── current page → active tab key (admin checked by path, since /admin/ files vary) ──
+  //  current page → active tab key (admin checked by path, since /admin/ files vary) 
   const path = location.pathname.toLowerCase();
   function activeKey() {
     if (path.indexOf("/admin/") !== -1) return "admin";
@@ -57,7 +57,7 @@
   }
   const ACTIVE = activeKey();
 
-  // ── state ──
+  //  state 
   let season = null, allTeams = [], coachByTeam = {};
   let currentUser = null, isAdmin = false;
   let postseasonVisible = false;
@@ -67,13 +67,13 @@
 
   function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
-  // ── styles (namespaced) ──
+  //  styles (namespaced) 
   function injectStyle() {
     const css = `
 #sbl-nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: stretch; padding: 0 1rem; position: sticky; top: 0; z-index: 100; min-height: 49px; }
 #sbl-nav * { box-sizing: border-box; }
 .sbln-logo { display: flex; align-items: center; gap: 8px; padding-right: 0px; margin-right: 0px; border-right: 1px solid var(--border); white-space: nowrap; text-decoration: none; flex-shrink: 0; }
-.sbln-logo img { height: 47px; width: auto; display: block; }
+.sbln-logo img { height: 40px; width: auto; display: block; }
 .sbln-logo .sbln-word { font-size: 15px; font-weight: 700; color: var(--accent); }
 .sbln-tabs { display: flex; align-items: stretch; }
 .sbln-tab { display: inline-flex; align-items: center; gap: 5px; padding: 0 15px; font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; border: none; border-bottom: 2px solid transparent; background: none; font-family: inherit; cursor: pointer; white-space: nowrap; }
@@ -125,7 +125,7 @@
   #sbl-nav { padding: 0 8px; overflow-x: auto; scrollbar-width: none; }
   #sbl-nav::-webkit-scrollbar { display: none; }
   .sbln-logo { padding-right: 10px; margin-right: 6px; }
-  .sbln-logo img { height: 24px; }
+  .sbln-logo img { height: 24px; width: auto;}
   .sbln-tab { padding: 0 11px; }
   .sbln-right { padding-left: 8px; gap: 8px; }
 }`;
@@ -135,7 +135,7 @@
     document.head.appendChild(tag);
   }
 
-  // ── build nav markup ──
+  //  build nav markup 
   function tabHtml(t) {
     if (t.dropdown) {
       return `<button class="sbln-tab${ACTIVE === t.key ? " active" : ""}" id="sbln-teams-trigger" aria-haspopup="true" aria-expanded="false">${t.label} <span class="sbln-caret">▾</span></button>`;
@@ -196,7 +196,7 @@
     if (nav) document.documentElement.style.setProperty("--nav-h", nav.offsetHeight + "px");
   }
 
-  // ── dropdown plumbing ──
+  //  dropdown plumbing 
   function positionMenu(menu, trigger) {
     if (!menu || menu.hidden) return;
     const r = trigger.getBoundingClientRect();
@@ -284,7 +284,7 @@
     }
   }
 
-  // ── admin control ──
+  //  admin control 
   function onAdminClick(e) {
     e.stopPropagation();
     if (isAdmin) {
@@ -297,7 +297,7 @@
     }
   }
 
-  // ── auth ──
+  //  auth 
   async function applySession(session) {
     currentUser = session ? session.user : null;
     if (currentUser) {
@@ -355,14 +355,14 @@
     setTimeout(() => { t.style.transition = "opacity .3s"; t.style.opacity = "0"; setTimeout(() => t.remove(), 300); }, 3200);
   }
 
-  // ── postseason tab visibility (published OR admin) ──
+  //  postseason tab visibility (published OR admin) 
   function applyPostseasonVisibility() {
     const tab = document.getElementById("sbln-tab-postseason");
     if (!tab) return;
     tab.hidden = !(postseasonVisible || isAdmin);
   }
 
-  // ── data load (season + teams for the dropdown) ──
+  //  data load (season + teams for the dropdown) 
   async function loadData() {
     try {
       const { data: s } = await sb.from("seasons").select("id, name, postseason_published").eq("is_current", true).maybeSingle();
@@ -380,7 +380,7 @@
     } catch (e) { console.error("nav.js loadData:", e); /* nav still works without the team list */ }
   }
 
-  // ── boot ──
+  //  boot 
   function start() {
     injectStyle();
     buildNav();
