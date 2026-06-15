@@ -415,6 +415,24 @@ function buildStandings() {
     if (m && m.stage === 'regular' && kd[s.team_id] != null) kd[s.team_id] += (s.kills || 0) - (s.deaths || 0);
   });
 
+  // TEMP DIAGNOSTIC — remove after checking console
+(function(){
+  const TARGET = Object.keys(kd).find(id => true); // we'll filter below
+  let total=0, dropped=0, droppedKD=0;
+  const byTeam = {};
+  statRows.forEach(s => {
+    const m = matchById(gameToMatch[s.game_id]);
+    const val = (s.kills||0)-(s.deaths||0);
+    if (!m) { dropped++; droppedKD += val; return; }
+    if (m.stage !== 'regular') return;
+    if (kd[s.team_id] == null) return;
+    byTeam[s.team_id] = (byTeam[s.team_id]||0) + val;
+    total += val;
+  });
+  console.log('stat rows with NO resolvable match:', dropped, 'KFΔ lost to that:', droppedKD);
+  console.log('per-team KFΔ (standings calc):', byTeam);
+})();
+
   // Win rates + opponent map for SoS / SoSoS.
   const winRate = {};
   allTeams.forEach(t => { const r = rec[t.id]; const dec = r.wins + r.losses; winRate[t.id] = dec > 0 ? r.wins / dec : null; });
