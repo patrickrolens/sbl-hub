@@ -395,6 +395,25 @@ function pctSort(count, whole) { return whole > 0 ? count / whole : -1; }
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA LOAD
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Fetch every row of `table` where `column` is in `values`, defeating Supabase's
+// default 1000-row response cap. The IN-list is chunked and each chunk paged until
+// a short page signals the end. Without this, season-wide stat reads silently truncate.
+async function fetchAllIn(table, columns, column, values) {
+  const IN_CHUNK = 300, PAGE = 1000, out = [];
+  for (let i = 0; i < values.length; i += IN_CHUNK) {
+    const slice = values.slice(i, i + IN_CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb.from(table).select(columns)
+        .in(column, slice).range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (data && data.length) out.push(...data);
+      if (!data || data.length < PAGE) break;
+    }
+  }
+  return out;
+}
+
 async function loadData() {
   const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
     const ct = res.headers.get('content-type') || '';
@@ -436,19 +455,14 @@ async function loadData() {
   gamesByMatch = {}; gameToMatch = {}; statRows = []; broughtRows = [];
   const matchIds = matches.map(m => m.id);
   if (matchIds.length) {
-    const { data: games, error: gErr } = await sb.from('games').select('id, match_id').in('match_id', matchIds);
-    if (gErr) throw gErr;
+    const games = await fetchAllIn('games', 'id, match_id', 'match_id', matchIds);
     (games || []).forEach(g => { (gamesByMatch[g.match_id] = gamesByMatch[g.match_id] || []).push(g.id); gameToMatch[g.id] = g.match_id; });
     const gameIds = (games || []).map(g => g.id);
     if (gameIds.length) {
-      const { data: stats, error: stErr } = await sb.from('game_pokemon_stats').select('game_id, team_id, pokemon_id, kills, deaths').in('game_id', gameIds);
-      if (stErr) throw stErr;
-      statRows = stats || [];
+      statRows = await fetchAllIn('game_pokemon_stats', 'game_id, team_id, pokemon_id, kills, deaths', 'game_id', gameIds);
     }
     // Brought-six per match (drives MB / "matches brought" counts).
-    const { data: mp, error: mpErr } = await sb.from('match_pokemon').select('match_id, team_id, pokemon_id').in('match_id', matchIds);
-    if (mpErr) throw mpErr;
-    broughtRows = mp || [];
+    broughtRows = await fetchAllIn('match_pokemon', 'match_id, team_id, pokemon_id', 'match_id', matchIds);
   }
 
   const pj = await pjPromise;
