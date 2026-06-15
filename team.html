@@ -57,16 +57,63 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   text-transform: uppercase; margin-bottom: 10px;
 }
 
-/* ── TEAM IDENTITY ── */
-.identity { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
-.identity .logo {
-  width: 100%; height: 100%; object-fit: contain; border-radius: 12px;
-  background: var(--bg3); border: 1px solid var(--border); padding: 6px;
+/* ── IDENTITY (logo-backed overlay; mirrors the sprite-name treatment) ── */
+.identity { position: relative; }
+
+/* The logo fills the overlay box. Aspect-ratio keeps it responsive across the
+   340px / 320px / full-width breakpoints without a fixed height. */
+.identity .logo-frame {
+  position: relative; width: 100%; aspect-ratio: 1 / 1;   /* 1/1 square — change to 4/3, 16/9, etc. */
+  border-radius: 12px; overflow: hidden;
+  background: var(--bg3); border: 1px solid var(--border);
+  cursor: pointer; outline: none;
 }
-.identity .team-name { font-size: 20px; font-weight: 700; line-height: 1.15; text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;}
-.coach-current { font-size: 13px; font-weight: 600; color: var(--text); text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;}
-.coach-current .lead { color: var(--text3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; margin-right: 4px; text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;}
-.coach-past { font-size: 12px; color: var(--text3); margin-top: 2px; text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;}
+.identity .logo-frame:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.identity .logo {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block;   /* cover = full-bleed crop; use contain to letterbox */
+}
+
+/* Bottom scrim so light logos don't wash out the white overlay text. */
+.identity .logo-frame::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 55%;
+  background: linear-gradient(transparent, rgba(0,0,0,.6)); pointer-events: none; z-index: 1;
+}
+
+/* Name + coaches pinned to the bottom band, same outline as .sprite-name. */
+.identity .id-overlay {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  padding: 10px 10px 9px; text-align: center; pointer-events: none;
+}
+.identity .team-name {
+  font-size: 20px; font-weight: 800; line-height: 1.15; color: #fff;
+  text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;
+}
+.coach-current {
+  font-size: 13px; font-weight: 700; color: #fff; margin-top: 3px;
+  text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;
+}
+.coach-current .lead {
+  color: #fff; opacity: .85; font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .5px; margin-right: 4px;
+}
+.coach-past {
+  font-size: 12px; color: #fff; opacity: .9; margin-top: 2px;
+  text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;
+}
+
+/* ── LOGO LIGHTBOX ── */
+.logo-lightbox {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.8); padding: 24px; cursor: zoom-out;
+}
+.logo-lightbox[hidden] { display: none; }
+.logo-lightbox img {
+  max-width: min(90vw, 640px); max-height: 90vh;
+  object-fit: contain; border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.6); cursor: default;
+}
 
 /* ── TEAM STATS ── */
 .record-big { text-align: center; margin-bottom: 12px; }
@@ -310,6 +357,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
     <div class="card sec-identity">
       <button class="copy-team-btn" id="roster-copy" onclick="copyRoster()" title="Copy this team's active roster (one Pokémon per line) for the Planner import">⧉ Copy Team</button>
       <div class="identity" id="identity"><!-- logo, name, coaches --></div>
+    </div>
+
+    <div class="logo-lightbox" id="logo-lightbox" hidden onclick="this.hidden = true">
+      <img id="logo-lightbox-img" src="" alt="">
     </div>
 
     <div class="card sec-stats">
@@ -780,6 +831,11 @@ function renderIdentity() {
     p.textContent = 'Formerly: ' + past.join(', ');
     el.appendChild(p);
   }
+
+  // onclick on .logo-frame:
+  const lb = document.getElementById('logo-lightbox');
+  document.getElementById('logo-lightbox-img').src = LOGO_URL;
+  lb.hidden = false;
 }
 
 function renderTeamStats() {
