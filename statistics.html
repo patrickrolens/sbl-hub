@@ -758,6 +758,8 @@ function openModal(id) {
   document.getElementById('viz-modal').hidden = false;
   document.body.style.overflow = 'hidden';
   // Render after layout so modalBodySize() reads real dimensions (fills the view).
+  // On mobile, start with filters collapsed so the chart gets the screen.
+  document.getElementById('viz-modal').classList.toggle('filters-collapsed', window.innerWidth <= 820);
   requestAnimationFrame(() => reg.render());
 }
 function closeModal() {
