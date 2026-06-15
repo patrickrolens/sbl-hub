@@ -17,7 +17,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .wrap { max-width: 100%; margin: 0 auto; padding: 16px 16px 60px; }
 
 .upper { max-width: 860px; margin: 0 auto;}
-.lower { column-width: 620px; column-gap: 1px }
+.lower { column-width: 480px; column-gap: 8px }
 
 /* PAGE HEADER */
 .page-head { text-align: center; padding: 14px 8px 6px; }
@@ -38,7 +38,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .toc a:hover { color: var(--text); border-color: var(--accent); }
 
 /* SECTION CARDS (reuses the site's card + collapse pattern) */
-.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; scroll-margin-top: 14px; max-width: 620px; break-inside: avoid; }
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; scroll-margin-top: 14px; flex: 1 1 360px; break-inside: avoid;}
 .sec-head { display: flex; align-items: center; gap: 10px; position: relative; cursor: pointer; }
 .sec-head .num { font-size: 12px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; min-width: 22px; }
 .sec-head .title { font-size: 15px; font-weight: 800; letter-spacing: .2px; }
@@ -113,9 +113,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
     </div>
 
     <div class="intro">
-      <p>The Springfield Battle League is a 4v4 VGC draft league played on Pokémon Showdown. Each player drafts a team from a shared pool and plays one match per week across a ten-week regular season, followed by playoffs.</p>
-      <p class="fmt">Format: <span class="ic">[Gen 9] VGC 2024 Reg G</span> — select this when building your team and challenging your opponent. Matches are reported by <b>11:59&nbsp;pm Sunday</b> each week.</p>
-      <p><b>Signups:</b> The league begins with signups! Interested players should DM <span class="ic">jdawgin13</span> to be added to the roster.</p>
+      <p>The Springfield Battle League is a VGC Draft League (4v4 doubles) played in Pokémon Showdown and Pokémon Scarlet and Violet. Each player drafts a team from a shared pool and plays one match per week across a ten-week regular season, followed by a postseason bracket.</p>
+      <p class="fmt">Format: <span class="ic">[Gen 9] VGC 2024 Reg G</span> - select this when building your team and challenging your opponent. Matches are reported by <b>11:59&nbsp;pm Sunday</b> each week.</p>
+      <p><b>Signups:</b> The league begins with signups! Interested players should post in the signups channel in the Discord or DM <span class="ic">jdawgin13</span> to be added to the roster.</p>
     </div>
 
     <nav class="toc">
@@ -143,7 +143,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
           <div class="fmt-cell"><div class="ph">Playoffs</div><div class="bo">Best of 5</div></div>
           <div class="fmt-cell"><div class="ph">Grand Finals</div><div class="bo">Best of 7</div></div>
         </div>
-        <p class="muted">Matches are played on Pokémon Showdown. Playoff finals are played on cart in Pokémon Scarlet &amp; Violet.</p>
+        <p>Matches are played on Pokémon Showdown. Playoff finals are played on cart in Pokémon Scarlet &amp; Violet.</p>
       </div>
     </div>
 
