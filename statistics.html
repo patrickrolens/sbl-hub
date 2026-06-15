@@ -81,7 +81,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .viz-modal-controls label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; font-weight: 700; }
 .viz-modal-controls select, .viz-modal-controls input { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 6px 8px; outline: none; font-family: inherit; }
 .viz-modal-controls input[type=number] { width: 60px; }
-.viz-modal-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: block; }
+/* Charts that must stay legible (axis-dependent) keep their intrinsic width and
+   let the body scroll horizontally on mobile, instead of shrinking to fit. */
+.viz-modal-body { overflow: auto; }
+.viz-modal-body.scroll-x > svg { width: auto; max-width: none; }
 .viz-modal-body svg { display: block; margin: 0 auto; }
 .viz-modal-body > svg { width: 100%; }
 .axis-line { stroke: var(--border); stroke-width: 1; }
@@ -544,6 +547,17 @@ function toggleModalFilters() {
   }
 }
 
+function modalBodySize() {
+  const b = document.getElementById('viz-modal-body');
+  const pad = 32;
+  const avail = (b.clientWidth || 1200) - pad;
+  // On narrow screens, render charts at a fixed legible width and let the body
+  // scroll, rather than squishing axis-dependent charts to fit the viewport.
+  const isMobile = window.innerWidth <= 820;
+  const w = isMobile ? Math.max(640, avail) : Math.max(320, avail);
+  return { w, h: Math.max(280, (b.clientHeight || 700) - pad) };
+}
+
 const SORT_ACCESSORS = {
   pokemon: r => r.name.toLowerCase(), team: r => teamLabelText(r.team_id).toLowerCase(),
   kos: r => r.kos, faints: r => r.faints, kf: r => r.kfVal, kfd: r => r.kfDelta,
@@ -760,6 +774,9 @@ function openModal(id) {
   // Render after layout so modalBodySize() reads real dimensions (fills the view).
   // On mobile, start with filters collapsed so the chart gets the screen.
   document.getElementById('viz-modal').classList.toggle('filters-collapsed', window.innerWidth <= 820);
+  // On mobile, every chart renders at its intrinsic (legible) width and the body
+  // scrolls, rather than shrinking to fit the viewport.
+  document.getElementById('viz-modal-body').classList.toggle('scroll-x', window.innerWidth <= 820);
   requestAnimationFrame(() => reg.render());
 }
 function closeModal() {
@@ -773,6 +790,7 @@ function closeModal() {
   const fb = document.getElementById('filter-bar');
   if (fb._home) fb._home.insertBefore(fb, fb._next || null);
   document.getElementById('viz-modal').hidden = true;
+  document.getElementById('viz-modal-body').classList.remove('scroll-x');
   document.body.style.overflow = '';
   modalChart = null;
   CHART_REGISTRY[id].render();   // re-render the inline version
