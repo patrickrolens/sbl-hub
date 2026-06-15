@@ -694,6 +694,8 @@ function renderTransactions() {
 // ─────────────────────────────────────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────────────────────────────────────
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
 async function init() {
   const banner = document.getElementById('boot-banner');
   try {
