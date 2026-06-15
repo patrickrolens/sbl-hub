@@ -535,6 +535,15 @@ function applyFilters() {
   if (modalChart === 'matrix') renderMatrix();
 }
 
+function toggleModalFilters() {
+  const m = document.getElementById('viz-modal');
+  m.classList.toggle('filters-collapsed');
+  // The chart sizes to available space, so re-render after the bar resizes.
+  if (modalChart && CHART_REGISTRY[modalChart]) {
+    requestAnimationFrame(() => CHART_REGISTRY[modalChart].render());
+  }
+}
+
 const SORT_ACCESSORS = {
   pokemon: r => r.name.toLowerCase(), team: r => teamLabelText(r.team_id).toLowerCase(),
   kos: r => r.kos, faints: r => r.faints, kf: r => r.kfVal, kfd: r => r.kfDelta,
