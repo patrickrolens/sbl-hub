@@ -89,12 +89,13 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .brought { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; }
 .brought img { width: 21px; height: 21px; image-rendering: pixelated; }
 .done-who { font-size: 11px; line-height: 1.3; text-align: center; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.done-who.win { font-weight: 700; color: var(--blue); }
 .done-who .pl { color: var(--text2); font-weight: 400; }
 
 /* ─── TRANSACTIONS ─── */
 .txn-list { display: flex; flex-direction: column; gap: 8px; }
 .txn { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.txn .with a.team-link { color: var(--text); text-decoration: none; }
+.txn .with a.team-link:hover { color: var(--accent); }
 .txn .with { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
 .txn .swap { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .txn .swap .drop { color: var(--red); } .txn .swap .gain { color: var(--green); }
