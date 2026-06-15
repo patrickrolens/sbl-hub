@@ -796,6 +796,11 @@ function renderIdentity() {
   const el = document.getElementById('identity');
   el.innerHTML = '';
 
+  // Logo frame (clickable → opens the lightbox at full size).
+  const frame = document.createElement('div');
+  frame.className = 'logo-frame';
+  frame.tabIndex = 0;
+
   const logo = document.createElement('img');
   logo.className = 'logo';
   logo.alt = team.name + ' logo';
@@ -810,12 +815,16 @@ function renderIdentity() {
     if (fbIdx < fallbacks.length) { this.src = fallbacks[fbIdx]; }
     else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
   };
-  el.appendChild(logo);
+  frame.appendChild(logo);
+
+  // Name + coaches overlay, pinned to the bottom band.
+  const overlay = document.createElement('div');
+  overlay.className = 'id-overlay';
 
   const nm = document.createElement('div');
   nm.className = 'team-name';
   nm.textContent = team.name;
-  el.appendChild(nm);
+  overlay.appendChild(nm);
 
   const current = ownerHistory.filter(o => o.ended_week == null).map(o => o.players && o.players.display_name).filter(Boolean);
   const past    = ownerHistory.filter(o => o.ended_week != null).map(o => o.players && o.players.display_name).filter(Boolean);
@@ -823,19 +832,29 @@ function renderIdentity() {
   const cur = document.createElement('div');
   cur.className = 'coach-current';
   cur.innerHTML = '<span class="lead">Coach</span>' + (current.length ? escapeHtml(current.join(', ')) : '—');
-  el.appendChild(cur);
+  overlay.appendChild(cur);
 
   if (past.length) {
     const p = document.createElement('div');
     p.className = 'coach-past';
     p.textContent = 'Formerly: ' + past.join(', ');
-    el.appendChild(p);
+    overlay.appendChild(p);
   }
 
-  // onclick on .logo-frame:
-  const lb = document.getElementById('logo-lightbox');
-  document.getElementById('logo-lightbox-img').src = team.logo_url;
-  lb.hidden = false;
+  frame.appendChild(overlay);
+  el.appendChild(frame);
+
+  // Click (or Enter/Space) opens the lightbox with whatever the logo resolved to,
+  // unless it's the Pokéball placeholder data URI.
+  function openLogoLightbox() {
+    if (logo.src.startsWith('data:')) return;
+    document.getElementById('logo-lightbox-img').src = logo.src;
+    document.getElementById('logo-lightbox').hidden = false;
+  }
+  frame.addEventListener('click', openLogoLightbox);
+  frame.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLogoLightbox(); }
+  });
 }
 
 function renderTeamStats() {
