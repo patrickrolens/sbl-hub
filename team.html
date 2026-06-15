@@ -71,7 +71,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .identity .logo-frame:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .identity .logo {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; display: block;   /* cover = full-bleed crop; use contain to letterbox */
+  object-fit: contain; display: block;   /* cover = full-bleed crop; use contain to letterbox */
 }
 
 /* Bottom scrim so light logos don't wash out the white overlay text. */
