@@ -299,6 +299,27 @@ function coachOnlyHtml(id, opts) {
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA LOAD
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Fetch every row of `table` where `column` is in `values`, defeating Supabase's
+// default 1000-row response cap. The IN-list is chunked (so a large id list can't
+// overrun the query), and each chunk is paged until a short page signals the end.
+async function fetchAllIn(table, columns, column, values) {
+  const IN_CHUNK = 300;     // max ids per IN() clause
+  const PAGE = 1000;        // Supabase max rows per response
+  const out = [];
+  for (let i = 0; i < values.length; i += IN_CHUNK) {
+    const slice = values.slice(i, i + IN_CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb.from(table).select(columns)
+        .in(column, slice).range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (data && data.length) out.push(...data);
+      if (!data || data.length < PAGE) break;   // last page for this chunk
+    }
+  }
+  return out;
+}
+
 async function loadData() {
   const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
     const ct = res.headers.get('content-type') || '';
@@ -337,22 +358,19 @@ async function loadData() {
   gamesByMatch = {}; gameToMatch = {}; statRows = []; broughtByMatch = {};
   const matchIds = matches.map(m => m.id);
   if (matchIds.length) {
-    const { data: games, error: gErr } = await sb.from('games').select('id, match_id').in('match_id', matchIds);
-    if (gErr) throw gErr;
+    const games = await fetchAllIn('games', 'id, match_id', 'match_id', matchIds);
     (games || []).forEach(g => { (gamesByMatch[g.match_id] = gamesByMatch[g.match_id] || []).push(g); gameToMatch[g.id] = g.match_id; });
     const gameIds = (games || []).map(g => g.id);
     if (gameIds.length) {
-      const { data: stats, error: sErr } = await sb.from('game_pokemon_stats').select('game_id, team_id, pokemon_id, kills, deaths').in('game_id', gameIds);
-      if (sErr) throw sErr;
-      statRows = stats || [];
+      statRows = await fetchAllIn('game_pokemon_stats', 'game_id, team_id, pokemon_id, kills, deaths', 'game_id', gameIds);
     }
     // Explicit "brought to the match" roster (preferred over inferring from game stats).
-    const { data: mp, error: mpErr } = await sb.from('match_pokemon').select('match_id, team_id, pokemon_id').in('match_id', matchIds);
-    if (mpErr) throw mpErr;
+    const mp = await fetchAllIn('match_pokemon', 'match_id, team_id, pokemon_id', 'match_id', matchIds);
     (mp || []).forEach(r => {
       const byTeam = broughtByMatch[r.match_id] = broughtByMatch[r.match_id] || {};
       (byTeam[r.team_id] = byTeam[r.team_id] || []).push(r.pokemon_id);
     });
+    console.log('[standings] loaded games:', games.length, '· stat rows:', statRows.length, '· brought rows:', mp.length);
   }
 
   txns = buildTransactions(faRes.data || [], tradeRes.data || []);
@@ -414,24 +432,6 @@ function buildStandings() {
     const m = matchById(gameToMatch[s.game_id]);
     if (m && m.stage === 'regular' && kd[s.team_id] != null) kd[s.team_id] += (s.kills || 0) - (s.deaths || 0);
   });
-
-  // TEMP DIAGNOSTIC — remove after checking console
-(function(){
-  const TARGET = Object.keys(kd).find(id => true); // we'll filter below
-  let total=0, dropped=0, droppedKD=0;
-  const byTeam = {};
-  statRows.forEach(s => {
-    const m = matchById(gameToMatch[s.game_id]);
-    const val = (s.kills||0)-(s.deaths||0);
-    if (!m) { dropped++; droppedKD += val; return; }
-    if (m.stage !== 'regular') return;
-    if (kd[s.team_id] == null) return;
-    byTeam[s.team_id] = (byTeam[s.team_id]||0) + val;
-    total += val;
-  });
-  console.log('stat rows with NO resolvable match:', dropped, 'KFΔ lost to that:', droppedKD);
-  console.log('per-team KFΔ (standings calc):', byTeam);
-})();
 
   // Win rates + opponent map for SoS / SoSoS.
   const winRate = {};
