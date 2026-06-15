@@ -366,6 +366,23 @@ const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
 const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Fetch every row of `table` where `column` is in `values`, defeating Supabase's
+// default 1000-row response cap (chunks the IN-list, pages each chunk to the end).
+async function fetchAllIn(table, columns, column, values) {
+  const IN_CHUNK = 300, PAGE = 1000, out = [];
+  for (let i = 0; i < values.length; i += IN_CHUNK) {
+    const slice = values.slice(i, i + IN_CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb.from(table).select(columns)
+        .in(column, slice).range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (data && data.length) out.push(...data);
+      if (!data || data.length < PAGE) break;
+    }
+  }
+  return out;
+}
+
 // ── STATE ──
 let isAdmin          = false;
 let seasons          = [];          // all seasons
@@ -551,8 +568,7 @@ async function loadSeasonData(seasonId) {
   // Count games per match so we can tell which matches already have results.
   const matchIds = matches.map(m => m.id);
   if (matchIds.length) {
-    const { data: games, error: gErr } = await sb.from('games').select('id, match_id').in('match_id', matchIds);
-    if (gErr) throw gErr;
+    const games = await fetchAllIn('games', 'id, match_id', 'match_id', matchIds);
     (games || []).forEach(g => { gamesCountByMatch[g.match_id] = (gamesCountByMatch[g.match_id] || 0) + 1; });
   }
 
