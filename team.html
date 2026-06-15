@@ -60,7 +60,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* ── TEAM IDENTITY ── */
 .identity { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
 .identity .logo {
-  width: 92px; height: 92px; object-fit: contain; border-radius: 12px;
+  width: 70%; height: 70%; object-fit: contain; border-radius: 12px;
   background: var(--bg3); border: 1px solid var(--border); padding: 6px;
 }
 .identity .team-name { font-size: 20px; font-weight: 700; line-height: 1.15; }
@@ -176,7 +176,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .member-sprite-block.compact .sprite-name.n-long { font-size: 9px; }
 .member-sprite-block.compact .sprite-name.n-xl   { font-size: 8px; }
 /* Inactive stat text can be a touch smaller so it never collides at the short height. */
-.member.inactive .member-statgrid .sc-v { font-size: 16px; }
+.member.inactive .member-statgrid .sc-v { font-size: 14px; }
 .member.inactive .member-statgrid .sc-k { font-size: 11px; }
 
 /* ── MEMBER DETAIL POPOVER (hover/tap the sprite) ── */
@@ -921,14 +921,14 @@ function memberCard(row, opts) {
   const grid = document.createElement('div');
   grid.className = 'member-statgrid';
   grid.innerHTML =
-      statCell('r1 tip', 'KOs', st.kos, '', 'test')
-    + statCell('r1', 'Faints', st.faints)
-    + statCell('r2', 'K/F', kfRatio(st.kos, st.faints))
+      statCell('r1 tip', 'KOs', st.kos, '', 'The number of KOs scored by this Pokémon')
+    + statCell('r1', 'Faints', st.faints, '', 'The number of faints by this Pokémon')
+    + statCell('r2', 'K/F', kfRatio(st.kos, st.faints), '', 'The ratio of KOs to Faints by this Pokémon')
     + statCell('r2 tip', 'KFΔ', signed(kfDelta), deltaClass(kfDelta), 'The difference between the Pokémon\'s KOs and Faints')
     + statCell('r2 tip', 'KPG', fmtKpg(st.kpg), '', 'KOs per Game: The total number of KOs scored by this Pokémon divided by the total number of games in which it participated')
-    + statCell('r3 tip', 'MB', st.mbPct, '', partTip('Match Bring', st.mbRaw, st.mbCount, st.mbWhole, 'matches', 'Share of available matches this Pokémon was brought in the team of 6.'))
-    + statCell('r3 tip', 'MP', st.mpPct, '', partTip('Match Participation', st.mpRaw, st.mpCount, st.mpWhole, 'matches', 'Share of available matches this Pokémon actually played.'))
-    + statCell('r3 tip', 'GP', st.gpPct, '', partTip('Game Participation', st.gpRaw, st.gpCount, st.gpWhole, 'games', 'Share of available games this Pokémon actually played.'));
+    + statCell('r3 tip', 'MB', st.mbPct, '', partTip('Match Bring', st.mbRaw, st.mbCount, st.mbWhole, 'matches', 'Share of available matches this Pokémon was brought in the team of 6'))
+    + statCell('r3 tip', 'MP', st.mpPct, '', partTip('Match Participation', st.mpRaw, st.mpCount, st.mpWhole, 'matches', 'Share of available matches this Pokémon actually played'))
+    + statCell('r3 tip', 'GP', st.gpPct, '', partTip('Game Participation', st.gpRaw, st.gpCount, st.gpWhole, 'games', 'Share of available games this Pokémon actually played'));
   card.appendChild(grid);
 
   return card;
