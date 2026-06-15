@@ -84,7 +84,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* Charts that must stay legible (axis-dependent) keep their intrinsic width and
    let the body scroll horizontally on mobile, instead of shrinking to fit. */
 .viz-modal-body { overflow: auto; }
-.viz-modal-body.scroll-x > svg { width: auto; min-width: 640px; max-width: none; }
+.viz-modal-body.scroll-x > svg { width: auto; max-width: none; }
 .viz-modal-body svg { display: block; margin: 0 auto; }
 .viz-modal-body > svg { width: 100%; }
 .axis-line { stroke: var(--border); stroke-width: 1; }
@@ -663,7 +663,8 @@ function renderScatter() {
   const sx = v => x0 + (v / maxX) * plotW;
   const sy = v => y0 - (v / maxY) * plotH;
 
-  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img">';
+  const _dims = (inModal && window.innerWidth <= 820) ? (' width="' + W + '" height="' + H + '"') : '';
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '"' + _dims + ' role="img">';
 
   // gridlines + tick labels
   const xticks = niceTicks(maxX, 8), yticks = niceTicks(maxY, 8);
@@ -796,13 +797,6 @@ function closeModal() {
   CHART_REGISTRY[id].render();   // re-render the inline version
 }
 function fmtBin(v, dec) { return dec > 0 ? v.toFixed(dec) : String(Math.round(v)); }
-// Actual drawable size of the modal body (minus its padding), so charts render their
-// viewBox to the real aspect ratio and fill the whole view instead of letterboxing.
-function modalBodySize() {
-  const b = document.getElementById('viz-modal-body');
-  const pad = 32;   // 16px padding each side
-  return { w: Math.max(320, (b.clientWidth || 1200) - pad), h: Math.max(280, (b.clientHeight || 700) - pad) };
-}
 // Collapse/expand a single chart card's body (used by the full-width pack chart).
 function toggleCollapse(cardId) {
   const card = document.getElementById(cardId);
@@ -849,7 +843,8 @@ function renderHistogram() {
   const W = inModal ? sz.w : 720, H = inModal ? sz.h : 380, padL = 44, padB = 46, padT = 14, padR = 14;
   const plotW = W - padL - padR, plotH = H - padT - padB, x0 = padL, y0 = H - padB;
 
-  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img">';
+  const _dims = (inModal && window.innerWidth <= 820) ? (' width="' + W + '" height="' + H + '"') : '';
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '"' + _dims + ' role="img">';
   if (!rows.length) {
     svg += '<text class="scatter-empty" x="' + (x0 + plotW / 2) + '" y="' + (padT + plotH / 2) + '" text-anchor="middle">No data for these filters</text>';
     el.innerHTML = svg + '</svg>'; return;
@@ -968,7 +963,8 @@ function renderBoxPlot() {
   const hi = Math.max(1, ...allVals);
   const sx = v => x0 + (v / hi) * plotW;
 
-  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img">';
+  const _dims = (inModal && window.innerWidth <= 820) ? (' width="' + W + '" height="' + H + '"') : '';
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '"' + _dims + ' role="img">';
   if (!teamIds.length) {
     svg = '<svg viewBox="0 0 ' + W + ' 120" role="img"><text class="scatter-empty" x="' + (W / 2) + '" y="60" text-anchor="middle">No data for these filters</text></svg>';
     el.innerHTML = svg; return;
@@ -1180,7 +1176,8 @@ function renderPack() {
   const ox = W / 2, oy = H / 2;
   const SX = v => ox + v * scale, SY = v => oy + v * scale;
 
-  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img">';
+  const _dims = (inModal && window.innerWidth <= 820) ? (' width="' + W + '" height="' + H + '"') : '';
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '"' + _dims + ' role="img">';
   packTeamTips = [];
   teamData.forEach(t => {
     const cx = SX(t.cx), cy = SY(t.cy), R = t.R * scale;
@@ -1251,7 +1248,8 @@ function renderMatrix() {
   const lblSize = inModal ? 20 : 10;
 
   matrixCells = [];
-  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img">';
+  const _dims = (inModal && window.innerWidth <= 820) ? (' width="' + W + '" height="' + H + '"') : '';
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '"' + _dims + ' role="img">';
   // Cells + row labels first…
   teams.forEach((tr, r) => {
     const y = headH + r * cs;
