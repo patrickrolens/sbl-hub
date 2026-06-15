@@ -37,6 +37,7 @@
     { key: "matches",    label: "Matches",     href: "/matches.html" },
     { key: "postseason", label: "Postseason",  href: "/postseason.html", gated: true },
     { key: "statistics", label: "Statistics",  href: "/statistics.html" },
+    { key: "rules",      label: "Rules",      href: "/rules.html" },
     { key: "planner",    label: "Planner",     href: PLANNER_URL, external: true },
   ];
 
@@ -51,6 +52,7 @@
     if (file === "matches.html") return "matches";
     if (file === "postseason.html") return "postseason";
     if (file === "statistics.html") return "statistics";
+    if (file === "rules.html") return "rules";
     return "";
   }
   const ACTIVE = activeKey();
