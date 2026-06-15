@@ -83,7 +83,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .viz-modal-controls input[type=number] { width: 60px; }
 /* Charts that must stay legible (axis-dependent) keep their intrinsic width and
    let the body scroll horizontally on mobile, instead of shrinking to fit. */
-.viz-modal-body { overflow: auto; }
+.viz-modal-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .viz-modal-body.scroll-x > svg { width: auto; max-width: none; }
 .viz-modal-body svg { display: block; margin: 0 auto; }
 .viz-modal-body > svg { width: 100%; }
