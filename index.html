@@ -36,11 +36,27 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .sec-head .sec-arrow { display: none; position: absolute; right: 0; font-size: 10px; color: var(--text3); transition: transform .15s; }
 .empty { font-size: 11px; color: var(--text3); font-style: italic; padding: 4px 0; }
 
-/* ─── LARGE LOGO + SEASON NAME ─── */
-.hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 18px 14px; }
-.hero .logo-img { max-width: 200px; max-height: 160px; object-fit: contain; }
-.hero .logo-fallback { width: 150px; height: 150px; border-radius: 18px; background: var(--bg3); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 800; letter-spacing: 2px; color: var(--accent); }
-.hero .season-name { font-size: 22px; font-weight: 800; line-height: 1.2; }
+/* Hero: logo fills the box, season name overlaid with the sprite-style outline. */
+.hero { position: relative; aspect-ratio: 2 / 1; overflow: hidden; border-radius: 12px; }
+.hero .logo-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block;   /* cover = fill the box; crop only the transparent margins */
+}
+.hero .logo-fallback {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--bg3); font-size: 44px; font-weight: 800; letter-spacing: 2px; color: var(--accent);
+}
+/* Scrim so the name stays legible over the bright logo. */
+.hero::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 55%;
+  background: linear-gradient(transparent, rgba(0,0,0,.65)); pointer-events: none; z-index: 1;
+}
+.hero .season-name {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  padding: 12px 14px; text-align: center;
+  font-size: 22px; font-weight: 800; line-height: 1.2; color: #fff;
+  text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;
+}
 
 /* ─── TABLES (standings + leaders) ─── */
 table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -98,7 +114,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .txn .with a.team-link:hover { color: var(--accent); }
 .txn .with { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
 .txn .swap { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.txn .swap .drop { color: var(--red); } .txn .swap .gain { color: var(--green); }
+.txn .swap .drop { color: var(--red); } .txn .swap .gain { color: var(--blue); }
 .txn .swap img { width: 22px; height: 22px; image-rendering: pixelated; vertical-align: middle; }
 
 /* ─── BANNER ─── */
