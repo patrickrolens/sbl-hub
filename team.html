@@ -176,7 +176,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .member-sprite-block.compact .sprite-name.n-long { font-size: 9px; }
 .member-sprite-block.compact .sprite-name.n-xl   { font-size: 8px; }
 /* Inactive stat text can be a touch smaller so it never collides at the short height. */
-.member.inactive .member-statgrid .sc-v { font-size: 14px; }
+.member.inactive .member-statgrid .sc-v { font-size: 11px; }
 .member.inactive .member-statgrid .sc-k { font-size: 11px; }
 
 /* ── MEMBER DETAIL POPOVER (hover/tap the sprite) ── */
@@ -922,8 +922,8 @@ function memberCard(row, opts) {
   grid.className = 'member-statgrid';
   grid.innerHTML =
       statCell('r1 tip', 'KOs', st.kos, '', 'The number of KOs scored by this Pokémon')
-    + statCell('r1', 'Faints', st.faints, '', 'The number of faints by this Pokémon')
-    + statCell('r2', 'K/F', kfRatio(st.kos, st.faints), '', 'The ratio of KOs to Faints by this Pokémon')
+    + statCell('r1 tip', 'Faints', st.faints, '', 'The number of faints by this Pokémon')
+    + statCell('r2 tip', 'K/F', kfRatio(st.kos, st.faints), '', 'The ratio of KOs to Faints by this Pokémon')
     + statCell('r2 tip', 'KFΔ', signed(kfDelta), deltaClass(kfDelta), 'The difference between the Pokémon\'s KOs and Faints')
     + statCell('r2 tip', 'KPG', fmtKpg(st.kpg), '', 'KOs per Game: The total number of KOs scored by this Pokémon divided by the total number of games in which it participated')
     + statCell('r3 tip', 'MB', st.mbPct, '', partTip('Match Bring', st.mbRaw, st.mbCount, st.mbWhole, 'matches', 'Share of available matches this Pokémon was brought in the team of 6'))
