@@ -1119,7 +1119,7 @@ function copyRoster() {
     .filter(r => r.released_week == null)
     .sort((a, b) => (a.draft_pick_number || 999) - (b.draft_pick_number || 999) || (a.acquired_week || 0) - (b.acquired_week || 0));
   const names = active.map(r => { const m = pokemonById[r.pokemon_id]; return m ? m.name : r.pokemon_id; });
-  const text = names.join('\n');
+  const text = names.join('\n\n');
   const btn = document.getElementById('roster-copy');
   const done = ok => {
     if (!btn) return;
