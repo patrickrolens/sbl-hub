@@ -73,7 +73,7 @@
 #sbl-nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: stretch; padding: 0 1rem; position: sticky; top: 0; z-index: 100; min-height: 49px; }
 #sbl-nav * { box-sizing: border-box; }
 .sbln-logo { display: flex; align-items: center; gap: 8px; padding-right: 0px; margin-right: 0px; border-right: 1px solid var(--border); white-space: nowrap; text-decoration: none; flex-shrink: 0; }
-.sbln-logo img { height: 40px; width: auto; display: block; margin-right: 4px}
+.sbln-logo img { height: 40px; width: auto; display: block; padding-right: 4px}
 .sbln-logo .sbln-word { font-size: 15px; font-weight: 700; color: var(--accent); }
 .sbln-tabs { display: flex; align-items: stretch; }
 .sbln-tab { display: inline-flex; align-items: center; gap: 5px; padding: 0 15px; font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none; border: none; border-bottom: 2px solid transparent; background: none; font-family: inherit; cursor: pointer; white-space: nowrap; }
