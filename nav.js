@@ -23,6 +23,7 @@
 
   // Admin pages listed in the Admin dropdown when signed in (now under /admin/).
   const ADMIN_LINKS = [
+    { href: "/admin/admin-seasons.html", label: "Seasons & Teams" },
     { href: "/admin/admin-matches.html", label: "Matches" },
     { href: "/admin/admin-rosters.html", label: "Rosters" },
     { href: "/admin/admin-tiers.html",   label: "Tiers" },
