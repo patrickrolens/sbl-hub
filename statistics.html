@@ -430,7 +430,7 @@ async function loadData() {
     }
     return await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
   })();
-  if (sErr) throw sErr;
+  if (seasonErr) throw seasonErr;
   if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
   season = seasonRow;
 
