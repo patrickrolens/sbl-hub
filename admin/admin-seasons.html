@@ -194,6 +194,31 @@ select:disabled, input:disabled { opacity: .5; }
         <button class="btn btn-accent" id="nt-create" onclick="createTeam()">Add team</button>
       </div>
     </div>
+
+    <!-- ── DRAFT SETUP ── -->
+    <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px;">
+      <div class="section-title" style="font-size:12px;">Draft setup</div>
+      <div class="section-sub">Set the round-1 draft order (snake reverses on even rounds), status, current pick, and date. Saving creates the draft record for this season if it doesn't exist yet.</div>
+
+      <div id="draft-order-wrap">
+        <div class="controls" style="margin-bottom:10px;">
+          <button class="btn btn-sm" onclick="fillFromSeed()">Fill from seed order</button>
+        </div>
+        <table class="tbl" id="draft-order-tbl">
+          <thead><tr><th class="num" style="width:90px;">Position</th><th>Team</th><th class="actions"></th></tr></thead>
+          <tbody id="draft-order-body"></tbody>
+        </table>
+      </div>
+
+      <div class="form-grid" style="margin-top:16px;">
+        <div class="fld"><label for="dr-status">Status</label><select id="dr-status"><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="complete">Complete</option></select></div>
+        <div class="fld"><label for="dr-pick">Current Pick #</label><input type="number" id="dr-pick" min="1" step="1" placeholder="optional"></div>
+        <div class="fld"><label for="dr-date">Draft Date</label><input type="date" id="dr-date"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-accent" id="dr-save" onclick="saveDraft()">Save draft setup</button>
+      </div>
+    </div>
   </div>
 
   <!-- ───────────── SECTION 3: COACHES / OWNERS ───────────── -->
@@ -257,6 +282,9 @@ let ownerTeamId = null;          // Section 3 selected team
 let chosenPlayer = null;         // { id, display_name } picked in the assign form
 let pickerKbd = -1;
 
+let draftBySeason = {};          // season_id → draft row (or null)
+let draftOrderIds = [];          // working list of team_ids in the order editor
+
 const sb = () => window.sb;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -318,6 +346,13 @@ async function loadSeasonTeams(seasonId) {
       coachNameByTeam[id] = open && open.players ? open.players.display_name : '';
     });
   }
+
+  // Draft row for this season (one per season, may not exist yet).
+  const { data: draft, error: dErr } = await sb().from('drafts')
+    .select('id, season_id, draft_order, status, current_pick_number, draft_date')
+    .eq('season_id', seasonId).maybeSingle();
+  if (dErr) throw dErr;
+  draftBySeason[seasonId] = draft || null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -335,7 +370,10 @@ function renderSeasons() {
     + '<td class="num">' + (s.point_limit ?? '—') + '</td>'
     + '<td>' + esc(fmtDate(s.started_at)) + '</td>'
     + '<td>' + esc(fmtDate(s.ended_at)) + '</td>'
-    + '<td class="actions">' + (s.is_current ? '' : '<button class="btn btn-sm" onclick="confirmMakeCurrent(\'' + s.id + '\')">Make current</button>') + '</td>'
+    + '<td class="actions">'
+      + '<button class="btn btn-sm" onclick="editSeason(\'' + s.id + '\')">Edit</button> '
+      + (s.is_current ? '' : '<button class="btn btn-sm" onclick="confirmMakeCurrent(\'' + s.id + '\')">Make current</button>')
+      + '</td>'
     + '</tr>'
   ).join('');
 }
@@ -437,7 +475,7 @@ async function onSeasonChange() {
 function renderTeams() {
   const body = document.getElementById('teams-body');
   const teams = teamsBySeason[selectedSeasonId] || [];
-  if (!teams.length) { body.innerHTML = '<tr class="empty-row"><td colspan="5">No teams in this season yet — add one below.</td></tr>'; return; }
+  if (!teams.length) { body.innerHTML = '<tr class="empty-row"><td colspan="5">No teams in this season yet — add one below.</td></tr>'; renderDraft(); return; }
   body.innerHTML = teams.map(t => {
     const coach = coachNameByTeam[t.id];
     return '<tr>'
@@ -445,9 +483,13 @@ function renderTeams() {
       + '<td>' + esc(t.slug) + '</td>'
       + '<td class="num">' + (t.initial_seed ?? '—') + '</td>'
       + '<td>' + (coach ? esc(coach) : '<span class="pill pl">none assigned</span>') + '</td>'
-      + '<td class="actions"><button class="btn btn-sm btn-danger" onclick="confirmRemoveTeam(\'' + t.id + '\')">Remove</button></td>'
+      + '<td class="actions">'
+        + '<button class="btn btn-sm" onclick="editTeam(\'' + t.id + '\')">Edit</button> '
+        + '<button class="btn btn-sm btn-danger" onclick="confirmRemoveTeam(\'' + t.id + '\')">Remove</button>'
+        + '</td>'
       + '</tr>';
   }).join('');
+  renderDraft();
 }
 
 async function createTeam() {
@@ -506,6 +548,197 @@ async function doRemoveTeam(teamId) {
     if (ownerTeamId === teamId) { ownerTeamId = null; document.getElementById('owner-team').value = ''; renderOwnerDetail(); }
     showToast('Team removed.', 'ok');
   } catch (err) { console.error(err); showToast('Could not remove team: ' + (err.message || err), 'err'); }
+}
+
+// ── EDIT SEASON (is_current handled separately via Make current) ──
+function editSeason(seasonId) {
+  const s = seasons.find(x => x.id === seasonId);
+  if (!s) return;
+  const dval = d => d ? String(d).slice(0, 10) : '';
+  openModal(
+    '<h3>Edit season</h3>'
+    + '<div class="fld"><label for="es-name">Name</label><input type="text" id="es-name" value="' + esc(s.name) + '"></div>'
+    + '<div class="fld"><label for="es-slug">Slug</label><input type="text" id="es-slug" value="' + esc(s.slug) + '"></div>'
+    + '<div class="fld"><label for="es-format">VGC Format</label><input type="text" id="es-format" value="' + esc(s.vgc_format || '') + '"></div>'
+    + '<div class="form-grid">'
+    +   '<div class="fld"><label for="es-budget">Point Budget</label><input type="number" id="es-budget" min="0" step="1" value="' + (s.point_limit ?? '') + '"></div>'
+    +   '<div class="fld"><label for="es-teamsize">Team Size</label><input type="number" id="es-teamsize" min="1" step="1" value="' + (s.team_size ?? '') + '"></div>'
+    +   '<div class="fld"><label for="es-start">Started</label><input type="date" id="es-start" value="' + dval(s.started_at) + '"></div>'
+    +   '<div class="fld"><label for="es-end">Ended</label><input type="date" id="es-end" value="' + dval(s.ended_at) + '"></div>'
+    + '</div>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" id="es-save" onclick="saveSeasonEdit(\'' + seasonId + '\')">Save changes</button></div>'
+  );
+}
+async function saveSeasonEdit(seasonId) {
+  const name = document.getElementById('es-name').value.trim();
+  const slug = slugify(document.getElementById('es-slug').value || name);
+  if (!name) { showToast('Enter a season name.', 'err'); return; }
+  if (!slug) { showToast('Enter a slug.', 'err'); return; }
+  if (seasons.some(s => s.slug === slug && s.id !== seasonId)) { showToast('That slug is already used.', 'err'); return; }
+  const budget = document.getElementById('es-budget').value;
+  const teamsize = document.getElementById('es-teamsize').value;
+  const upd = {
+    name, slug,
+    vgc_format: document.getElementById('es-format').value.trim() || null,
+    point_limit: budget === '' ? 0 : parseInt(budget, 10),
+    team_size: teamsize === '' ? null : parseInt(teamsize, 10),
+    started_at: document.getElementById('es-start').value || null,
+    ended_at: document.getElementById('es-end').value || null,
+  };
+  const btn = document.getElementById('es-save'); if (btn) btn.disabled = true;
+  try {
+    const { error } = await sb().from('seasons').update(upd).eq('id', seasonId);
+    if (error) throw error;
+    await loadSeasons();
+    renderSeasons();
+    populateSeasonDropdowns();
+    closeModal();
+    showToast('Season updated.', 'ok');
+  } catch (err) { console.error(err); showToast('Could not update season: ' + (err.message || err), 'err'); if (btn) btn.disabled = false; }
+}
+
+// ── EDIT TEAM ──
+function editTeam(teamId) {
+  const teams = teamsBySeason[selectedSeasonId] || [];
+  const t = teams.find(x => x.id === teamId);
+  if (!t) return;
+  openModal(
+    '<h3>Edit team</h3>'
+    + '<div class="fld"><label for="et-name">Name</label><input type="text" id="et-name" value="' + esc(t.name) + '"></div>'
+    + '<div class="fld"><label for="et-slug">Slug</label><input type="text" id="et-slug" value="' + esc(t.slug) + '"></div>'
+    + '<div class="form-grid">'
+    +   '<div class="fld"><label for="et-seed">Initial Seed</label><input type="number" id="et-seed" min="1" step="1" value="' + (t.initial_seed ?? '') + '"></div>'
+    +   '<div class="fld"><label for="et-logo">Logo URL</label><input type="text" id="et-logo" value="' + esc(t.logo_url || '') + '"></div>'
+    + '</div>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" id="et-save" onclick="saveTeamEdit(\'' + teamId + '\')">Save changes</button></div>'
+  );
+}
+async function saveTeamEdit(teamId) {
+  const name = document.getElementById('et-name').value.trim();
+  const slug = slugify(document.getElementById('et-slug').value || name);
+  if (!name) { showToast('Enter a team name.', 'err'); return; }
+  if (!slug) { showToast('Enter a slug.', 'err'); return; }
+  const existing = teamsBySeason[selectedSeasonId] || [];
+  if (existing.some(t => t.slug === slug && t.id !== teamId)) { showToast('That slug is already used this season.', 'err'); return; }
+  if (existing.some(t => t.name.toLowerCase() === name.toLowerCase() && t.id !== teamId)) { showToast('That name is already used this season.', 'err'); return; }
+  const seedRaw = document.getElementById('et-seed').value;
+  const upd = {
+    name, slug,
+    initial_seed: seedRaw === '' ? null : parseInt(seedRaw, 10),
+    logo_url: document.getElementById('et-logo').value.trim() || null,
+  };
+  const btn = document.getElementById('et-save'); if (btn) btn.disabled = true;
+  try {
+    const { error } = await sb().from('teams').update(upd).eq('id', teamId);
+    if (error) throw error;
+    await loadSeasonTeams(selectedSeasonId);
+    renderTeams();
+    populateOwnerTeamDropdown();
+    closeModal();
+    showToast('Team updated.', 'ok');
+  } catch (err) { console.error(err); showToast('Could not update team: ' + (err.message || err), 'err'); if (btn) btn.disabled = false; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRAFT SETUP (one drafts row per season; draft_order is an ordered team_id[])
+// ─────────────────────────────────────────────────────────────────────────────
+function renderDraft() {
+  const teams = teamsBySeason[selectedSeasonId] || [];
+  const draft = draftBySeason[selectedSeasonId] || null;
+
+  // Seed the working order: saved draft_order (filtered to live teams), then
+  // append any teams not in it (e.g. added after the order was first saved).
+  const liveIds = new Set(teams.map(t => t.id));
+  let order = (draft && Array.isArray(draft.draft_order) ? draft.draft_order : []).filter(id => liveIds.has(id));
+  teams.forEach(t => { if (!order.includes(t.id)) order.push(t.id); });
+  draftOrderIds = order;
+
+  // Status / pick / date fields reflect the saved row.
+  document.getElementById('dr-status').value = draft && draft.status ? draft.status : 'pending';
+  document.getElementById('dr-pick').value = draft && draft.current_pick_number != null ? draft.current_pick_number : '';
+  document.getElementById('dr-date').value = draft && draft.draft_date ? String(draft.draft_date).slice(0, 10) : '';
+
+  renderDraftOrder();
+}
+
+function renderDraftOrder() {
+  const body = document.getElementById('draft-order-body');
+  if (!draftOrderIds.length) {
+    body.innerHTML = '<tr class="empty-row"><td colspan="3">Add teams above to set a draft order.</td></tr>';
+    return;
+  }
+  body.innerHTML = draftOrderIds.map((id, i) =>
+    '<tr>'
+    + '<td class="num"><input type="number" min="1" step="1" style="width:64px;" value="' + (i + 1) + '" onchange="reposition(' + i + ', this.value)"></td>'
+    + '<td>' + esc(teamName(id)) + '</td>'
+    + '<td class="actions">'
+      + '<button class="btn btn-sm" onclick="moveDraft(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '>↑</button> '
+      + '<button class="btn btn-sm" onclick="moveDraft(' + i + ',1)"' + (i === draftOrderIds.length - 1 ? ' disabled' : '') + '>↓</button>'
+      + '</td>'
+    + '</tr>'
+  ).join('');
+}
+
+function moveDraft(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= draftOrderIds.length) return;
+  const tmp = draftOrderIds[i]; draftOrderIds[i] = draftOrderIds[j]; draftOrderIds[j] = tmp;
+  renderDraftOrder();
+}
+
+// Move the team at index `from` to 1-based position `posRaw`, shifting the rest.
+function reposition(from, posRaw) {
+  let pos = parseInt(posRaw, 10);
+  if (!Number.isInteger(pos)) { renderDraftOrder(); return; }
+  pos = Math.max(1, Math.min(draftOrderIds.length, pos)) - 1;
+  if (pos === from) { renderDraftOrder(); return; }
+  const [id] = draftOrderIds.splice(from, 1);
+  draftOrderIds.splice(pos, 0, id);
+  renderDraftOrder();
+}
+
+function fillFromSeed() {
+  const teams = (teamsBySeason[selectedSeasonId] || []).slice();
+  // Seeded teams first (ascending), unseeded after, by name.
+  teams.sort((a, b) => {
+    const as = a.initial_seed ?? 1e9, bs = b.initial_seed ?? 1e9;
+    return as - bs || a.name.localeCompare(b.name);
+  });
+  draftOrderIds = teams.map(t => t.id);
+  renderDraftOrder();
+  showToast('Order filled from seeds. Review, then save.', 'ok');
+}
+
+async function saveDraft() {
+  if (!selectedSeasonId) { showToast('Pick a season first.', 'err'); return; }
+  if (!draftOrderIds.length) { showToast('Add teams before saving a draft order.', 'err'); return; }
+  const status = document.getElementById('dr-status').value;
+  const pickRaw = document.getElementById('dr-pick').value;
+  const date = document.getElementById('dr-date').value || null;
+  const row = {
+    season_id: selectedSeasonId,
+    draft_order: draftOrderIds,
+    status,
+    current_pick_number: pickRaw === '' ? null : parseInt(pickRaw, 10),
+    draft_date: date,
+  };
+  const existing = draftBySeason[selectedSeasonId];
+  const btn = document.getElementById('dr-save'); btn.disabled = true;
+  try {
+    if (existing && existing.id) {
+      const { error } = await sb().from('drafts').update(row).eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await sb().from('drafts').insert(row);
+      if (error) throw error;
+    }
+    await loadSeasonTeams(selectedSeasonId);
+    renderTeams();
+    showToast('Draft setup saved.', 'ok');
+  } catch (err) { console.error(err); showToast('Could not save draft: ' + (err.message || err), 'err'); }
+  finally { btn.disabled = false; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
