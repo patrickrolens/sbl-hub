@@ -246,7 +246,7 @@ async function load() {
             +       '<div class="fact"><div class="k">Started</div><div class="v">' + esc(fmtDate(current.started_at)) + '</div></div>'
             +     '</div>'
             +     '<div class="cta-row">'
-            +       cta("Standings", link("index.html#standings", current), "primary")
+            +       cta("Standings", link("standings.html", current), current)
             +       cta("Draft Board", link("draft.html", current))
             +       cta("Teams", link("team.html", current))
             +       cta("Matches", link("matches.html", current))
@@ -267,7 +267,7 @@ async function load() {
         const { champ, runner } = deriveResult(playoffsBy[s.id], teamName);
         const cover = ASSET_BASE + esc(s.slug) + ".png";
         const slugUp = esc((s.slug || "S").toUpperCase());
-        html += '<a class="scard" href="' + esc(link("index.html#standings", s)) + '">'
+        html += '<a class="scard" href="' + esc(link("standings.html", s)) + '">'
               +   '<div class="art">'
               +     '<img src="' + cover + '" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
               +     '<div class="fallback" style="display:none">' + slugUp + '</div>'
