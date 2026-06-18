@@ -316,6 +316,19 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* User pin (single-click) — yellow. Unlimited, multi-select. */
 .pmon.pinned { border-color: rgba(240,192,96,.7); background: rgba(240,192,96,.1); box-shadow: 0 0 0 1px rgba(240,192,96,.35); }
 .pmon.pinned .pmon-name { color: var(--yellow); }
+/* Cross-division: taken by the OTHER division only — still available to me. A solid
+   border in that division's color (set inline via --xdiv), no fill, distinct from the
+   red "taken in my division" state. Can co-exist with red when taken in both. */
+.pmon.xdiv { border-color: var(--xdiv, var(--accent)); box-shadow: 0 0 0 1px var(--xdiv, var(--accent)); }
+/* When taken in both, red fill wins for the background but the cross-div ring shows. */
+.pmon.drafted.xdiv { border-color: var(--xdiv, var(--accent)); }
+
+/* Division toggle */
+.div-toggle { display: inline-flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.div-toggle button { background: var(--bg2); color: var(--text2); border: none; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; border-left: 1px solid var(--border); }
+.div-toggle button:first-child { border-left: none; }
+.div-toggle button.active { color: #fff; }
+.div-toggle button .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
 /* Search: matches get accent ring, non-matches fade. Opacity-only so any color above
    survives the fade. */
@@ -514,6 +527,7 @@ body.overlay-open { overflow: hidden; }
         <button class="sc" id="search-clear" onclick="clearSearch()">✕</button>
         <div class="search-results" id="search-results"></div>
       </div>
+      <div class="div-toggle" id="div-toggle" hidden></div>
       <button class="btn btn-icon" id="filter-btn" onclick="toggleFilters(event)" title="Pool filters" aria-label="Pool filters">
         <svg viewBox="0 0 22 16" width="20" height="15" aria-hidden="true">
           <circle cx="4" cy="8" r="1.8" fill="currentColor"/>
@@ -577,12 +591,22 @@ let coachByTeam  = {};              // team_id -> current coach display_name
 let ownersByTeam = {};              // team_id -> [{started_week, ended_week, name}] stints
 let txns         = [];              // unified transaction feed for the activity log
 let tierCost     = {};              // pokemon_id -> point_cost (this season's legal set)
-let draft        = null;            // drafts row (may be null until Patrick seeds it)
+let draft        = null;            // ACTIVE division's drafts row (or the sole row when undivided)
 let picksByTeam  = {};              // team_id -> [pokemon_id, …] CURRENT active roster (icons/points)
 let rosterByTeam = {};              // alias of the above current-roster map
 let draftPicks   = [];              // global ordered [{pick_number, team_id, pokemon_id}] for undo
-let draftedSet   = new Set();       // pokemon_id that are already drafted
-let orderedTeams = [];              // team_ids in sidebar/draft order
+let draftedSet   = new Set();       // ACTIVE division's taken pokemon_ids (derived; see refreshActiveDivision)
+let orderedTeams = [];              // team_ids in sidebar/draft order (ACTIVE division)
+
+// ── DIVISION STATE ──
+// A season "has divisions" iff `divisions` has rows. When it does, the board shows
+// a toggle; the ACTIVE division drives draft/orderedTeams/draftedSet via accessors.
+let divisions       = [];           // [{id, name, abbr, color, sort_order}] sorted
+let activeDivisionId = null;        // currently-toggled division id (null when undivided)
+let draftByDivision = {};           // divisionId|'__none__' -> drafts row
+let teamDivision    = {};           // team_id -> division_id (null when undivided)
+let takenByDivision = {};           // pokemon_id -> Set(division_id|'__none__')  (current rosters)
+let orderByDivision = {};           // divisionId|'__none__' -> [team_id] ordered
 let pokemonById  = {};              // id -> pokemon.json entry
 let collapsed    = new Set();       // collapsed tier lane keys
 let searchQ      = '';
@@ -646,6 +670,71 @@ function attachIconFallback(img, mon) {
 //   draft_order is the round-1 team sequence; even rounds (0-indexed) go forward,
 //   odd rounds reverse. Skip-aware computation arrives in Stage 4.
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTIVE DIVISION CONTEXT
+// The board renders one division at a time (or the whole season when undivided).
+// These accessors translate the active scope into the globals existing code reads,
+// so the bulk of the draft logic is untouched.
+// ─────────────────────────────────────────────────────────────────────────────
+function activeScope() { return divisions.length ? activeDivisionId : '__none__'; }
+function hasDivisions() { return divisions.length > 0; }
+function divisionMeta(id) { return divisions.find(d => d.id === id) || null; }
+function otherDivisions() { return divisions.filter(d => d.id !== activeDivisionId); }
+
+// Point the single-draft globals at the active scope. Called on load and on toggle.
+function refreshActiveDivision() {
+  const scope = activeScope();
+  draft = draftByDivision[scope] || null;
+  orderedTeams = orderByDivision[scope] || [];
+  // draftedSet = the active scope's taken set, so all existing draftedSet.has()
+  // call sites mean "taken in the division I'm currently viewing".
+  draftedSet = new Set();
+  for (const id in takenByDivision) { if (takenByDivision[id].has(scope)) draftedSet.add(id); }
+}
+
+// Is `id` taken in any division OTHER than the active one? (drives the cross border)
+function takenInOtherDivision(id) {
+  if (!hasDivisions()) return false;
+  const set = takenByDivision[id];
+  if (!set) return false;
+  for (const d of otherDivisions()) if (set.has(d.id)) return true;
+  return false;
+}
+// The color of the first other-division that has taken `id` (for the cross border).
+function crossDivisionColor(id) {
+  const set = takenByDivision[id];
+  if (!set) return null;
+  for (const d of otherDivisions()) if (set.has(d.id)) return d.color || 'var(--accent)';
+  return null;
+}
+
+// Render the division toggle (hidden entirely when the season is undivided).
+function renderDivToggle() {
+  const el = document.getElementById('div-toggle');
+  if (!el) return;
+  if (!hasDivisions()) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = divisions.map(d =>
+    '<button class="' + (d.id === activeDivisionId ? 'active' : '') + '" '
+    + 'style="' + (d.id === activeDivisionId && d.color ? 'background:' + d.color + ';' : '') + '" '
+    + 'onclick="switchDivision(\'' + d.id + '\')">'
+    + (d.color ? '<span class="swatch" style="background:' + (d.id === activeDivisionId ? '#fff' : d.color) + '"></span>' : '')
+    + escapeHtml(d.abbr || d.name) + '</button>'
+  ).join('');
+}
+
+// Toggle the active division: re-point the active-context globals and re-render the
+// parts that depend on it (clock/sidebar follow the active draft; pool recolors).
+function switchDivision(divId) {
+  if (divId === activeDivisionId) return;
+  activeDivisionId = divId;
+  refreshActiveDivision();
+  renderDivToggle();
+  renderSidebar();
+  renderStatus();
+  renderPool();
+}
+
 function teamAtPick(pickNumber) {
   if (!draft || !orderedTeams.length || !season) return null;
   const n = orderedTeams.length;
@@ -688,18 +777,23 @@ async function loadData() {
   if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
   season = seasonRow;
 
-  const [teamsRes, ownersRes, tiersRes, draftRes, tradeRes, faRes] = await Promise.all([
-    sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
+  const [teamsRes, ownersRes, tiersRes, draftRes, tradeRes, faRes, divRes] = await Promise.all([
+    sb.from('teams').select('id,name,slug,logo_url,initial_seed,division_id').eq('season_id', season.id),
     sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', season.id),
-    sb.from('drafts').select('draft_order, current_pick_number, status').eq('season_id', season.id).maybeSingle(),
+    sb.from('drafts').select('id, division_id, draft_order, current_pick_number, status').eq('season_id', season.id),
     sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at, notes').eq('season_id', season.id),
     sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at, notes').eq('season_id', season.id),
+    sb.from('divisions').select('id, name, abbr, color, sort_order').eq('season_id', season.id).order('sort_order', { ascending: true }),
   ]);
-  for (const r of [teamsRes, ownersRes, tiersRes, draftRes, tradeRes, faRes]) if (r.error) throw r.error;
+  for (const r of [teamsRes, ownersRes, tiersRes, draftRes, tradeRes, faRes, divRes]) if (r.error) throw r.error;
 
   teams = teamsRes.data || [];
   const teamIds = teams.map(t => t.id);
+
+  divisions = divRes.data || [];
+  teamDivision = {};
+  teams.forEach(t => { teamDivision[t.id] = t.division_id || null; });
 
   // Owner stints (for coach-as-of-week) + current coach (existing usage).
   coachByTeam = {}; ownersByTeam = {};
@@ -713,10 +807,12 @@ async function loadData() {
   tierCost = {};
   (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; });
 
-  draft = draftRes.data || null;
+  // Index draft rows by division scope ('__none__' when undivided).
+  draftByDivision = {};
+  (draftRes.data || []).forEach(d => { draftByDivision[d.division_id || '__none__'] = d; });
 
   // Drafted picks for this season's teams.
-  picksByTeam = {}; draftedSet = new Set(); draftPicks = []; rosterByTeam = {};
+  picksByTeam = {}; draftPicks = []; rosterByTeam = {}; takenByDivision = {};
   if (teamIds.length) {
     const { data: picks, error: picksErr } = await sb
       .from('team_pokemon')
@@ -731,28 +827,42 @@ async function loadData() {
       .forEach(p => {
         draftPicks.push({ pick_number: p.draft_pick_number, team_id: p.team_id, pokemon_id: p.pokemon_id });
       });
-    // Current rosters (sidebar icons + point totals + pool "taken" coloring): every
-    // unreleased Pokémon, however acquired, so the board reflects trades and FA.
+    // Current rosters → per-division "taken" sets. A Pokémon is taken within the
+    // division of whichever team currently rosters it; the same id can be taken in
+    // multiple divisions (separate pools), hence a Set of division scopes per id.
     (picks || [])
       .filter(p => p.released_week == null)
       .sort((a, b) => (a.acquired_week || 0) - (b.acquired_week || 0) || (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
       .forEach(p => {
         (rosterByTeam[p.team_id] = rosterByTeam[p.team_id] || []).push(p.pokemon_id);
-        draftedSet.add(p.pokemon_id);   // currently rostered → unavailable in the pool
+        const scope = teamDivision[p.team_id] || '__none__';
+        (takenByDivision[p.pokemon_id] = takenByDivision[p.pokemon_id] || new Set()).add(scope);
       });
     picksByTeam = rosterByTeam;
   }
 
-  buildTxns(tradeRes.data, faRes.data);
+  // Order maps per division scope (built once; active one is surfaced as orderedTeams).
+  orderByDivision = {};
+  const scopes = divisions.length ? divisions.map(d => d.id) : ['__none__'];
+  scopes.forEach(scope => {
+    const scopeTeams = divisions.length ? teams.filter(t => (t.division_id || null) === scope) : teams.slice();
+    const d = draftByDivision[scope];
+    let order;
+    if (d && Array.isArray(d.draft_order) && d.draft_order.length) {
+      order = d.draft_order.filter(id => teamIds.includes(id));
+    } else {
+      order = scopeTeams
+        .sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name))
+        .map(t => t.id);
+    }
+    orderByDivision[scope] = order;
+  });
 
-  // Sidebar / draft order: prefer drafts.draft_order, else initial_seed, else name.
-  if (draft && Array.isArray(draft.draft_order) && draft.draft_order.length) {
-    orderedTeams = draft.draft_order.filter(id => teamIds.includes(id));
-  } else {
-    orderedTeams = [...teams]
-      .sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name))
-      .map(t => t.id);
-  }
+  // Choose the initial active division: first by sort_order (null when undivided).
+  activeDivisionId = divisions.length ? divisions[0].id : null;
+  refreshActiveDivision();   // sets draft, orderedTeams, draftedSet from the active scope
+
+  buildTxns(tradeRes.data, faRes.data);
 
   // pokemon.json index.
   const pj = await pjPromise;
@@ -931,15 +1041,25 @@ function makeCard(mon) {
 }
 
 // ── COLOR STATE ──
-// Exactly one color class per card, by precedence: team-pick (blue) > drafted (red)
-// > pinned (yellow). illegal-card (image grayscale) and search-* (opacity) are
-// independent axes and are left untouched here.
+// Fill/precedence: team-pick (blue) > drafted (red, taken in active division) >
+// pinned (yellow). The cross-division ring (xdiv) is an INDEPENDENT axis: it shows
+// whenever another division has taken the Pokémon, and can co-exist with red (taken
+// in both) — so a card can be plain+xdiv ("open to me, taken in the other division")
+// or drafted+xdiv ("taken in both").
 function applyCardState(card, id) {
-  card.classList.remove('team-pick', 'drafted', 'pinned');
+  card.classList.remove('team-pick', 'drafted', 'pinned', 'xdiv');
+  card.style.removeProperty('--xdiv');
   const ownedBySelected = selectedTeam && (picksByTeam[selectedTeam] || []).includes(id);
   if (ownedBySelected)        card.classList.add('team-pick');
   else if (draftedSet.has(id)) card.classList.add('drafted');
   else if (pinnedIds.has(id))  card.classList.add('pinned');
+
+  // Cross-division ring — only meaningful in a divisioned season, and not shown on
+  // the viewer's own blue selection (which already conveys ownership).
+  if (!ownedBySelected && takenInOtherDivision(id)) {
+    const color = crossDivisionColor(id);
+    if (color) { card.style.setProperty('--xdiv', color); card.classList.add('xdiv'); }
+  }
 }
 
 // Reapply color state to every pool card (after a selection change).
@@ -1044,12 +1164,20 @@ async function draftPokemon(mon, teamId, pickNumber) {
     const update = isLast
       ? { current_pick_number: pickNumber + 1, status: 'complete', completed_at: new Date().toISOString() }
       : { current_pick_number: pickNumber + 1 };
-    const { error: updErr } = await sb.from('drafts').update(update).eq('season_id', season.id);
+    // Target the ACTIVE division's draft row specifically. For an undivided season
+    // there's a single row (its id), so this is equally correct there.
+    let updQuery = sb.from('drafts').update(update);
+    updQuery = draft && draft.id
+      ? updQuery.eq('id', draft.id)
+      : updQuery.eq('season_id', season.id);   // defensive fallback
+    const { error: updErr } = await updQuery;
     if (updErr) throw updErr;
 
     // Local state.
     (picksByTeam[teamId] = picksByTeam[teamId] || []).push(mon.id);
-    draftedSet.add(mon.id);
+    const scope = teamDivision[teamId] || '__none__';
+    (takenByDivision[mon.id] = takenByDivision[mon.id] || new Set()).add(scope);
+    draftedSet.add(mon.id);   // active scope === the picking team's scope here
     draftPicks.push({ pick_number: pickNumber, team_id: teamId, pokemon_id: mon.id });
     pinnedIds.delete(mon.id);           // a drafted Pokémon clears its yellow pin
     savePins();
@@ -1319,8 +1447,14 @@ function updateUndoButton() {
 // the last pick is simply the highest draft_pick_number.
 function undoLastPick() {
   if (!isAdmin) return;
-  if (!draftPicks.length) { showToast('Nothing to undo.', 'err'); return; }
-  const last = draftPicks[draftPicks.length - 1];
+  // In a divisioned season, undo operates within the ACTIVE division: the last pick
+  // is the highest-numbered pick made by a team in that division. Undivided seasons
+  // use the global last pick as before.
+  const scope = activeScope();
+  const inScope = p => !hasDivisions() || (teamDivision[p.team_id] || '__none__') === scope;
+  const candidates = draftPicks.filter(inScope);
+  if (!candidates.length) { showToast('Nothing to undo' + (hasDivisions() ? ' in this division.' : '.'), 'err'); return; }
+  const last = candidates.reduce((a, b) => ((b.pick_number || 0) > (a.pick_number || 0) ? b : a));
   const mon  = pokemonById[last.pokemon_id];
   const monName = mon ? mon.name : last.pokemon_id;
 
@@ -1347,13 +1481,22 @@ async function performUndo(last) {
     if (delErr) throw delErr;
 
     // Pointer goes back to the undone pick; reopening the draft if it had completed.
-    const { error: updErr } = await sb.from('drafts')
-      .update({ current_pick_number: last.pick_number, status: 'in_progress', completed_at: null })
-      .eq('season_id', season.id);
+    let undoQuery = sb.from('drafts')
+      .update({ current_pick_number: last.pick_number, status: 'in_progress', completed_at: null });
+    undoQuery = draft && draft.id ? undoQuery.eq('id', draft.id) : undoQuery.eq('season_id', season.id);
+    const { error: updErr } = await undoQuery;
     if (updErr) throw updErr;
 
     // Local state.
-    draftPicks.pop();
+    const li = draftPicks.lastIndexOf(last);
+    if (li !== -1) draftPicks.splice(li, 1); else draftPicks.pop();
+    // Remove the active scope from this Pokémon's taken set (it may still be taken
+    // in the other division), and recompute draftedSet for the active scope.
+    const undoScope = teamDivision[last.team_id] || '__none__';
+    if (takenByDivision[last.pokemon_id]) {
+      takenByDivision[last.pokemon_id].delete(undoScope);
+      if (!takenByDivision[last.pokemon_id].size) delete takenByDivision[last.pokemon_id];
+    }
     draftedSet.delete(last.pokemon_id);
     const arr = picksByTeam[last.team_id] || [];
     const at = arr.lastIndexOf(last.pokemon_id);
@@ -1560,7 +1703,7 @@ async function refreshDraftState() {
     const teamIds = teams.map(t => t.id);
 
     const [draftRes, picksRes, tradeRes, faRes] = await Promise.all([
-      sb.from('drafts').select('draft_order, current_pick_number, status').eq('season_id', season.id).maybeSingle(),
+      sb.from('drafts').select('id, division_id, draft_order, current_pick_number, status').eq('season_id', season.id),
       teamIds.length
         ? sb.from('team_pokemon').select('team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week').in('team_id', teamIds)
         : Promise.resolve({ data: [], error: null }),
@@ -1572,10 +1715,12 @@ async function refreshDraftState() {
     if (tradeRes.error) throw tradeRes.error;
     if (faRes.error) throw faRes.error;
 
-    draft = draftRes.data || null;
+    // Re-index draft rows by scope.
+    draftByDivision = {};
+    (draftRes.data || []).forEach(d => { draftByDivision[d.division_id || '__none__'] = d; });
 
     // Rebuild pick-derived state from scratch.
-    picksByTeam = {}; draftedSet = new Set(); draftPicks = []; rosterByTeam = {};
+    picksByTeam = {}; draftPicks = []; rosterByTeam = {}; takenByDivision = {};
     (picksRes.data || [])
       .filter(p => p.acquired_via === 'draft')
       .sort((a, b) => (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
@@ -1587,21 +1732,26 @@ async function refreshDraftState() {
       .sort((a, b) => (a.acquired_week || 0) - (b.acquired_week || 0) || (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
       .forEach(p => {
         (rosterByTeam[p.team_id] = rosterByTeam[p.team_id] || []).push(p.pokemon_id);
-        draftedSet.add(p.pokemon_id);
+        const scope = teamDivision[p.team_id] || '__none__';
+        (takenByDivision[p.pokemon_id] = takenByDivision[p.pokemon_id] || new Set()).add(scope);
       });
     picksByTeam = rosterByTeam;
 
-    // A Pokémon that's now drafted can't stay yellow-pinned (matches the local rule).
-    pinnedIds.forEach(id => { if (draftedSet.has(id)) pinnedIds.delete(id); });
+    // Recompute per-division order maps (admin may have edited an order).
+    orderByDivision = {};
+    const scopes = divisions.length ? divisions.map(d => d.id) : ['__none__'];
+    scopes.forEach(scope => {
+      const scopeTeams = divisions.length ? teams.filter(t => (t.division_id || null) === scope) : teams.slice();
+      const d = draftByDivision[scope];
+      orderByDivision[scope] = (d && Array.isArray(d.draft_order) && d.draft_order.length)
+        ? d.draft_order.filter(id => teamIds.includes(id))
+        : scopeTeams.sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name)).map(t => t.id);
+    });
 
-    // Draft order can change (e.g. admin edit), so recompute it too.
-    if (draft && Array.isArray(draft.draft_order) && draft.draft_order.length) {
-      orderedTeams = draft.draft_order.filter(id => teamIds.includes(id));
-    } else {
-      orderedTeams = [...teams]
-        .sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name))
-        .map(t => t.id);
-    }
+    // Re-point active-context globals (draft, orderedTeams, draftedSet) at the
+    // active scope, then drop any now-drafted pins.
+    refreshActiveDivision();
+    pinnedIds.forEach(id => { if (draftedSet.has(id)) pinnedIds.delete(id); });
 
     buildTxns(tradeRes.data, faRes.data);
 
@@ -1625,6 +1775,7 @@ async function init() {
   try {
     await loadData();
     loadPins();        // restore yellow pins + blue team selection from a prior session
+    renderDivToggle();
     renderSidebar();
     renderStatus();
     renderPool();
