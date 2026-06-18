@@ -58,6 +58,21 @@
   }
   const ACTIVE = activeKey();
 
+  // ── Season param carry-through ──────────────────────────────────────────────
+  // If the URL carries ?season=<slug>, propagate it to internal nav links so the
+  // viewer stays in that season as they browse. The slug is taken verbatim at
+  // boot (synchronous); loadData() later validates it against the seasons table
+  // and, if it's bogus/absent, rewrites the links to drop the param (the pages
+  // themselves fall back to the current season for a bad slug).
+  let seasonSlug = new URLSearchParams(location.search).get("season") || "";
+  // Internal, non-external hrefs get the param appended; external (Planner) and
+  // the season-independent hub logo do not.
+  function withSeason(href) {
+    if (!seasonSlug) return href;
+    if (/^https?:\/\//i.test(href)) return href;          // external
+    return href + (href.indexOf("?") === -1 ? "?" : "&") + "season=" + encodeURIComponent(seasonSlug);
+  }
+
   //  state 
   let season = null, allTeams = [], coachByTeam = {};
   let currentUser = null, isAdmin = false;
@@ -143,7 +158,7 @@
     }
     const hidden = t.gated ? " hidden" : "";
     const target = t.external ? ' rel="noopener"' : "";
-    return `<a class="sbln-tab${ACTIVE === t.key ? " active" : ""}${hidden}" id="sbln-tab-${t.key}" href="${t.href}"${target}>${t.label}</a>`;
+    return `<a class="sbln-tab${ACTIVE === t.key ? " active" : ""}${hidden}" id="sbln-tab-${t.key}" href="${withSeason(t.href)}"${target}>${t.label}</a>`;
   }
 
   function buildNav() {
@@ -268,7 +283,7 @@
     rows.forEach(e => {
       const a = document.createElement("a");
       a.className = "sbln-menu-item";
-      a.href = "/team.html#" + encodeURIComponent(e.t.slug || "");
+      a.href = withSeason("/team.html") + "#" + encodeURIComponent(e.t.slug || "");
       a.innerHTML = esc(e.t.name) + (e.coach ? ` <span class="pl">(${esc(e.coach)})</span>` : "");
       list.appendChild(a);
     });
@@ -366,7 +381,19 @@
   //  data load (season + teams for the dropdown) 
   async function loadData() {
     try {
-      const { data: s } = await sb.from("seasons").select("id, name, postseason_published").eq("is_current", true).maybeSingle();
+      // Resolve the active season: by slug if the URL carried one, else current.
+      let s = null;
+      if (seasonSlug) {
+        const r = await sb.from("seasons").select("id, name, slug, postseason_published").eq("slug", seasonSlug).maybeSingle();
+        s = r.data || null;
+      }
+      if (!s) {
+        // No slug, or the slug didn't match a season → fall back to current and
+        // drop the (absent/invalid) param from the nav links already rendered.
+        if (seasonSlug) { seasonSlug = ""; stripSeasonFromLinks(); }
+        const r = await sb.from("seasons").select("id, name, slug, postseason_published").eq("is_current", true).maybeSingle();
+        s = r.data || null;
+      }
       season = s || null;
       postseasonVisible = !!(season && season.postseason_published);
       applyPostseasonVisibility();
@@ -381,6 +408,18 @@
     } catch (e) { console.error("nav.js loadData:", e); /* nav still works without the team list */ }
   }
 
+  // Remove ?season=… from the rendered tab links (used when the URL slug was
+  // invalid and we've fallen back to the current season).
+  function stripSeasonFromLinks() {
+    document.querySelectorAll('#sbl-nav .sbln-tab[href]').forEach(a => {
+      try {
+        const u = new URL(a.getAttribute("href"), location.origin);
+        u.searchParams.delete("season");
+        a.setAttribute("href", u.pathname + (u.search || "") + (u.hash || ""));
+      } catch (_) { /* leave as-is */ }
+    });
+  }
+
   //  boot 
   function start() {
     injectStyle();
@@ -392,7 +431,7 @@
     sb.auth.onAuthStateChange((_e, s) => { setTimeout(() => applySession(s), 0); });
   }
 
-  window.SBLNav = { ready, get isAdmin() { return isAdmin; }, get user() { return currentUser; } };
+  window.SBLNav = { ready, get isAdmin() { return isAdmin; }, get user() { return currentUser; }, get seasonSlug() { return seasonSlug; }, get season() { return season; } };
 
   if (document.body) start();
   else document.addEventListener("DOMContentLoaded", start);
