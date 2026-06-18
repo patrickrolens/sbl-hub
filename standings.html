@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SBL Hub — Standings</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* ─── TOKENS (shared verbatim with the rest of the hub) ─── */
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+  --nav-h: 49px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+
+/* ─── PAGE GRID: leaders | logo+standings | feed ─── */
+.layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.18fr) minmax(0,1fr); gap: 12px; padding: 12px; align-items: start; }
+.col { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.card-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; margin-bottom: 10px; }
+.card-title.center { text-align: center; }
+.card-title a { color: inherit; text-decoration: none; }
+.card-title a:hover { color: var(--accent); }
+/* collapsible section header (mobile gets the arrow; desktop stays open) */
+.sec-head { display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; cursor: default; }
+.sec-head .sec-arrow { display: none; position: absolute; right: 0; font-size: 10px; color: var(--text3); transition: transform .15s; }
+.empty { font-size: 11px; color: var(--text3); font-style: italic; padding: 4px 0; }
+
+/* Hero: logo fills the box, season name overlaid with the sprite-style outline. */
+.hero { position: relative; aspect-ratio: 2.04 / 1; overflow: hidden;
+  margin: -14px; border-radius: 10px; }
+.hero .logo-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block;   /* cover = fill the box; crop only the transparent margins */
+}
+.hero .logo-fallback {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--bg3); font-size: 44px; font-weight: 800; letter-spacing: 2px; color: var(--accent);
+}
+.hero .season-name {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  padding: 12px 14px; text-align: center;
+  font-size: 32px; font-weight: 800; line-height: 1.2; color: #fff;
+  text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;
+}
+
+/* ─── TABLES (standings + leaders) ─── */
+table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th { text-align: center; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); font-weight: 700; padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.tbl th.team-head { text-align: left; }
+.tbl td { padding: 6px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* zebra banding */
+.tbl tbody tr:nth-child(even) { background: rgba(255,255,255,.022); }
+.tbl tbody tr:hover { background: var(--bg3); }
+.tbl .num { text-align: center; font-variant-numeric: tabular-nums; }
+.tbl .rank { color: var(--text3); font-weight: 700; width: 1%; padding-right: 4px; text-align: center; }
+.tbl .pl { color: var(--text2); font-weight: 400; }
+.tbl .pos { color: var(--blue); } .tbl .neg { color: var(--red); }
+.tbl .dim { opacity: .42; }
+.tbl a.team-link { color: var(--text); text-decoration: none; }
+.tbl a.team-link:hover { color: var(--accent); }
+.lead-mon { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lead-mon img { width: 26px; height: 26px; image-rendering: pixelated; flex-shrink: 0; }
+.lead-mon span { overflow: hidden; text-overflow: ellipsis; }
+.tbl td.team-cell { max-width: 0; width: 99%; }    /* team column eats remaining width; names ellipsis */
+
+.kf-note { font-size: 10px; color: var(--text3); margin-top: 8px; line-height: 1.4; }
+
+/* ─── DRAFT / UPCOMING ─── */
+.draft-status { font-size: 15px; font-weight: 700; text-align: center; padding: 6px 0 4px; }
+.draft-sub { font-size: 12px; color: var(--text2); text-align: center; }
+.match-row { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; }
+.match-list { display: flex; flex-direction: column; gap: 8px; }
+.match-teams { font-size: 12px; line-height: 1.45; text-align: center; }
+.match-teams a.team-link { color: var(--text); text-decoration: none; }
+.match-teams a.team-link:hover { color: var(--accent); }
+.match-teams .vs { color: var(--text3); }
+.match-teams .pl { color: var(--text2); font-weight: 400; }   /* was --text3; brighter coach */
+.match-date { font-size: 10px; font-weight: 700; letter-spacing: .3px; color: var(--text3); text-transform: uppercase; text-align: center; margin-bottom: 4px; }
+
+/* ─── RECENTLY COMPLETED (side-by-side: brought · score · brought, labels beneath) ─── */
+.done-row { display: block; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; text-decoration: none; color: inherit; }
+.done-row:hover { border-color: var(--accent); }
+.done-date { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .3px; text-align: center; margin-bottom: 6px; min-height: 0; }
+.done-grid { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.done-col { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.done-score { display: flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.done-score .sc { color: var(--text2); }
+.done-score .sc.win { color: var(--blue); }
+.done-score .vs { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; }
+.brought { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; }
+.brought img { width: 21px; height: 21px; image-rendering: pixelated; }
+.done-who { font-size: 11px; line-height: 1.3; text-align: center; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.done-who .pl { color: var(--text2); font-weight: 400; }
+
+/* ─── TRANSACTIONS ─── */
+.txn-list { display: flex; flex-direction: column; gap: 8px; }
+.txn { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.txn .with a.team-link { color: var(--text); text-decoration: none; }
+.txn .with a.team-link:hover { color: var(--accent); }
+.txn .with { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+.txn .swap { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.txn .swap .drop { color: var(--red); } .txn .swap .gain { color: var(--blue); }
+.txn .swap img { width: 22px; height: 22px; image-rendering: pixelated; vertical-align: middle; }
+
+/* ─── BANNER ─── */
+.banner { margin: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); font-size: 12px; color: var(--text2); }
+.banner.err { border-color: rgba(224,85,85,.5); color: var(--red); }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 1fr; }
+  /* Logo + standings lead on narrow screens; leaders and feed follow. */
+  .col-center { order: -1; }
+}
+@media (max-width: 680px) {
+  /* Collapsible sections: show the arrow, allow tap-to-toggle. */
+  .sec-head { cursor: pointer; }
+  .sec-head .sec-arrow { display: block; }
+  .card.collapsed .sec-head { margin-bottom: 0; }
+  .card.collapsed .sec-head .sec-arrow { transform: rotate(-90deg); }
+  .card.collapsed .sec-body { display: none; }
+  /* Brought-six as two even rows of three. */
+  .brought { display: grid; grid-template-columns: repeat(3, max-content); justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<script src="/nav.js"></script>
+
+<div id="boot-banner" class="banner">Loading standings…</div>
+
+<div class="layout" id="layout" hidden>
+
+  <!-- ── LEFT: leader boards ── -->
+  <div class="col col-left">
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>KO Leaders · Top 10</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="ko-leaders"></div></div>
+    </div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>KF Δ Leaders · Top 10</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="kfd-leaders"></div></div>
+    </div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>K/F Leaders · Top 10</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <div id="kf-leaders"></div>
+        <div class="kf-note">Pokémon with 4 or fewer games played are dimmed and ranked below qualified Pokémon.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CENTER: logo + season standings ── -->
+  <div class="col col-center">
+    <div class="card">
+      <div class="hero" id="hero"></div>
+    </div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>Season Standings</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="standings"></div></div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: draft/upcoming, completed, transactions ── -->
+  <div class="col col-right">
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span id="draft-card-title">Up Next</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="draft-panel"></div></div>
+    </div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><span>Recently Completed</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="completed"></div></div>
+    </div>
+    <div class="card" data-collapse>
+      <div class="card-title center sec-head"><a id="txn-card-title" href="draft.html">Recent Transactions</a><span class="sec-arrow">▾</span></div>
+      <div class="sec-body"><div id="transactions"></div></div>
+    </div>
+  </div>
+
+</div>
+
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+// Reuse the single client created by nav.js; fall back to our own only if it's absent.
+const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
+const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
+
+// League logo (shared asset, same as the nav). Falls back to a text mark on error.
+const SBL_LOGO_URL = "/assets/SBL_Logo.png";
+
+const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
+
+// ── STATE ──
+let season       = null;
+let allTeams     = [];
+let teamById     = {};
+let allOwners    = [];
+let coachByTeam  = {};
+let draftRow     = null;
+let matches      = [];     // all matches for the season (any stage)
+let gamesByMatch = {};     // match_id -> [game rows]
+let gameToMatch  = {};     // game_id -> match_id
+let statRows     = [];     // all game_pokemon_stats rows for the season
+let broughtByMatch = {};   // match_id -> { team_id -> [pokemon_id, …] } from match_pokemon
+let txns         = [];
+let pokemonById  = {};
+
+// ── ID / URL HELPERS (mirror the rest of the hub) ──
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/);
+  if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(mon)   { return mon && mon.id ? ASSET_BASE + 'icons/'   + localId(mon.id) + '.png' : ''; }
+function spriteUrl(mon) { return mon && mon.id ? ASSET_BASE + 'sprites/' + localId(mon.id) + '.png' : ''; }
+function attachIconFallback(img, mon) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/')) { this.src = spriteUrl(mon); }
+    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+
+// ── FORMAT HELPERS ──
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function signed(n) { return (n > 0 ? '+' : '') + n; }
+function deltaClass(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
+function kfRatio(kos, faints) { if (faints === 0) return kos === 0 ? '—' : '∞'; return (kos / faints).toFixed(2); }
+function kfSortValue(kos, faints) { return faints > 0 ? kos / faints : (kos > 0 ? Infinity : 0); }
+function fmtRate(r) { return r == null ? '—' : (r * 100).toFixed(0) + '%'; }
+function fmtDateTime(s) {
+  if (!s) return 'TBD';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return 'TBD';
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+// Mobile uses coach-only labels in the feed; track the breakpoint and re-render on cross.
+const MOBILE_MQ = window.matchMedia('(max-width: 680px)');
+let IS_MOBILE = MOBILE_MQ.matches;
+// Team label that collapses to coach-only on mobile.
+function feedTeamHtml(id, opts) { return IS_MOBILE ? coachOnlyHtml(id, opts) : teamLabelHtml(id, opts); }
+
+function fmtDate(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear();
+}
+function monName(id) { const m = pokemonById[id]; return m ? m.name : id; }
+function monFor(id)  { return pokemonById[id] || { id: id, name: id }; }
+
+// Coach for a team, suppressed when it's identical to the team name (note: "if Coach = Team, show once").
+function coachFor(id) {
+  const t = teamById[id]; const c = coachByTeam[id];
+  if (!c) return '';
+  if (t && t.name.trim().toLowerCase() === c.trim().toLowerCase()) return '';
+  return c;
+}
+// "Team Name (Coach)" as HTML, coach dimmed and suppressed when redundant. Optionally a link to the team page.
+function teamLabelHtml(id, opts) {
+  const t = teamById[id];
+  if (!t) return 'TBD';
+  const c = coachFor(id);
+  const inner = escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '');
+  if (opts && opts.link && t.slug) return '<a class="team-link" href="team.html#' + encodeURIComponent(t.slug) + '">' + inner + '</a>';
+  return inner;
+}
+// Coach-only label (used in the compact mobile feed and where space is tight).
+function coachOnlyHtml(id, opts) {
+  const t = teamById[id];
+  if (!t) return 'TBD';
+  const label = coachByTeam[id] || t.name;
+  const esc = escapeHtml(label);
+  if (opts && opts.link && t.slug) return '<a class="team-link" href="team.html#' + encodeURIComponent(t.slug) + '">' + esc + '</a>';
+  return esc;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA LOAD
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Fetch every row of `table` where `column` is in `values`, defeating Supabase's
+// default 1000-row response cap. The IN-list is chunked (so a large id list can't
+// overrun the query), and each chunk is paged until a short page signals the end.
+async function fetchAllIn(table, columns, column, values) {
+  const IN_CHUNK = 300;     // max ids per IN() clause
+  const PAGE = 1000;        // Supabase max rows per response
+  const out = [];
+  for (let i = 0; i < values.length; i += IN_CHUNK) {
+    const slice = values.slice(i, i + IN_CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb.from(table).select(columns)
+        .in(column, slice).range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (data && data.length) out.push(...data);
+      if (!data || data.length < PAGE) break;   // last page for this chunk
+    }
+  }
+  return out;
+}
+
+async function loadData() {
+  const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
+    const ct = res.headers.get('content-type') || '';
+    if (!res.ok || !ct.includes('json')) throw new Error('pokemon.json not found at "' + POKEMON_JSON_URL + '" (got ' + res.status + ').');
+    return res.json();
+  });
+
+  const { data: seasonRow, error: seasonErr } = await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
+  if (seasonErr) throw seasonErr;
+  if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
+  season = seasonRow;
+
+  const [teamsRes, ownersRes, draftRes, matchRes, faRes, tradeRes] = await Promise.all([
+    sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
+    sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
+    sb.from('drafts').select('status, started_at, completed_at').eq('season_id', season.id).maybeSingle(),
+    sb.from('matches').select('id, stage, week, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id').eq('season_id', season.id),
+    sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at').eq('season_id', season.id),
+    sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at').eq('season_id', season.id),
+  ]);
+  for (const r of [teamsRes, ownersRes, draftRes, matchRes, faRes, tradeRes]) if (r.error) throw r.error;
+
+  allTeams = teamsRes.data || [];
+  teamById = {};
+  allTeams.forEach(t => { teamById[t.id] = t; });
+  const teamIds = allTeams.map(t => t.id);
+
+  allOwners = (ownersRes.data || []).filter(o => teamIds.includes(o.team_id));
+  coachByTeam = {};
+  allOwners.filter(o => o.ended_week == null).forEach(o => { if (o.players) coachByTeam[o.team_id] = o.players.display_name; });
+
+  draftRow = draftRes.data || null;
+  matches  = matchRes.data || [];
+
+  // Games + per-Pokémon stats across the whole season (drives leaders, KD).
+  gamesByMatch = {}; gameToMatch = {}; statRows = []; broughtByMatch = {};
+  const matchIds = matches.map(m => m.id);
+  if (matchIds.length) {
+    const games = await fetchAllIn('games', 'id, match_id', 'match_id', matchIds);
+    (games || []).forEach(g => { (gamesByMatch[g.match_id] = gamesByMatch[g.match_id] || []).push(g); gameToMatch[g.id] = g.match_id; });
+    const gameIds = (games || []).map(g => g.id);
+    if (gameIds.length) {
+      statRows = await fetchAllIn('game_pokemon_stats', 'game_id, team_id, pokemon_id, kills, deaths', 'game_id', gameIds);
+    }
+    // Explicit "brought to the match" roster (preferred over inferring from game stats).
+    const mp = await fetchAllIn('match_pokemon', 'match_id, team_id, pokemon_id', 'match_id', matchIds);
+    (mp || []).forEach(r => {
+      const byTeam = broughtByMatch[r.match_id] = broughtByMatch[r.match_id] || {};
+      (byTeam[r.team_id] = byTeam[r.team_id] || []).push(r.pokemon_id);
+    });
+    console.log('[standings] loaded games:', games.length, '· stat rows:', statRows.length, '· brought rows:', mp.length);
+  }
+
+  txns = buildTransactions(faRes.data || [], tradeRes.data || []);
+
+  const pj = await pjPromise;
+  const arr = Array.isArray(pj) ? pj : pj.pokemon;
+  pokemonById = {};
+  arr.forEach(p => { pokemonById[p.id] = p; });
+}
+
+function buildTransactions(faMoves, trades) {
+  const feed = [];
+  faMoves.forEach(m => feed.push({ kind: 'fa', week: m.effective_week, when: m.occurred_at, added: m.pokemon_added_id, dropped: m.pokemon_dropped_id, teams: [m.team_id] }));
+  trades.forEach(t => feed.push({ kind: 'trade', week: t.effective_week, when: t.occurred_at, aTeam: t.team_a_id, aMon: t.pokemon_a_id, bTeam: t.team_b_id, bMon: t.pokemon_b_id, teams: [t.team_a_id, t.team_b_id] }));
+  return feed.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AGGREGATION
+// ─────────────────────────────────────────────────────────────────────────────
+let _matchIndex = null;
+function matchById(id) { if (!_matchIndex) { _matchIndex = {}; matches.forEach(m => { _matchIndex[m.id] = m; }); } return _matchIndex[id]; }
+
+// Per (pokemon, team) totals across all stages — drives the three leader boards.
+function buildLeaders() {
+  const map = {};
+  statRows.forEach(s => {
+    const key = s.pokemon_id + '|' + s.team_id;
+    let e = map[key];
+    if (!e) e = map[key] = { pokemon_id: s.pokemon_id, team_id: s.team_id, kos: 0, faints: 0, games: new Set(), matchesSet: new Set() };
+    e.kos += s.kills || 0; e.faints += s.deaths || 0;
+    e.games.add(s.game_id);
+    const mid = gameToMatch[s.game_id]; if (mid) e.matchesSet.add(mid);
+  });
+  return Object.values(map).map(e => ({
+    pokemon_id: e.pokemon_id, team_id: e.team_id,
+    kos: e.kos, faints: e.faints, kfDelta: e.kos - e.faints,
+    gp: e.games.size, mp: e.matchesSet.size,
+  }));
+}
+
+// Regular-season standings rows with SoS / SoSoS.
+function buildStandings() {
+  const reg = matches.filter(m => m.stage === 'regular');
+
+  // Win/loss + game differential per team.
+  const rec = {};
+  allTeams.forEach(t => { rec[t.id] = { wins: 0, losses: 0, gameDiff: 0 }; });
+  reg.forEach(m => {
+    if (rec[m.team_a_id]) rec[m.team_a_id].gameDiff += (m.team_a_score || 0) - (m.team_b_score || 0);
+    if (rec[m.team_b_id]) rec[m.team_b_id].gameDiff += (m.team_b_score || 0) - (m.team_a_score || 0);
+    if (!m.winner_team_id) return;
+    [m.team_a_id, m.team_b_id].forEach(tid => { if (rec[tid]) (tid === m.winner_team_id ? rec[tid].wins++ : rec[tid].losses++); });
+  });
+
+  // KF Δ (KD) over regular stage only.
+  const kd = {}; allTeams.forEach(t => { kd[t.id] = 0; });
+  statRows.forEach(s => {
+    const m = matchById(gameToMatch[s.game_id]);
+    if (m && m.stage === 'regular' && kd[s.team_id] != null) kd[s.team_id] += (s.kills || 0) - (s.deaths || 0);
+  });
+
+  // Win rates + opponent map for SoS / SoSoS.
+  const winRate = {};
+  allTeams.forEach(t => { const r = rec[t.id]; const dec = r.wins + r.losses; winRate[t.id] = dec > 0 ? r.wins / dec : null; });
+  const opps = {}; allTeams.forEach(t => { opps[t.id] = []; });
+  reg.forEach(m => {
+    if (opps[m.team_a_id]) opps[m.team_a_id].push(m.team_b_id);
+    if (opps[m.team_b_id]) opps[m.team_b_id].push(m.team_a_id);
+  });
+  const avg = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const sos = {}, sosos = {};
+  allTeams.forEach(t => {
+    sos[t.id] = avg(opps[t.id].map(o => winRate[o]));
+    const second = []; opps[t.id].forEach(o => opps[o].forEach(oo => second.push(winRate[oo])));
+    sosos[t.id] = avg(second);
+  });
+
+  return allTeams.map(t => ({
+    id: t.id, name: t.name, seed: t.initial_seed,
+    wins: rec[t.id].wins, losses: rec[t.id].losses, gameDiff: rec[t.id].gameDiff,
+    kd: kd[t.id], sos: sos[t.id], sosos: sosos[t.id],
+  })).sort((a, b) =>
+    b.wins - a.wins
+    || b.gameDiff - a.gameDiff
+    || b.kd - a.kd
+    || (b.sos ?? -1) - (a.sos ?? -1)
+    || (b.sosos ?? -1) - (a.sosos ?? -1)
+    || (a.seed ?? 999) - (b.seed ?? 999)
+    || a.name.localeCompare(b.name)
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function render() {
+  renderHero();
+  renderStandings();
+  renderLeaders();
+  renderDraftPanel();
+  renderCompleted();
+  renderTransactions();
+}
+
+// Mobile collapse: tapping a section head toggles its body. Desktop ignores it (arrows hidden).
+function wireCollapse() {
+  document.querySelectorAll('.card[data-collapse] .sec-head').forEach(head => {
+    head.addEventListener('click', e => {
+      if (!IS_MOBILE) return;            // arrows only actionable at mobile width
+      if (e.target.closest('a')) return; // let header links (e.g. Transactions → Draft) work
+      head.closest('.card').classList.toggle('collapsed');
+    });
+  });
+}
+
+// Re-render the label-bearing sections when crossing the mobile breakpoint
+// (team labels switch between "Team (Coach)" and coach-only).
+function onBreakpointChange() {
+  const now = MOBILE_MQ.matches;
+  if (now === IS_MOBILE) return;
+  IS_MOBILE = now;
+  renderStandings();
+  renderLeaders();
+  renderDraftPanel();
+  renderCompleted();
+  renderTransactions();
+}
+if (MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener('change', onBreakpointChange);
+else MOBILE_MQ.addListener(onBreakpointChange);
+
+function renderHero() {
+  const el = document.getElementById('hero');
+  el.innerHTML = '';
+  if (SBL_LOGO_URL) {
+    const img = document.createElement('img');
+    img.className = 'logo-img'; img.src = SBL_LOGO_URL; img.alt = 'SBL logo';
+    img.onerror = function () { this.replaceWith(logoFallback()); };
+    el.appendChild(img);
+  } else {
+    el.appendChild(logoFallback());
+  }
+  const nm = document.createElement('div');
+  nm.className = 'season-name';
+  nm.textContent = season.name || 'Season';
+  el.appendChild(nm);
+}
+function logoFallback() { const d = document.createElement('div'); d.className = 'logo-fallback'; d.textContent = 'SBL'; return d; }
+
+function renderStandings() {
+  const rows = buildStandings();
+  const el = document.getElementById('standings');
+  if (!rows.length) { el.innerHTML = '<div class="empty">No teams in this season yet.</div>'; return; }
+  let html = '<table class="tbl"><thead><tr>'
+    + '<th class="rank">#</th><th class="team-head">Team</th>'
+    + '<th class="num">W</th><th class="num">L</th>'
+    + '<th class="num">SOS</th><th class="num">SOSOS</th>'
+    + '<th class="num">Game Δ</th><th class="num">KF Δ</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    html += '<tr>'
+      + '<td class="rank">' + (i + 1) + '</td>'
+      + '<td class="team-cell">' + feedTeamHtml(r.id, { link: true }) + '</td>'
+      + '<td class="num">' + r.wins + '</td>'
+      + '<td class="num">' + r.losses + '</td>'
+      + '<td class="num">' + fmtRate(r.sos) + '</td>'
+      + '<td class="num">' + fmtRate(r.sosos) + '</td>'
+      + '<td class="num ' + deltaClass(r.gameDiff) + '">' + signed(r.gameDiff) + '</td>'
+      + '<td class="num ' + deltaClass(r.kd) + '">' + signed(r.kd) + '</td>'
+      + '</tr>';
+  });
+  el.innerHTML = html + '</tbody></table>';
+}
+
+// One leader board. `metric` picks the value column; `sortKf` applies the
+// participation gate (GP>4 first, GP<=4 dimmed below).
+function renderLeaderBoard(elId, metricLabel, valueFn, sorter, opts) {
+  opts = opts || {};
+  const el = document.getElementById(elId);
+  let rows = buildLeaders();
+  if (!rows.length) { el.innerHTML = '<div class="empty">No game data yet.</div>'; return; }
+  rows = sorter(rows).slice(0, 10);
+
+  let html = '<table class="tbl"><thead><tr>'
+    + '<th class="rank">#</th><th>Pokémon</th><th>Team</th>'
+    + '<th class="num">' + metricLabel + '</th>'
+    + '<th class="num" title="Match Participation Count">MP</th>'
+    + '<th class="num" title="Game Participation Count">GP</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    const mon = monFor(r.pokemon_id);
+    const dim = opts.gate && r.gp <= 4 ? ' dim' : '';
+    html += '<tr class="' + dim.trim() + '">'
+      + '<td class="rank">' + (i + 1) + '</td>'
+      + '<td><div class="lead-mon"><img src="' + iconUrl(mon) + '" alt="" data-mid="' + escapeHtml(r.pokemon_id) + '"><span>' + escapeHtml(mon.name) + '</span></div></td>'
+      + '<td class="team-cell">' + feedTeamHtml(r.team_id, { link: true }) + '</td>'
+      + '<td class="num">' + valueFn(r) + '</td>'
+      + '<td class="num">' + r.mp + '</td>'
+      + '<td class="num">' + r.gp + '</td>'
+      + '</tr>';
+  });
+  el.innerHTML = html + '</tbody></table>';
+  el.querySelectorAll('img[data-mid]').forEach(img => attachIconFallback(img, monFor(img.dataset.mid)));
+}
+
+function renderLeaders() {
+  renderLeaderBoard('ko-leaders', 'KOs', r => r.kos,
+    rows => rows.slice().sort((a, b) => b.kos - a.kos || b.kfDelta - a.kfDelta));
+  renderLeaderBoard('kfd-leaders', 'KF Δ', r => signed(r.kfDelta),
+    rows => rows.slice().sort((a, b) => b.kfDelta - a.kfDelta || b.kos - a.kos));
+  renderLeaderBoard('kf-leaders', 'K/F', r => kfRatio(r.kos, r.faints),
+    rows => rows.slice().sort((a, b) =>
+      ((b.gp > 4) - (a.gp > 4))                                  // qualified first
+      || kfSortValue(b.kos, b.faints) - kfSortValue(a.kos, a.faints)
+      || b.kos - a.kos),
+    { gate: true });
+}
+
+function renderDraftPanel() {
+  const el = document.getElementById('draft-panel');
+  const title = document.getElementById('draft-card-title');
+  const status = draftRow ? draftRow.status : 'pending';
+
+  if (status === 'pending') {
+    title.textContent = 'Draft';
+    // No draft-date field yet — show TBD; wire the real date here once it exists.
+    el.innerHTML = '<div class="draft-status">Draft Day</div><div class="draft-sub">TBD</div>';
+    return;
+  }
+  if (status === 'in_progress') {
+    title.textContent = 'Draft';
+    el.innerHTML = '<div class="draft-status">Drafting in Progress</div>';
+    return;
+  }
+
+  // Draft complete → upcoming scheduled matches.
+  title.textContent = 'Upcoming Matches';
+  const upcoming = matches
+    .filter(m => m.match_date && !m.winner_team_id)
+    .sort((a, b) => new Date(a.match_date) - new Date(b.match_date));
+  if (!upcoming.length) { el.innerHTML = '<div class="empty">No upcoming matches scheduled.</div>'; return; }
+
+  const list = document.createElement('div');
+  list.className = 'match-list';
+  upcoming.forEach(m => {
+    const row = document.createElement('div');
+    row.className = 'match-row';
+    row.innerHTML =
+      '<div class="match-date">' + fmtDateTime(m.match_date) + '</div>'
+      + '<div class="match-teams">' + feedTeamHtml(m.team_a_id, { link: true }) + ' <span class="vs">vs</span> ' + feedTeamHtml(m.team_b_id, { link: true }) + '</div>';
+    list.appendChild(row);
+  });
+  el.innerHTML = ''; el.appendChild(list);
+}
+
+// Up to 6 distinct Pokémon a team brought to a match. Prefers the explicit
+// match_pokemon roster; falls back to inferring from game stats for older matches.
+function broughtIconsHtml(matchId, teamId) {
+  let seen = (broughtByMatch[matchId] && broughtByMatch[matchId][teamId]) ? broughtByMatch[matchId][teamId].slice() : [];
+  if (!seen.length) {
+    const gameIds = (gamesByMatch[matchId] || []).map(g => g.id);
+    statRows.forEach(s => { if (s.team_id === teamId && gameIds.includes(s.game_id) && !seen.includes(s.pokemon_id)) seen.push(s.pokemon_id); });
+  }
+  if (!seen.length) return '';
+  return '<div class="brought">' + seen.slice(0, 6).map(pid =>
+    '<img src="' + iconUrl(monFor(pid)) + '" alt="" title="' + escapeHtml(monName(pid)) + '" data-mid="' + escapeHtml(pid) + '">').join('') + '</div>';
+}
+
+function renderCompleted() {
+  const el = document.getElementById('completed');
+  const done = matches
+    .filter(m => m.winner_team_id)
+    .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0))
+    .slice(0, 5);
+  if (!done.length) { el.innerHTML = '<div class="empty">No completed matches yet.</div>'; return; }
+
+  const list = document.createElement('div');
+  list.className = 'match-list';
+  done.forEach(m => {
+    const aWin = m.winner_team_id === m.team_a_id;
+    const bWin = m.winner_team_id === m.team_b_id;
+    const dateStr = m.match_date ? fmtDate(m.match_date) : '';
+    const row = document.createElement('a');
+    row.className = 'done-row';
+    row.href = 'matches.html#' + m.id;
+    row.innerHTML =
+      (dateStr ? '<div class="done-date">' + dateStr + '</div>' : '')
+      + '<div class="done-grid">'
+      +   '<div class="done-col">'
+      +     broughtIconsHtml(m.id, m.team_a_id)
+      +     '<div class="done-who' + (aWin ? ' win' : '') + '">' + feedTeamHtml(m.team_a_id) + '</div>'
+      +   '</div>'
+      +   '<div class="done-score">'
+      +     '<span class="sc' + (aWin ? ' win' : '') + '">' + (m.team_a_score || 0) + '</span>'
+      +     '<span class="vs">vs</span>'
+      +     '<span class="sc' + (bWin ? ' win' : '') + '">' + (m.team_b_score || 0) + '</span>'
+      +   '</div>'
+      +   '<div class="done-col right">'
+      +     broughtIconsHtml(m.id, m.team_b_id)
+      +     '<div class="done-who' + (bWin ? ' win' : '') + '">' + feedTeamHtml(m.team_b_id) + '</div>'
+      +   '</div>'
+      + '</div>';
+    list.appendChild(row);
+  });
+  el.innerHTML = ''; el.appendChild(list);
+  el.querySelectorAll('img[data-mid]').forEach(img => attachIconFallback(img, monFor(img.dataset.mid)));
+}
+
+function renderTransactions() {
+  const el = document.getElementById('transactions');
+  el.innerHTML = '';
+  if (!txns.length) { el.innerHTML = '<div class="empty">No transactions yet.</div>'; return; }
+
+  const list = document.createElement('div');
+  list.className = 'txn-list';
+  txns.slice(0, 5).forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'txn';
+    if (t.kind === 'fa') {
+      const dropped = monFor(t.dropped), added = monFor(t.added);
+      row.innerHTML =
+        '<div class="with">' + teamLabelHtml(t.teams[0], { link: true }) + ' · Free Agency</div>'
+        + '<div class="swap"><span class="drop"><img src="' + iconUrl(dropped) + '" data-mid="' + escapeHtml(t.dropped) + '"> ' + escapeHtml(dropped.name) + '</span>'
+        + '<span>⇄</span><span class="gain"><img src="' + iconUrl(added) + '" data-mid="' + escapeHtml(t.added) + '"> ' + escapeHtml(added.name) + '</span></div>';
+    } else {
+      const aMon = monFor(t.aMon), bMon = monFor(t.bMon);
+      row.innerHTML =
+        '<div class="with">' + teamLabelHtml(t.aTeam, { link: true }) + ' ⇄ ' + teamLabelHtml(t.bTeam, { link: true }) + '</div>'
+        + '<div class="swap"><span class="gain"><img src="' + iconUrl(aMon) + '" data-mid="' + escapeHtml(t.aMon) + '"> ' + escapeHtml(aMon.name) + '</span>'
+        + '<span>⇄</span><span class="gain"><img src="' + iconUrl(bMon) + '" data-mid="' + escapeHtml(t.bMon) + '"> ' + escapeHtml(bMon.name) + '</span></div>';
+    }
+    list.appendChild(row);
+  });
+  el.appendChild(list);
+  el.querySelectorAll('img[data-mid]').forEach(img => attachIconFallback(img, monFor(img.dataset.mid)));
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
+async function init() {
+  const banner = document.getElementById('boot-banner');
+  try {
+    await loadData();
+    render();
+    wireCollapse();
+    banner.hidden = true;
+    document.getElementById('layout').hidden = false;
+  } catch (err) {
+    console.error(err);
+    banner.className = 'banner err';
+    banner.textContent = 'Could not load the standings page: ' + (err.message || err);
+  }
+}
+init();
+</script>
+</body>
+</html>
