@@ -754,7 +754,15 @@ async function detectAdmin() {
 async function init() {
   const banner = document.getElementById('boot-banner');
   try {
-    const { data: seasonRow, error: sErr } = await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
+    const { data: seasonRow, error: seasonErr } = await (async () => {
+      const slug = new URLSearchParams(location.search).get('season');
+      if (slug) {
+        const bySlug = await sb.from('seasons').select('*').eq('slug', slug).maybeSingle();
+        if (bySlug.error) return bySlug;
+        if (bySlug.data) return bySlug;
+      }
+      return await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
+    })();
     if (sErr) throw sErr;
     if (!seasonRow) throw new Error('No current season found.');
     season = seasonRow;
