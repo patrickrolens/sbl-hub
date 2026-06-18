@@ -177,8 +177,26 @@ select:disabled, input:disabled { opacity: .5; }
       </div>
     </div>
 
+    <!-- ── DIVISIONS (optional; most seasons have none) ── -->
+    <div style="margin-bottom:16px;border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--bg3);">
+      <div class="section-title" style="font-size:12px;">Divisions</div>
+      <div class="section-sub" style="margin-bottom:10px;">Optional. Add divisions only for split-pool seasons (e.g. WKL / ISL). When a season has divisions, teams are grouped by division in standings, and the draft pool tracks availability per division.</div>
+      <table class="tbl" id="divisions-tbl">
+        <thead><tr><th class="num" style="width:60px;">Order</th><th>Name</th><th>Abbr</th><th>Color</th><th class="actions"></th></tr></thead>
+        <tbody id="divisions-body"></tbody>
+      </table>
+      <div class="form-grid" style="margin-top:12px;">
+        <div class="fld"><label for="nd-name">Name</label><input type="text" id="nd-name" placeholder="Winged King League"></div>
+        <div class="fld"><label for="nd-abbr">Abbr</label><input type="text" id="nd-abbr" placeholder="WKL"></div>
+        <div class="fld"><label for="nd-color">Color</label><input type="text" id="nd-color" placeholder="#7c6ff7"><span class="hint">hex, for pool half-border</span></div>
+        <div class="fld"><label for="nd-sort">Sort Order</label><input type="number" id="nd-sort" step="1" placeholder="0"></div>
+        <div class="fld"><label for="nd-logo">Logo URL</label><input type="text" id="nd-logo" placeholder="optional"></div>
+      </div>
+      <div class="form-actions"><button class="btn btn-accent" id="nd-create" onclick="createDivision()">Add division</button></div>
+    </div>
+
     <table class="tbl" id="teams-tbl">
-      <thead><tr><th>Team</th><th>Slug</th><th class="num">Seed</th><th>Current Coach</th><th class="actions"></th></tr></thead>
+      <thead><tr><th>Team</th><th>Slug</th><th class="num">Seed</th><th>Division</th><th>Current Coach</th><th class="actions"></th></tr></thead>
       <tbody id="teams-body"></tbody>
     </table>
 
@@ -188,6 +206,7 @@ select:disabled, input:disabled { opacity: .5; }
         <div class="fld"><label for="nt-name">Name</label><input type="text" id="nt-name" placeholder="Violet City Woopers"></div>
         <div class="fld"><label for="nt-slug">Slug</label><input type="text" id="nt-slug" placeholder="vcw"><span class="hint">lowercase, used in URLs</span></div>
         <div class="fld"><label for="nt-seed">Initial Seed</label><input type="number" id="nt-seed" min="1" step="1" placeholder="optional"></div>
+        <div class="fld" id="nt-division-fld" hidden><label for="nt-division">Division</label><select id="nt-division"></select></div>
         <div class="fld"><label for="nt-logo">Logo URL</label><input type="text" id="nt-logo" placeholder="optional"></div>
       </div>
       <div class="form-actions">
@@ -195,29 +214,11 @@ select:disabled, input:disabled { opacity: .5; }
       </div>
     </div>
 
-    <!-- ── DRAFT SETUP ── -->
+    <!-- ── DRAFT SETUP (one block when undivided; one per division otherwise) ── -->
     <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px;">
       <div class="section-title" style="font-size:12px;">Draft setup</div>
-      <div class="section-sub">Set the round-1 draft order (snake reverses on even rounds), status, current pick, and date. Saving creates the draft record for this season if it doesn't exist yet.</div>
-
-      <div id="draft-order-wrap">
-        <div class="controls" style="margin-bottom:10px;">
-          <button class="btn btn-sm" onclick="fillFromSeed()">Fill from seed order</button>
-        </div>
-        <table class="tbl" id="draft-order-tbl">
-          <thead><tr><th class="num" style="width:90px;">Position</th><th>Team</th><th class="actions"></th></tr></thead>
-          <tbody id="draft-order-body"></tbody>
-        </table>
-      </div>
-
-      <div class="form-grid" style="margin-top:16px;">
-        <div class="fld"><label for="dr-status">Status</label><select id="dr-status"><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="complete">Complete</option></select></div>
-        <div class="fld"><label for="dr-pick">Current Pick #</label><input type="number" id="dr-pick" min="1" step="1" placeholder="optional"></div>
-        <div class="fld"><label for="dr-date">Draft Date</label><input type="date" id="dr-date"></div>
-      </div>
-      <div class="form-actions">
-        <button class="btn btn-accent" id="dr-save" onclick="saveDraft()">Save draft setup</button>
-      </div>
+      <div class="section-sub">Set the round-1 draft order (snake reverses on even rounds), status, current pick, and date. Saving creates the draft record if it doesn't exist yet. Divisioned seasons get one independent draft per division.</div>
+      <div id="draft-blocks"></div>
     </div>
   </div>
 
@@ -282,8 +283,9 @@ let ownerTeamId = null;          // Section 3 selected team
 let chosenPlayer = null;         // { id, display_name } picked in the assign form
 let pickerKbd = -1;
 
-let draftBySeason = {};          // season_id → draft row (or null)
-let draftOrderIds = [];          // working list of team_ids in the order editor
+let draftBySeason = {};          // season_id → { scopeKey → draft row }
+
+let divisionsBySeason = {};      // season_id → [division] (sorted)
 
 const sb = () => window.sb;
 
@@ -303,6 +305,11 @@ function slugify(s) { return String(s || '').toLowerCase().trim().replace(/[^a-z
 
 // The open owner (still piloting) for a team: ended_week IS NULL.
 function openOwner(teamId) { return (ownersByTeam[teamId] || []).find(o => o.ended_week == null) || null; }
+
+// Divisions for the selected season (possibly empty).
+function seasonDivisions() { return divisionsBySeason[selectedSeasonId] || []; }
+function divisionById(id) { return seasonDivisions().find(d => d.id === id) || null; }
+function divisionLabel(id) { const d = divisionById(id); return d ? (d.abbr || d.name) : ''; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA LOAD
@@ -325,8 +332,17 @@ async function loadPlayers() {
 async function loadSeasonTeams(seasonId) {
   teamsBySeason[seasonId] = [];
   if (!seasonId) return;
+
+  // Divisions for this season (may be none).
+  const { data: divs, error: dvErr } = await sb().from('divisions')
+    .select('id, season_id, name, abbr, color, logo_url, sort_order')
+    .eq('season_id', seasonId)
+    .order('sort_order', { ascending: true });
+  if (dvErr) throw dvErr;
+  divisionsBySeason[seasonId] = divs || [];
+
   const { data: teams, error: tErr } = await sb().from('teams')
-    .select('id, name, slug, initial_seed, logo_url, season_id')
+    .select('id, name, slug, initial_seed, logo_url, season_id, division_id')
     .eq('season_id', seasonId)
     .order('initial_seed', { ascending: true });
   if (tErr) throw tErr;
@@ -347,12 +363,16 @@ async function loadSeasonTeams(seasonId) {
     });
   }
 
-  // Draft row for this season (one per season, may not exist yet).
-  const { data: draft, error: dErr } = await sb().from('drafts')
-    .select('id, season_id, draft_order, status, current_pick_number, draft_date')
-    .eq('season_id', seasonId).maybeSingle();
+  // Draft rows for this season. Undivided seasons have at most one (division_id
+  // null); divisioned seasons have one per division. Keyed by division_id, with
+  // the sentinel '__none__' for the undivided row.
+  const { data: drafts, error: dErr } = await sb().from('drafts')
+    .select('id, season_id, division_id, draft_order, status, current_pick_number, draft_date')
+    .eq('season_id', seasonId);
   if (dErr) throw dErr;
-  draftBySeason[seasonId] = draft || null;
+  const dmap = {};
+  (drafts || []).forEach(d => { dmap[d.division_id || '__none__'] = d; });
+  draftBySeason[seasonId] = dmap;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -473,15 +493,22 @@ async function onSeasonChange() {
 // SECTION 2: TEAMS
 // ─────────────────────────────────────────────────────────────────────────────
 function renderTeams() {
+  renderDivisions();
+  populateTeamDivisionDropdown();
   const body = document.getElementById('teams-body');
   const teams = teamsBySeason[selectedSeasonId] || [];
-  if (!teams.length) { body.innerHTML = '<tr class="empty-row"><td colspan="5">No teams in this season yet — add one below.</td></tr>'; renderDraft(); return; }
+  const hasDiv = seasonDivisions().length > 0;
+  if (!teams.length) { body.innerHTML = '<tr class="empty-row"><td colspan="6">No teams in this season yet — add one below.</td></tr>'; renderDraft(); return; }
   body.innerHTML = teams.map(t => {
     const coach = coachNameByTeam[t.id];
+    const divCell = hasDiv
+      ? (t.division_id ? esc(divisionLabel(t.division_id)) : '<span class="pill pl">unassigned</span>')
+      : '<span class="pill pl">—</span>';
     return '<tr>'
       + '<td>' + esc(t.name) + '</td>'
       + '<td>' + esc(t.slug) + '</td>'
       + '<td class="num">' + (t.initial_seed ?? '—') + '</td>'
+      + '<td>' + divCell + '</td>'
       + '<td>' + (coach ? esc(coach) : '<span class="pill pl">none assigned</span>') + '</td>'
       + '<td class="actions">'
         + '<button class="btn btn-sm" onclick="editTeam(\'' + t.id + '\')">Edit</button> '
@@ -490,6 +517,127 @@ function renderTeams() {
       + '</tr>';
   }).join('');
   renderDraft();
+}
+
+// Show/populate the division picker in the add-team form only when divisions exist.
+function populateTeamDivisionDropdown() {
+  const fld = document.getElementById('nt-division-fld');
+  const sel = document.getElementById('nt-division');
+  const divs = seasonDivisions();
+  if (!divs.length) { fld.hidden = true; sel.innerHTML = ''; return; }
+  fld.hidden = false;
+  sel.innerHTML = '<option value="">— unassigned —</option>' + divs.map(d => '<option value="' + d.id + '">' + esc(d.name) + ' (' + esc(d.abbr) + ')</option>').join('');
+}
+
+// ── DIVISIONS CRUD ──
+function renderDivisions() {
+  const body = document.getElementById('divisions-body');
+  const divs = seasonDivisions();
+  if (!divs.length) { body.innerHTML = '<tr class="empty-row"><td colspan="5">No divisions — this season is undivided.</td></tr>'; return; }
+  body.innerHTML = divs.map(d =>
+    '<tr>'
+    + '<td class="num">' + (d.sort_order ?? 0) + '</td>'
+    + '<td>' + esc(d.name) + '</td>'
+    + '<td>' + esc(d.abbr) + '</td>'
+    + '<td>' + (d.color ? '<span style="display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:6px;background:' + esc(d.color) + '"></span>' + esc(d.color) : '<span class="pill pl">—</span>') + '</td>'
+    + '<td class="actions">'
+      + '<button class="btn btn-sm" onclick="editDivision(\'' + d.id + '\')">Edit</button> '
+      + '<button class="btn btn-sm btn-danger" onclick="confirmRemoveDivision(\'' + d.id + '\')">Remove</button>'
+      + '</td>'
+    + '</tr>'
+  ).join('');
+}
+
+async function createDivision() {
+  if (!selectedSeasonId) { showToast('Pick a season first.', 'err'); return; }
+  const name = document.getElementById('nd-name').value.trim();
+  const abbr = document.getElementById('nd-abbr').value.trim();
+  const color = document.getElementById('nd-color').value.trim();
+  const sortRaw = document.getElementById('nd-sort').value;
+  const logo = document.getElementById('nd-logo').value.trim();
+  if (!name) { showToast('Enter a division name.', 'err'); return; }
+  if (!abbr) { showToast('Enter an abbreviation.', 'err'); return; }
+  const existing = seasonDivisions();
+  if (existing.some(d => d.abbr.toLowerCase() === abbr.toLowerCase())) { showToast('That abbreviation is already used this season.', 'err'); return; }
+  const row = {
+    season_id: selectedSeasonId, name, abbr,
+    color: color || null, logo_url: logo || null,
+    sort_order: sortRaw === '' ? existing.length : parseInt(sortRaw, 10),
+  };
+  const btn = document.getElementById('nd-create'); btn.disabled = true;
+  try {
+    const { error } = await sb().from('divisions').insert(row);
+    if (error) throw error;
+    await loadSeasonTeams(selectedSeasonId);
+    renderTeams();
+    ['nd-name','nd-abbr','nd-color','nd-sort','nd-logo'].forEach(id => document.getElementById(id).value = '');
+    showToast('Division added.', 'ok');
+  } catch (err) { console.error(err); showToast('Could not add division: ' + (err.message || err), 'err'); }
+  finally { btn.disabled = false; }
+}
+
+function editDivision(divId) {
+  const d = divisionById(divId);
+  if (!d) return;
+  openModal(
+    '<h3>Edit division</h3>'
+    + '<div class="fld"><label for="ed-name">Name</label><input type="text" id="ed-name" value="' + esc(d.name) + '"></div>'
+    + '<div class="form-grid">'
+    +   '<div class="fld"><label for="ed-abbr">Abbr</label><input type="text" id="ed-abbr" value="' + esc(d.abbr) + '"></div>'
+    +   '<div class="fld"><label for="ed-color">Color</label><input type="text" id="ed-color" value="' + esc(d.color || '') + '"></div>'
+    +   '<div class="fld"><label for="ed-sort">Sort Order</label><input type="number" id="ed-sort" step="1" value="' + (d.sort_order ?? 0) + '"></div>'
+    +   '<div class="fld"><label for="ed-logo">Logo URL</label><input type="text" id="ed-logo" value="' + esc(d.logo_url || '') + '"></div>'
+    + '</div>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent" id="ed-save" onclick="saveDivisionEdit(\'' + divId + '\')">Save changes</button></div>'
+  );
+}
+async function saveDivisionEdit(divId) {
+  const name = document.getElementById('ed-name').value.trim();
+  const abbr = document.getElementById('ed-abbr').value.trim();
+  if (!name) { showToast('Enter a division name.', 'err'); return; }
+  if (!abbr) { showToast('Enter an abbreviation.', 'err'); return; }
+  if (seasonDivisions().some(d => d.abbr.toLowerCase() === abbr.toLowerCase() && d.id !== divId)) { showToast('That abbreviation is already used this season.', 'err'); return; }
+  const sortRaw = document.getElementById('ed-sort').value;
+  const upd = {
+    name, abbr,
+    color: document.getElementById('ed-color').value.trim() || null,
+    logo_url: document.getElementById('ed-logo').value.trim() || null,
+    sort_order: sortRaw === '' ? 0 : parseInt(sortRaw, 10),
+  };
+  const btn = document.getElementById('ed-save'); if (btn) btn.disabled = true;
+  try {
+    const { error } = await sb().from('divisions').update(upd).eq('id', divId);
+    if (error) throw error;
+    await loadSeasonTeams(selectedSeasonId);
+    renderTeams();
+    closeModal();
+    showToast('Division updated.', 'ok');
+  } catch (err) { console.error(err); showToast('Could not update division: ' + (err.message || err), 'err'); if (btn) btn.disabled = false; }
+}
+
+function confirmRemoveDivision(divId) {
+  const d = divisionById(divId);
+  const assigned = (teamsBySeason[selectedSeasonId] || []).filter(t => t.division_id === divId).length;
+  openModal(
+    '<h3>Remove division?</h3>'
+    + '<p>This deletes <b>' + esc(d ? d.name : 'this division') + '</b>.'
+    + (assigned ? ' <span class="warn">' + assigned + ' team(s) will become unassigned.</span>' : '')
+    + '</p>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
+    + '<button class="btn btn-accent btn-danger" onclick="doRemoveDivision(\'' + divId + '\')">Remove</button></div>'
+  );
+}
+async function doRemoveDivision(divId) {
+  closeModal();
+  try {
+    // FK is ON DELETE SET NULL, so assigned teams are unassigned automatically.
+    const { error } = await sb().from('divisions').delete().eq('id', divId);
+    if (error) throw error;
+    await loadSeasonTeams(selectedSeasonId);
+    renderTeams();
+    showToast('Division removed.', 'ok');
+  } catch (err) { console.error(err); showToast('Could not remove division: ' + (err.message || err), 'err'); }
 }
 
 async function createTeam() {
@@ -509,6 +657,7 @@ async function createTeam() {
     season_id: selectedSeasonId, name, slug,
     initial_seed: seedRaw === '' ? null : parseInt(seedRaw, 10),
     logo_url: logo || null,
+    division_id: seasonDivisions().length ? (document.getElementById('nt-division').value || null) : null,
   };
   const btn = document.getElementById('nt-create'); btn.disabled = true;
   try {
@@ -518,6 +667,7 @@ async function createTeam() {
     renderTeams();
     populateOwnerTeamDropdown();
     ['nt-name','nt-slug','nt-seed','nt-logo'].forEach(id => document.getElementById(id).value = '');
+    if (seasonDivisions().length) document.getElementById('nt-division').value = '';
     showToast('Team added.', 'ok');
   } catch (err) { console.error(err); showToast('Could not add team: ' + (err.message || err), 'err'); }
   finally { btn.disabled = false; }
@@ -603,6 +753,13 @@ function editTeam(teamId) {
   const teams = teamsBySeason[selectedSeasonId] || [];
   const t = teams.find(x => x.id === teamId);
   if (!t) return;
+  const divs = seasonDivisions();
+  const divField = divs.length
+    ? '<div class="fld"><label for="et-division">Division</label><select id="et-division">'
+      + '<option value="">— unassigned —</option>'
+      + divs.map(d => '<option value="' + d.id + '"' + (t.division_id === d.id ? ' selected' : '') + '>' + esc(d.name) + ' (' + esc(d.abbr) + ')</option>').join('')
+      + '</select></div>'
+    : '';
   openModal(
     '<h3>Edit team</h3>'
     + '<div class="fld"><label for="et-name">Name</label><input type="text" id="et-name" value="' + esc(t.name) + '"></div>'
@@ -610,6 +767,7 @@ function editTeam(teamId) {
     + '<div class="form-grid">'
     +   '<div class="fld"><label for="et-seed">Initial Seed</label><input type="number" id="et-seed" min="1" step="1" value="' + (t.initial_seed ?? '') + '"></div>'
     +   '<div class="fld"><label for="et-logo">Logo URL</label><input type="text" id="et-logo" value="' + esc(t.logo_url || '') + '"></div>'
+    +   divField
     + '</div>'
     + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
     + '<button class="btn btn-accent" id="et-save" onclick="saveTeamEdit(\'' + teamId + '\')">Save changes</button></div>'
@@ -629,6 +787,10 @@ async function saveTeamEdit(teamId) {
     initial_seed: seedRaw === '' ? null : parseInt(seedRaw, 10),
     logo_url: document.getElementById('et-logo').value.trim() || null,
   };
+  if (seasonDivisions().length) {
+    const ds = document.getElementById('et-division');
+    if (ds) upd.division_id = ds.value || null;
+  }
   const btn = document.getElementById('et-save'); if (btn) btn.disabled = true;
   try {
     const { error } = await sb().from('teams').update(upd).eq('id', teamId);
@@ -642,90 +804,132 @@ async function saveTeamEdit(teamId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DRAFT SETUP (one drafts row per season; draft_order is an ordered team_id[])
+// DRAFT SETUP — one block when undivided, one per division otherwise.
+// Each block is scoped by a key: '__none__' (undivided) or a division_id.
+// Working orders are kept per-scope so editing one block doesn't disturb another.
 // ─────────────────────────────────────────────────────────────────────────────
+let draftOrderByScope = {};   // scopeKey → [team_id] working order
+
 function renderDraft() {
-  const teams = teamsBySeason[selectedSeasonId] || [];
-  const draft = draftBySeason[selectedSeasonId] || null;
+  const container = document.getElementById('draft-blocks');
+  const divs = seasonDivisions();
+  const dmap = draftBySeason[selectedSeasonId] || {};
+  draftOrderByScope = {};
 
-  // Seed the working order: saved draft_order (filtered to live teams), then
-  // append any teams not in it (e.g. added after the order was first saved).
-  const liveIds = new Set(teams.map(t => t.id));
-  let order = (draft && Array.isArray(draft.draft_order) ? draft.draft_order : []).filter(id => liveIds.has(id));
-  teams.forEach(t => { if (!order.includes(t.id)) order.push(t.id); });
-  draftOrderIds = order;
+  // Build the list of scopes to render.
+  const scopes = divs.length
+    ? divs.map(d => ({ key: d.id, label: d.name + ' (' + d.abbr + ')', divisionId: d.id }))
+    : [{ key: '__none__', label: '', divisionId: null }];
 
-  // Status / pick / date fields reflect the saved row.
-  document.getElementById('dr-status').value = draft && draft.status ? draft.status : 'pending';
-  document.getElementById('dr-pick').value = draft && draft.current_pick_number != null ? draft.current_pick_number : '';
-  document.getElementById('dr-date').value = draft && draft.draft_date ? String(draft.draft_date).slice(0, 10) : '';
+  container.innerHTML = scopes.map(s => draftBlockHtml(s, dmap[s.key] || null)).join('');
 
-  renderDraftOrder();
+  // Seed each block's working order and render its order table.
+  scopes.forEach(s => {
+    const teams = teamsForScope(s.divisionId);
+    const draft = dmap[s.key] || null;
+    const liveIds = new Set(teams.map(t => t.id));
+    let order = (draft && Array.isArray(draft.draft_order) ? draft.draft_order : []).filter(id => liveIds.has(id));
+    teams.forEach(t => { if (!order.includes(t.id)) order.push(t.id); });
+    draftOrderByScope[s.key] = order;
+    renderDraftOrder(s.key);
+  });
 }
 
-function renderDraftOrder() {
-  const body = document.getElementById('draft-order-body');
-  if (!draftOrderIds.length) {
+// Teams eligible for a scope: all teams (undivided) or that division's teams.
+function teamsForScope(divisionId) {
+  const teams = teamsBySeason[selectedSeasonId] || [];
+  return divisionId ? teams.filter(t => t.division_id === divisionId) : teams;
+}
+
+function draftBlockHtml(scope, draft) {
+  const k = scope.key;
+  const heading = scope.label
+    ? '<div class="section-title" style="font-size:12px;margin-top:6px;">' + esc(scope.label) + ' draft</div>'
+    : '';
+  return '<div class="draft-block" data-scope="' + esc(k) + '" style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;background:var(--bg3);">'
+    + heading
+    + '<div class="controls" style="margin-bottom:10px;"><button class="btn btn-sm" onclick="fillFromSeed(\'' + k + '\')">Fill from seed order</button></div>'
+    + '<table class="tbl"><thead><tr><th class="num" style="width:90px;">Position</th><th>Team</th><th class="actions"></th></tr></thead>'
+    + '<tbody id="draft-order-body-' + k + '"></tbody></table>'
+    + '<div class="form-grid" style="margin-top:16px;">'
+    +   '<div class="fld"><label>Status</label><select id="dr-status-' + k + '">'
+    +     '<option value="pending"' + (draft && draft.status === 'pending' ? ' selected' : '') + '>Pending</option>'
+    +     '<option value="in_progress"' + (draft && draft.status === 'in_progress' ? ' selected' : '') + '>In progress</option>'
+    +     '<option value="complete"' + (draft && draft.status === 'complete' ? ' selected' : '') + '>Complete</option>'
+    +   '</select></div>'
+    +   '<div class="fld"><label>Current Pick #</label><input type="number" id="dr-pick-' + k + '" min="1" step="1" value="' + (draft && draft.current_pick_number != null ? draft.current_pick_number : '') + '" placeholder="optional"></div>'
+    +   '<div class="fld"><label>Draft Date</label><input type="date" id="dr-date-' + k + '" value="' + (draft && draft.draft_date ? String(draft.draft_date).slice(0,10) : '') + '"></div>'
+    + '</div>'
+    + '<div class="form-actions"><button class="btn btn-accent" onclick="saveDraft(\'' + k + '\')">Save draft setup</button></div>'
+    + '</div>';
+}
+
+function renderDraftOrder(scopeKey) {
+  const body = document.getElementById('draft-order-body-' + scopeKey);
+  if (!body) return;
+  const order = draftOrderByScope[scopeKey] || [];
+  if (!order.length) {
     body.innerHTML = '<tr class="empty-row"><td colspan="3">Add teams above to set a draft order.</td></tr>';
     return;
   }
-  body.innerHTML = draftOrderIds.map((id, i) =>
+  body.innerHTML = order.map((id, i) =>
     '<tr>'
-    + '<td class="num"><input type="number" min="1" step="1" style="width:64px;" value="' + (i + 1) + '" onchange="reposition(' + i + ', this.value)"></td>'
+    + '<td class="num"><input type="number" min="1" step="1" style="width:64px;" value="' + (i + 1) + '" onchange="reposition(\'' + scopeKey + '\',' + i + ', this.value)"></td>'
     + '<td>' + esc(teamName(id)) + '</td>'
     + '<td class="actions">'
-      + '<button class="btn btn-sm" onclick="moveDraft(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '>↑</button> '
-      + '<button class="btn btn-sm" onclick="moveDraft(' + i + ',1)"' + (i === draftOrderIds.length - 1 ? ' disabled' : '') + '>↓</button>'
+      + '<button class="btn btn-sm" onclick="moveDraft(\'' + scopeKey + '\',' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '>↑</button> '
+      + '<button class="btn btn-sm" onclick="moveDraft(\'' + scopeKey + '\',' + i + ',1)"' + (i === order.length - 1 ? ' disabled' : '') + '>↓</button>'
       + '</td>'
     + '</tr>'
   ).join('');
 }
 
-function moveDraft(i, dir) {
+function moveDraft(scopeKey, i, dir) {
+  const order = draftOrderByScope[scopeKey] || [];
   const j = i + dir;
-  if (j < 0 || j >= draftOrderIds.length) return;
-  const tmp = draftOrderIds[i]; draftOrderIds[i] = draftOrderIds[j]; draftOrderIds[j] = tmp;
-  renderDraftOrder();
+  if (j < 0 || j >= order.length) return;
+  const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+  renderDraftOrder(scopeKey);
 }
 
-// Move the team at index `from` to 1-based position `posRaw`, shifting the rest.
-function reposition(from, posRaw) {
+function reposition(scopeKey, from, posRaw) {
+  const order = draftOrderByScope[scopeKey] || [];
   let pos = parseInt(posRaw, 10);
-  if (!Number.isInteger(pos)) { renderDraftOrder(); return; }
-  pos = Math.max(1, Math.min(draftOrderIds.length, pos)) - 1;
-  if (pos === from) { renderDraftOrder(); return; }
-  const [id] = draftOrderIds.splice(from, 1);
-  draftOrderIds.splice(pos, 0, id);
-  renderDraftOrder();
+  if (!Number.isInteger(pos)) { renderDraftOrder(scopeKey); return; }
+  pos = Math.max(1, Math.min(order.length, pos)) - 1;
+  if (pos === from) { renderDraftOrder(scopeKey); return; }
+  const [id] = order.splice(from, 1);
+  order.splice(pos, 0, id);
+  renderDraftOrder(scopeKey);
 }
 
-function fillFromSeed() {
-  const teams = (teamsBySeason[selectedSeasonId] || []).slice();
-  // Seeded teams first (ascending), unseeded after, by name.
+function fillFromSeed(scopeKey) {
+  const divisionId = scopeKey === '__none__' ? null : scopeKey;
+  const teams = teamsForScope(divisionId).slice();
   teams.sort((a, b) => {
     const as = a.initial_seed ?? 1e9, bs = b.initial_seed ?? 1e9;
     return as - bs || a.name.localeCompare(b.name);
   });
-  draftOrderIds = teams.map(t => t.id);
-  renderDraftOrder();
+  draftOrderByScope[scopeKey] = teams.map(t => t.id);
+  renderDraftOrder(scopeKey);
   showToast('Order filled from seeds. Review, then save.', 'ok');
 }
 
-async function saveDraft() {
+async function saveDraft(scopeKey) {
   if (!selectedSeasonId) { showToast('Pick a season first.', 'err'); return; }
-  if (!draftOrderIds.length) { showToast('Add teams before saving a draft order.', 'err'); return; }
-  const status = document.getElementById('dr-status').value;
-  const pickRaw = document.getElementById('dr-pick').value;
-  const date = document.getElementById('dr-date').value || null;
+  const order = draftOrderByScope[scopeKey] || [];
+  if (!order.length) { showToast('Add teams before saving a draft order.', 'err'); return; }
+  const divisionId = scopeKey === '__none__' ? null : scopeKey;
+  const pickRaw = document.getElementById('dr-pick-' + scopeKey).value;
   const row = {
     season_id: selectedSeasonId,
-    draft_order: draftOrderIds,
-    status,
+    division_id: divisionId,
+    draft_order: order,
+    status: document.getElementById('dr-status-' + scopeKey).value,
     current_pick_number: pickRaw === '' ? null : parseInt(pickRaw, 10),
-    draft_date: date,
+    draft_date: document.getElementById('dr-date-' + scopeKey).value || null,
   };
-  const existing = draftBySeason[selectedSeasonId];
-  const btn = document.getElementById('dr-save'); btn.disabled = true;
+  const existing = (draftBySeason[selectedSeasonId] || {})[scopeKey];
   try {
     if (existing && existing.id) {
       const { error } = await sb().from('drafts').update(row).eq('id', existing.id);
@@ -738,7 +942,6 @@ async function saveDraft() {
     renderTeams();
     showToast('Draft setup saved.', 'ok');
   } catch (err) { console.error(err); showToast('Could not save draft: ' + (err.message || err), 'err'); }
-  finally { btn.disabled = false; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
