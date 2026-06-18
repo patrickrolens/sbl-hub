@@ -31,7 +31,7 @@
   // Primary tabs, in order. Postseason is gated (shown when published, or to admins).
   // Root-absolute hrefs so the shared nav works from subfolders (e.g. /admin/) too.
   const TABS = [
-    { key: "standings",  label: "Standings",   href: "/index.html" },
+    { key: "standings",  label: "Standings",   href: "/standings.html" },
     { key: "draft",      label: "Draft Board", href: "/draft.html" },
     { key: "teams",      label: "Teams",       href: "/team.html", dropdown: true },
     { key: "matches",    label: "Matches",     href: "/matches.html" },
@@ -46,7 +46,7 @@
   function activeKey() {
     if (path.indexOf("/admin/") !== -1) return "admin";
     const file = path.split("/").pop();
-    if (file === "" || file === "index.html" || file === "standings.html") return "standings";
+    if (file === "standings.html") return "standings";
     if (file === "draft.html") return "draft";
     if (file === "team.html") return "teams";
     if (file === "matches.html") return "matches";
