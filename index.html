@@ -36,21 +36,19 @@ a { color: inherit; }
 .sec-label { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--text3); margin: 0 0 12px; }
 
 /* ─── CURRENT SEASON: spotlight ─── */
-/* Table-layout for the two columns: immune to flex/grid edge cases and
-   external class collisions. The <a> is the table, two cells side by side. */
 .spotlight {
   position: relative; border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
-  background: var(--bg2); margin-bottom: 30px; text-decoration: none; color: inherit;
-  display: table; table-layout: fixed; width: 100%; border-collapse: collapse;
+  background: var(--bg2); margin-bottom: 30px;
+  display: flex; align-items: stretch;
 }
-.spotlight .art { display: table-cell; vertical-align: middle; width: 54%; position: relative; height: 240px; overflow: hidden; background: var(--bg3); }
+.spotlight .art { position: relative; flex: 1 1 54%; min-width: 0; min-height: 240px; overflow: hidden; background: var(--bg3); }
 .spotlight .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .spotlight .art.logo { background: var(--bg2); }
 .spotlight .art.logo img { object-fit: contain; padding: 28px; }
 .spotlight .art.logo::after { display: none; }
 .spotlight .art .fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 48px; font-weight: 800; letter-spacing: 3px; color: var(--accent); opacity: .5; }
 .spotlight .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 50%, var(--bg2) 99%); pointer-events: none; }
-.spotlight .body { display: table-cell; vertical-align: top; width: 46%; padding: 24px 26px; }
+.spotlight .body { flex: 1 1 46%; min-width: 0; padding: 24px 26px; display: flex; flex-direction: column; }
 .status-badge { display: inline-flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; margin-bottom: 12px; }
 .status-badge .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .spotlight h2 { font-size: 30px; font-weight: 800; line-height: 1.08; letter-spacing: -.4px; margin-bottom: 8px; }
@@ -92,8 +90,8 @@ a { color: inherit; }
 .err { color: #ff9c9c; font-size: 13px; padding: 16px; border: 1px solid rgba(224,85,85,.4); border-radius: 8px; background: rgba(224,85,85,.07); }
 
 @media (max-width: 720px) {
-  .spotlight, .spotlight .art, .spotlight .body { display: block; width: auto; }
-  .spotlight .art { height: 150px; }
+  .spotlight { flex-direction: column; }
+  .spotlight .art { flex: none; min-height: 150px; }
   .spotlight .art::after { background: linear-gradient(180deg, transparent 55%, var(--bg2) 99%); }
   .spotlight h2 { font-size: 24px; }
 }
@@ -234,7 +232,7 @@ async function load() {
       const status = deriveStatus(current, draftBy[current.id], regBy[current.id]);
       const logo = ASSET_BASE + "SBL_Logo.png";
       html += '<div class="sec-label">Current season</div>';
-      html += '<a class="spotlight" href="' + esc(link("index.html#standings", current)) + '">'
+      html += '<div class="spotlight">'
             +   '<div class="art logo">'
             +     '<img src="' + logo + '" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
             +     '<div class="fallback" style="display:none">SBL</div>'
@@ -256,7 +254,7 @@ async function load() {
             +       (current.postseason_published ? cta("Postseason", link("postseason.html", current), "gold") : "")
             +     '</div>'
             +   '</div>'
-            + '</a>';
+            + '</div>';
     }
 
     // ── Archive grid ──
