@@ -578,8 +578,15 @@ async function loadGlobalData() {
     return res.json();
   });
 
-  const { data: seasonRow, error: seasonErr } = await sb
-    .from('seasons').select('*').eq('is_current', true).maybeSingle();
+  const { data: seasonRow, error: seasonErr } = await (async () => {
+    const slug = new URLSearchParams(location.search).get('season');
+    if (slug) {
+      const bySlug = await sb.from('seasons').select('*').eq('slug', slug).maybeSingle();
+      if (bySlug.error) return bySlug;
+      if (bySlug.data) return bySlug;
+    }
+    return await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
+  })();
   if (seasonErr) throw seasonErr;
   if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
   season = seasonRow;
