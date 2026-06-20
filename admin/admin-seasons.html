@@ -70,6 +70,7 @@ select:disabled, input:disabled { opacity: .5; }
 .tbl .badge { display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; background: rgba(124,111,247,.18); color: var(--accent); margin-left: 6px; }
 .tbl .badge.green { background: rgba(76,175,125,.18); color: var(--green); }
 .tbl .badge.dim { background: var(--bg3); color: var(--text3); }
+.tbl th[hidden] { display: none; }
 .empty-row td { color: var(--text3); font-style: italic; text-align: center; padding: 18px; }
 
 .pill { display: inline-block; font-size: 11px; color: var(--text2); }
@@ -170,33 +171,16 @@ select:disabled, input:disabled { opacity: .5; }
     <div class="section-title">Teams</div>
     <div class="section-sub">Teams belong to a season. Add each team here before assigning its coach below.</div>
 
-    <div class="controls">
+    <div class="controls" style="justify-content:space-between;">
       <div class="group">
         <label for="season-select">Season</label>
         <select id="season-select" onchange="onSeasonChange()"></select>
       </div>
-    </div>
-
-    <!-- ── DIVISIONS (optional; most seasons have none) ── -->
-    <div style="margin-bottom:16px;border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--bg3);">
-      <div class="section-title" style="font-size:12px;">Divisions</div>
-      <div class="section-sub" style="margin-bottom:10px;">Optional. Add divisions only for split-pool seasons (e.g. WKL / ISL). When a season has divisions, teams are grouped by division in standings, and the draft pool tracks availability per division.</div>
-      <table class="tbl" id="divisions-tbl">
-        <thead><tr><th class="num" style="width:60px;">Order</th><th>Name</th><th>Abbr</th><th>Color</th><th class="actions"></th></tr></thead>
-        <tbody id="divisions-body"></tbody>
-      </table>
-      <div class="form-grid" style="margin-top:12px;">
-        <div class="fld"><label for="nd-name">Name</label><input type="text" id="nd-name" placeholder="Winged King League"></div>
-        <div class="fld"><label for="nd-abbr">Abbr</label><input type="text" id="nd-abbr" placeholder="WKL"></div>
-        <div class="fld"><label for="nd-color">Color</label><input type="text" id="nd-color" placeholder="#7c6ff7"><span class="hint">hex, for pool half-border</span></div>
-        <div class="fld"><label for="nd-sort">Sort Order</label><input type="number" id="nd-sort" step="1" placeholder="0"></div>
-        <div class="fld"><label for="nd-logo">Logo URL</label><input type="text" id="nd-logo" placeholder="optional"></div>
-      </div>
-      <div class="form-actions"><button class="btn btn-accent" id="nd-create" onclick="createDivision()">Add division</button></div>
+      <button class="btn" id="divisions-btn" onclick="openDivisionsModal()">Add divisions</button>
     </div>
 
     <table class="tbl" id="teams-tbl">
-      <thead><tr><th>Team</th><th>Slug</th><th class="num">Seed</th><th>Division</th><th>Current Coach</th><th class="actions"></th></tr></thead>
+      <thead><tr><th>Team</th><th>Slug</th><th class="num">Seed</th><th class="col-division">Division</th><th>Current Coach</th><th class="actions"></th></tr></thead>
       <tbody id="teams-body"></tbody>
     </table>
 
@@ -493,22 +477,25 @@ async function onSeasonChange() {
 // SECTION 2: TEAMS
 // ─────────────────────────────────────────────────────────────────────────────
 function renderTeams() {
-  renderDivisions();
+  updateDivisionsButton();
+  applyDivisionColumnVisibility();
   populateTeamDivisionDropdown();
+  if (document.getElementById('divisions-modal-body')) renderDivisionsModalBody();
   const body = document.getElementById('teams-body');
   const teams = teamsBySeason[selectedSeasonId] || [];
   const hasDiv = seasonDivisions().length > 0;
-  if (!teams.length) { body.innerHTML = '<tr class="empty-row"><td colspan="6">No teams in this season yet — add one below.</td></tr>'; renderDraft(); return; }
+  const colspan = hasDiv ? 6 : 5;
+  if (!teams.length) { body.innerHTML = '<tr class="empty-row"><td colspan="' + colspan + '">No teams in this season yet — add one below.</td></tr>'; renderDraft(); return; }
   body.innerHTML = teams.map(t => {
     const coach = coachNameByTeam[t.id];
     const divCell = hasDiv
-      ? (t.division_id ? esc(divisionLabel(t.division_id)) : '<span class="pill pl">unassigned</span>')
-      : '<span class="pill pl">—</span>';
+      ? '<td>' + (t.division_id ? esc(divisionLabel(t.division_id)) : '<span class="pill pl">unassigned</span>') + '</td>'
+      : '';
     return '<tr>'
       + '<td>' + esc(t.name) + '</td>'
       + '<td>' + esc(t.slug) + '</td>'
       + '<td class="num">' + (t.initial_seed ?? '—') + '</td>'
-      + '<td>' + divCell + '</td>'
+      + divCell
       + '<td>' + (coach ? esc(coach) : '<span class="pill pl">none assigned</span>') + '</td>'
       + '<td class="actions">'
         + '<button class="btn btn-sm" onclick="editTeam(\'' + t.id + '\')">Edit</button> '
@@ -517,6 +504,21 @@ function renderTeams() {
       + '</tr>';
   }).join('');
   renderDraft();
+}
+
+// Hide/show the Division column header based on whether the season has divisions.
+function applyDivisionColumnVisibility() {
+  const hasDiv = seasonDivisions().length > 0;
+  document.querySelectorAll('#teams-tbl .col-division').forEach(th => { th.hidden = !hasDiv; });
+}
+
+// Button label reflects whether divisions exist: "Add divisions" vs "Manage divisions (N)".
+function updateDivisionsButton() {
+  const btn = document.getElementById('divisions-btn');
+  if (!btn) return;
+  const n = seasonDivisions().length;
+  btn.textContent = n ? 'Manage divisions (' + n + ')' : 'Add divisions';
+  btn.disabled = !selectedSeasonId;
 }
 
 // Show/populate the division picker in the add-team form only when divisions exist.
@@ -529,23 +531,54 @@ function populateTeamDivisionDropdown() {
   sel.innerHTML = '<option value="">— unassigned —</option>' + divs.map(d => '<option value="' + d.id + '">' + esc(d.name) + ' (' + esc(d.abbr) + ')</option>').join('');
 }
 
-// ── DIVISIONS CRUD ──
-function renderDivisions() {
-  const body = document.getElementById('divisions-body');
+// ── DIVISIONS MANAGER (modal) ──
+// Opened from the season row. Hosts the divisions list + add form. The create/
+// edit/remove handlers re-render the modal body in place and refresh the teams
+// view (button label + Division column) underneath.
+function openDivisionsModal() {
+  if (!selectedSeasonId) { showToast('Pick a season first.', 'err'); return; }
+  openModal(
+    '<h3>Divisions</h3>'
+    + '<p>Optional. Add divisions only for split-pool seasons (e.g. WKL / ISL). When a season has divisions, teams are grouped by division in standings, and the draft pool tracks availability per division.</p>'
+    + '<div id="divisions-modal-body"></div>'
+    + '<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">'
+    +   '<div class="section-title" style="font-size:12px;">Add a division</div>'
+    +   '<div class="form-grid">'
+    +     '<div class="fld"><label for="nd-name">Name</label><input type="text" id="nd-name" placeholder="Winged King League"></div>'
+    +     '<div class="fld"><label for="nd-abbr">Abbr</label><input type="text" id="nd-abbr" placeholder="WKL"></div>'
+    +     '<div class="fld"><label for="nd-color">Color</label><input type="text" id="nd-color" placeholder="#7c6ff7"><span class="hint">hex, for pool half-border</span></div>'
+    +     '<div class="fld"><label for="nd-sort">Sort Order</label><input type="number" id="nd-sort" step="1" placeholder="0"></div>'
+    +     '<div class="fld"><label for="nd-logo">Logo URL</label><input type="text" id="nd-logo" placeholder="optional"></div>'
+    +   '</div>'
+    +   '<div class="form-actions"><button class="btn btn-accent" id="nd-create" onclick="createDivision()">Add division</button></div>'
+    + '</div>'
+    + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Done</button></div>'
+  );
+  renderDivisionsModalBody();
+}
+
+function renderDivisionsModalBody() {
+  const body = document.getElementById('divisions-modal-body');
+  if (!body) return;
   const divs = seasonDivisions();
-  if (!divs.length) { body.innerHTML = '<tr class="empty-row"><td colspan="5">No divisions — this season is undivided.</td></tr>'; return; }
-  body.innerHTML = divs.map(d =>
-    '<tr>'
-    + '<td class="num">' + (d.sort_order ?? 0) + '</td>'
-    + '<td>' + esc(d.name) + '</td>'
-    + '<td>' + esc(d.abbr) + '</td>'
-    + '<td>' + (d.color ? '<span style="display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:6px;background:' + esc(d.color) + '"></span>' + esc(d.color) : '<span class="pill pl">—</span>') + '</td>'
-    + '<td class="actions">'
-      + '<button class="btn btn-sm" onclick="editDivision(\'' + d.id + '\')">Edit</button> '
-      + '<button class="btn btn-sm btn-danger" onclick="confirmRemoveDivision(\'' + d.id + '\')">Remove</button>'
-      + '</td>'
-    + '</tr>'
-  ).join('');
+  if (!divs.length) {
+    body.innerHTML = '<div class="section-sub" style="margin:0;">No divisions yet — this season is undivided.</div>';
+    return;
+  }
+  body.innerHTML = '<table class="tbl"><thead><tr><th class="num" style="width:60px;">Order</th><th>Name</th><th>Abbr</th><th>Color</th><th class="actions"></th></tr></thead><tbody>'
+    + divs.map(d =>
+      '<tr>'
+      + '<td class="num">' + (d.sort_order ?? 0) + '</td>'
+      + '<td>' + esc(d.name) + '</td>'
+      + '<td>' + esc(d.abbr) + '</td>'
+      + '<td>' + (d.color ? '<span style="display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:6px;background:' + esc(d.color) + '"></span>' + esc(d.color) : '<span class="pill pl">—</span>') + '</td>'
+      + '<td class="actions">'
+        + '<button class="btn btn-sm" onclick="editDivision(\'' + d.id + '\')">Edit</button> '
+        + '<button class="btn btn-sm btn-danger" onclick="confirmRemoveDivision(\'' + d.id + '\')">Remove</button>'
+        + '</td>'
+      + '</tr>'
+    ).join('')
+    + '</tbody></table>';
 }
 
 async function createDivision() {
