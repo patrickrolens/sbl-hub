@@ -1067,6 +1067,14 @@ function refreshPoolColors() {
   document.querySelectorAll('.pmon').forEach(card => applyCardState(card, card.dataset.id));
 }
 
+// After a pick/undo, pool MEMBERSHIP can change while "Hide Drafted" is on (a newly
+// drafted mon must vanish; an undone one must reappear). A recolor can't add/remove
+// cards, so rebuild the pool in that case; otherwise a recolor suffices.
+function refreshPoolAfterPickChange() {
+  if (hideDrafted) renderPool();
+  else refreshPoolColors();
+}
+
 // ── INTERACTIONS ──
 function onPoolClick(mon, card) {
   // A drafted Pokémon can't be a draft target, so it can't be yellow-pinned.
@@ -1186,7 +1194,7 @@ async function draftPokemon(mon, teamId, pickNumber) {
 
     renderSidebar();
     renderStatus();
-    refreshPoolColors();
+    refreshPoolAfterPickChange();
     updateUndoButton();
     showToast('Drafted ' + mon.name + ' to ' + teamName(teamId) + '.', 'ok');
     if (isLast) showToast('Draft complete!', 'ok');
@@ -1506,7 +1514,7 @@ async function performUndo(last) {
 
     renderSidebar();
     renderStatus();
-    refreshPoolColors();
+    refreshPoolAfterPickChange();
     updateUndoButton();
     const mon = pokemonById[last.pokemon_id];
     showToast('Undid pick #' + last.pick_number + ' — ' + (mon ? mon.name : last.pokemon_id) + ' returned to the pool.', 'ok');
@@ -1757,7 +1765,7 @@ async function refreshDraftState() {
 
     renderSidebar();
     renderStatus();
-    refreshPoolColors();
+    refreshPoolAfterPickChange();
     updateUndoButton();
     renderActivity();
   } catch (err) {
