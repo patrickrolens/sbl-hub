@@ -242,17 +242,13 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .pool { padding: 16px; display: flex; flex-direction: column; gap: 6px; }
 .tier-lane {
   background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  display: flex; align-items: stretch;
 }
 .tier-lane.illegal-lane { border-color: rgba(224,85,85,.25); }
-/* Left rail holds the point value and is the collapse toggle. In the expanded
-   state it floats so it only occupies the first row's height; the card grid wraps
-   beneath it once rows clear the float. (Collapsed state overrides this to a slim
-   horizontal bar — see below.) */
+/* Left rail holds the point value and is the collapse toggle. */
 .tier-rail {
-  float: left; width: 64px; min-height: 64px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  flex: 0 0 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   padding: 8px 6px; background: var(--bg3); border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border); border-bottom-right-radius: 8px;
   cursor: pointer; user-select: none;
 }
 .tier-rail:hover { background: rgba(255,255,255,.03); }
@@ -262,22 +258,17 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .tier-count { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 4px; font-variant-numeric: tabular-nums; }
 .tier-count .cslash { color: var(--text3); margin: 0 1px; font-weight: 400; }
 .tier-collapse-icon { font-size: 9px; color: var(--text3); margin-top: 3px; }
-/* Card area: a plain block with inline-block cards. This is the one layout that
-   flows AROUND the floated rail — flex/grid containers establish a new formatting
-   context and would ignore the float. Cards are fixed-width so they tile like a grid;
-   the floated rail occupies the top-left and cards wrap beneath it after the first row. */
+/* Card area: an even grid so rows line up (note 21). auto-fill keeps columns tidy. */
 .tier-body {
-  display: block; padding: 10px 12px; font-size: 0;   /* font-size:0 kills inline-block whitespace gaps */
+  flex: 1; min-width: 0; display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px;
+  padding: 10px 12px; align-content: start; justify-items: center;
 }
-.tier-body .pmon { display: inline-flex; vertical-align: top; margin: 3px; }
 .tier-lane.is-collapsed .tier-body { display: none; }
-/* Collapsed lanes get compact: the rail un-floats to a slim full-width horizontal
-   bar so a stack of collapsed tiers takes minimal vertical room. */
-.tier-lane.is-collapsed .tier-rail {
-  float: none; width: auto; min-height: 0;
-  flex-direction: row; gap: 6px; padding: 5px 8px;
-  border-bottom: none; border-bottom-right-radius: 0; border-right: none;
-}
+/* Collapsed lanes get compact: smaller point value, no count, a slim rail — so a
+   stack of collapsed tiers takes minimal vertical room. */
+.tier-lane.is-collapsed { }
+.tier-lane.is-collapsed .tier-rail { flex-basis: 48px; flex-direction: row; gap: 6px; padding: 5px 8px; }
 .tier-lane.is-collapsed .tier-pts { font-size: 14px; }
 .tier-lane.is-collapsed .tier-pts.illegal-pts { font-size: 11px; }
 .tier-lane.is-collapsed .tier-count { display: none; }
@@ -308,6 +299,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .pmon.illegal-card img { opacity: .4; filter: grayscale(70%); }
 
 /* ── SPRITES-ONLY MODE: drop names, shrink cards so more fit per screen. ── */
+.pool.sprites-only .tier-body { grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); }
 .pool.sprites-only .pmon { width: 48px; padding: 4px; }
 .pool.sprites-only .pmon img { width: 38px; height: 38px; }
 .pool.sprites-only .pmon-name { display: none; }
