@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Schedule &amp; Matches</title>
+<title>SBL Hub - Schedule &amp; Matches</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -236,7 +236,7 @@ function attachIconFallback(img, id) {
   };
 }
 function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
-// Coach (owner) active for a team during a given week — falls back to the current owner, then the team name.
+// Coach (owner) active for a team during a given week - falls back to the current owner, then the team name.
 function coachAtWeek(teamId, week) {
   const stints = ownersByTeam[teamId] || [];
   let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
@@ -316,7 +316,7 @@ async function init() {
       const pj = await pjPromise;
       const arr = Array.isArray(pj) ? pj : (pj.pokemon || []);
       arr.forEach(p => { pokemonById[p.id] = p; });
-    } catch (e) { console.error('pokemon.json:', e); showToast('Pokémon data didn\u2019t load — names/icons may be missing.', 'err'); }
+    } catch (e) { console.error('pokemon.json:', e); showToast('Pokémon data didn\u2019t load - names/icons may be missing.', 'err'); }
 
     document.getElementById('season-sub').textContent = season.name;
     banner.hidden = true;
@@ -419,7 +419,7 @@ function renderSchedule() {
   if (reg.length) {
     const weeks = [...new Set(reg.map(m => m.week))].sort((a, b) => a - b);
     h += '<div class="week-grid">';
-    weeks.forEach(w => { h += weekBlockHtml('Week ' + w + ' — Regular Season', w, reg.filter(m => m.week === w), cw); });
+    weeks.forEach(w => { h += weekBlockHtml('Week ' + w + ' - Regular Season', w, reg.filter(m => m.week === w), cw); });
     h += '</div>';
   }
 
@@ -432,7 +432,7 @@ function renderSchedule() {
     Object.keys(byWeek).map(Number).sort((a, b) => a - b).forEach(w => {
       // Playoffs matches first, then Cup (stageRank: playoffs 0, cup 1).
       const list = byWeek[w].slice().sort((a, b) => stageRank(a.stage) - stageRank(b.stage));
-      h += weekBlockHtml('Week ' + w + ' — Postseason', w, list, cw, true);
+      h += weekBlockHtml('Week ' + w + ' - Postseason', w, list, cw, true);
     });
     h += '</div>';
   }
@@ -539,7 +539,7 @@ function gameHtml(m, g, d) {
   // One team's grid: a header row (Pokémon / K / F) then a row per mon.
   const sideGrid = teamId => {
     const rows = d.stats.filter(s => s.game_id === g.id && s.team_id === teamId);
-    if (!rows.length) return '<div class="dm-empty">—</div>';
+    if (!rows.length) return '<div class="dm-empty">-</div>';
     let gh = '<div class="game-grid">'
       + '<div class="gg-head gg-mon">Pokémon</div><div class="gg-head gg-num gg-k">K</div><div class="gg-head gg-num">F</div>';
     rows.forEach((s, i) => {
@@ -604,7 +604,7 @@ function renderChrono(body) {
   ordered.forEach(m => {
     const key = m.stage + '|' + m.week;
     if (key !== lastKey) {
-      h += '<div class="chrono-week-head">Week ' + m.week + ' — ' + escapeHtml(stageLabel(m.stage)) + '</div>';
+      h += '<div class="chrono-week-head">Week ' + m.week + ' - ' + escapeHtml(stageLabel(m.stage)) + '</div>';
       lastKey = key;
     }
     const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
