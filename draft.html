@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Draft</title>
+<title>SBL Hub - Draft</title>
 
 <!-- Supabase JS client (v2). Same pattern as hello-world.html. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 /* ─────────────────────────────────────────────────────────────────────────────
-   TOKENS — lifted verbatim from the Planner / Tier Editor so the three apps share
+   TOKENS - lifted verbatim from the Planner / Tier Editor so the three apps share
    one palette. (Planner uses --cb-green for colorblind mode; the hub doesn't need
    that axis yet, so --blue stays the plain blue.)
 ───────────────────────────────────────────────────────────────────────────── */
@@ -134,7 +134,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 }
 .team-card.is-current { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(124,111,247,.35); }
 .team-card.is-next    { border-color: var(--yellow); box-shadow: 0 0 0 1px rgba(240,192,96,.3); }
-/* Selected (clicked) team — blue. outline sits outside the border so it coexists
+/* Selected (clicked) team - blue. outline sits outside the border so it coexists
    with the current/next border colors. */
 .team-card.selected  { outline: 2px solid var(--blue); outline-offset: 1px; background: rgba(96,165,250,.08); }
 .team-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
@@ -142,7 +142,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .team-card-name  { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-card-name:hover { color: var(--accent); }
 .team-card-coach { font-size: 11px; color: var(--text2); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Point tracker: spent sum (left) · remaining (right) / total — all white, readable. */
+/* Point tracker: spent sum (left) · remaining (right) / total - all white, readable. */
 .team-card-pts   { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; white-space: nowrap; }
 .team-card-pts .spent { font-size: 13px; font-weight: 700; color: var(--text); }
 .team-card-pts .rem   { font-size: 17px; font-weight: 800; color: var(--text); }
@@ -265,7 +265,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   padding: 10px 12px; align-content: start; justify-items: center;
 }
 .tier-lane.is-collapsed .tier-body { display: none; }
-/* Collapsed lanes get compact: smaller point value, no count, a slim rail — so a
+/* Collapsed lanes get compact: smaller point value, no count, a slim rail - so a
    stack of collapsed tiers takes minimal vertical room. */
 .tier-lane.is-collapsed { }
 .tier-lane.is-collapsed .tier-rail { flex-basis: 48px; flex-direction: row; gap: 6px; padding: 5px 8px; }
@@ -285,7 +285,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 }
 .pmon:hover { border-color: var(--accent); }
 .pmon img { width: 40px; height: 40px; image-rendering: pixelated; pointer-events: none; display: block; }
-/* Fixed two-line name area so 1- and 2-line names take the same height — keeps every
+/* Fixed two-line name area so 1- and 2-line names take the same height - keeps every
    card uniform so the grid rows line up cleanly (e.g. on the big draft-night screen). */
 .pmon-name {
   font-size: 9px; color: var(--text2); text-align: center; margin-top: 3px; line-height: 1.2;
@@ -307,16 +307,16 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* ── COLOR STATE (one at a time, by precedence: blue > red > yellow) ──
    A card gets exactly one of team-pick / drafted / pinned, assigned in JS, so the
    precedence is enforced at assignment time and no !important juggling is needed. */
-/* Team-selected (sidebar click) — blue. Highest priority. */
+/* Team-selected (sidebar click) - blue. Highest priority. */
 .pmon.team-pick { border-color: rgba(96,165,250,.7); background: rgba(96,165,250,.1); box-shadow: 0 0 0 1px rgba(96,165,250,.35); }
 .pmon.team-pick .pmon-name { color: var(--blue); }
-/* Drafted: legal but already taken. Red — NOT dimmed (dimming is reserved for illegal). */
+/* Drafted: legal but already taken. Red - NOT dimmed (dimming is reserved for illegal). */
 .pmon.drafted { border-color: rgba(224,85,85,.7); background: rgba(224,85,85,.08); box-shadow: 0 0 0 1px rgba(224,85,85,.35); }
 .pmon.drafted .pmon-name { color: var(--red); }
-/* User pin (single-click) — yellow. Unlimited, multi-select. */
+/* User pin (single-click) - yellow. Unlimited, multi-select. */
 .pmon.pinned { border-color: rgba(240,192,96,.7); background: rgba(240,192,96,.1); box-shadow: 0 0 0 1px rgba(240,192,96,.35); }
 .pmon.pinned .pmon-name { color: var(--yellow); }
-/* Cross-division: taken by the OTHER division only — still available to me. A solid
+/* Cross-division: taken by the OTHER division only - still available to me. A solid
    border in that division's color (set inline via --xdiv), no fill, distinct from the
    red "taken in my division" state. Can co-exist with red when taken in both. */
 .pmon.xdiv { border-color: var(--xdiv, var(--accent)); box-shadow: 0 0 0 1px var(--xdiv, var(--accent)); }
@@ -495,10 +495,10 @@ body.overlay-open { overflow: hidden; }
       <div class="upnext-col">
         <div class="upnext-card">
           <div class="upnext-label">Up Next</div>
-          <div class="upnext-text" id="upnext-text">—</div>
+          <div class="upnext-text" id="upnext-text">-</div>
         </div>
         <div class="op-hint" id="op-hint" hidden>
-          <span class="op-dot"></span>Operator mode — double-click a Pokémon to draft it
+          <span class="op-dot"></span>Operator mode - double-click a Pokémon to draft it
         </div>
         <!-- Admin-only draft controls, revealed once an admin session resolves. -->
         <div id="admin-controls" hidden>
@@ -568,20 +568,20 @@ body.overlay-open { overflow: hidden; }
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
-// CONFIG — anon key is public by design; RLS enforces access (same as hello-world).
+// CONFIG - anon key is public by design; RLS enforces access (same as hello-world).
 // ─────────────────────────────────────────────────────────────────────────────
 const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
 const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Where pokemon.json lives. The icons/ and sprites/ folders live alongside it in
-// the same (planner) repo, so ASSET_BASE is derived by stripping the filename —
+// the same (planner) repo, so ASSET_BASE is derived by stripping the filename -
 // one URL drives the data and the art. To move everything into the hub repo later,
 // set this back to "./pokemon.json".
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');  // ".../vgc-draft-planner/"
 
-// Pokéball fallback — identical to the Planner / Tier Editor.
+// Pokéball fallback - identical to the Planner / Tier Editor.
 const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
 
 // ── STATE ──
@@ -625,7 +625,7 @@ function savePins() {
       pins: [...pinnedIds], sel: selectedTeam,
       hideDrafted: hideDrafted, spritesOnly: spritesOnly,
     }));
-  } catch (e) { /* private mode / disabled storage — silently skip */ }
+  } catch (e) { /* private mode / disabled storage - silently skip */ }
 }
 function loadPins() {
   try {
@@ -644,7 +644,7 @@ function loadPins() {
 let isAdmin      = false;           // profiles.is_admin for the logged-in user
 
 // ─────────────────────────────────────────────────────────────────────────────
-// URL / ID HELPERS — mirror the Planner so sprite/icon paths resolve identically.
+// URL / ID HELPERS - mirror the Planner so sprite/icon paths resolve identically.
 //   Draft pool + sidebar use ICONS first, falling back to SPRITES, then Pokéball.
 // ─────────────────────────────────────────────────────────────────────────────
 function localId(id) {
@@ -666,7 +666,7 @@ function attachIconFallback(img, mon) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SNAKE ORDER — for the read-only current/next display in Stage 1.
+// SNAKE ORDER - for the read-only current/next display in Stage 1.
 //   draft_order is the round-1 team sequence; even rounds (0-indexed) go forward,
 //   odd rounds reverse. Skip-aware computation arrives in Stage 4.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -819,7 +819,7 @@ async function loadData() {
       .select('team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week')
       .in('team_id', teamIds);
     if (picksErr) throw picksErr;
-    // Draft LOG (historical): every draft pick ever made, even if later traded away —
+    // Draft LOG (historical): every draft pick ever made, even if later traded away -
     // the log is a permanent record of who originally drafted what.
     (picks || [])
       .filter(p => p.acquired_via === 'draft')
@@ -877,9 +877,9 @@ async function loadData() {
 // ─────────────────────────────────────────────────────────────────────────────
 // RENDER
 // ─────────────────────────────────────────────────────────────────────────────
-function teamName(id)  { const t = teams.find(x => x.id === id); return t ? t.name : '—'; }
+function teamName(id)  { const t = teams.find(x => x.id === id); return t ? t.name : '-'; }
 function teamSlug(id)  { const t = teams.find(x => x.id === id); return t && t.slug ? t.slug : (t ? t.id : id); }
-function coachName(id) { return coachByTeam[id] || '—'; }
+function coachName(id) { return coachByTeam[id] || '-'; }
 function pointsUsed(id){ return (picksByTeam[id] || []).reduce((s, pid) => s + (tierCost[pid] || 0), 0); }
 
 // Render a row of drafted icons, optionally padded out to `slotCount` total slots
@@ -946,7 +946,7 @@ function renderSidebar() {
     const pts = document.createElement('div');
     pts.className = 'team-card-pts';
     pts.innerHTML = '<span class="spent">' + spent + '</span>'
-      + '<span class="rem">' + (limit - spent) + '<span class="total">/' + (season.point_limit ?? '—') + '</span></span>';
+      + '<span class="rem">' + (limit - spent) + '<span class="total">/' + (season.point_limit ?? '-') + '</span></span>';
     head.appendChild(pts);
     card.appendChild(head);
 
@@ -965,7 +965,7 @@ function renderStatus() {
     nowCard.innerHTML = '<div class="now-label">On the Clock</div>'
       + '<div class="now-coach">Draft not started</div>'
       + '<div class="now-team">' + (draft ? 'Status: ' + draft.status : 'No draft row for this season yet') + '</div>';
-    upnext.textContent = '—';
+    upnext.textContent = '-';
     return;
   }
 
@@ -974,7 +974,7 @@ function renderStatus() {
     nowCard.innerHTML = '<div class="now-label">Draft</div>'
       + '<div class="now-coach">Draft complete</div>'
       + '<div class="now-team">All ' + (orderedTeams.length * (season.team_size || 0)) + ' picks are in.</div>';
-    upnext.textContent = '—';
+    upnext.textContent = '-';
     return;
   }
 
@@ -991,7 +991,7 @@ function renderStatus() {
   const spent = pointsUsed(curId);
   const pts = document.createElement('div'); pts.className = 'now-pts';
   pts.innerHTML = '<span class="spent">' + spent + '</span>'
-    + '<span class="rem">' + (limit - spent) + '<span class="total">/' + (season.point_limit ?? '—') + '</span></span>';
+    + '<span class="rem">' + (limit - spent) + '<span class="total">/' + (season.point_limit ?? '-') + '</span></span>';
   nowCard.appendChild(pts);
 
   const nextId = teamAtPick(draft.current_pick_number + 1);
@@ -1025,7 +1025,7 @@ function makeCard(mon) {
   card.appendChild(nm);
 
   // Single-click = yellow pin; double-click = draft (admin, Stage 3). A single
-  // click is delayed briefly so a double-click can cancel it — otherwise every
+  // click is delayed briefly so a double-click can cancel it - otherwise every
   // draft would also leave a stray yellow pin behind.
   card.addEventListener('click', () => {
     clearTimeout(card._clickTimer);
@@ -1044,7 +1044,7 @@ function makeCard(mon) {
 // Fill/precedence: team-pick (blue) > drafted (red, taken in active division) >
 // pinned (yellow). The cross-division ring (xdiv) is an INDEPENDENT axis: it shows
 // whenever another division has taken the Pokémon, and can co-exist with red (taken
-// in both) — so a card can be plain+xdiv ("open to me, taken in the other division")
+// in both) - so a card can be plain+xdiv ("open to me, taken in the other division")
 // or drafted+xdiv ("taken in both").
 function applyCardState(card, id) {
   card.classList.remove('team-pick', 'drafted', 'pinned', 'xdiv');
@@ -1054,7 +1054,7 @@ function applyCardState(card, id) {
   else if (draftedSet.has(id)) card.classList.add('drafted');
   else if (pinnedIds.has(id))  card.classList.add('pinned');
 
-  // Cross-division ring — only meaningful in a divisioned season, and not shown on
+  // Cross-division ring - only meaningful in a divisioned season, and not shown on
   // the viewer's own blue selection (which already conveys ownership).
   if (!ownedBySelected && takenInOtherDivision(id)) {
     const color = crossDivisionColor(id);
@@ -1108,13 +1108,13 @@ function onPoolDblClick(mon, card) {
   const minNeeded = slotsAfter * minCost;
   const shortfall = minNeeded - budgetAfter;
 
-  // Confirmation — surfaces team, cost, and any budget/roster warning before committing.
+  // Confirmation - surfaces team, cost, and any budget/roster warning before committing.
   let warn = '';
   if (cost > left)  warn += '<p class="modal-warn">Over budget by ' + (cost - left) + ' pts (' + left + ' remaining).</p>';
   if (rosterFull)   warn += '<p class="modal-warn">' + escapeHtml(teamName(teamId)) + ' already has a full roster.</p>';
   if (!rosterFull && cost <= left && slotsAfter > 0 && shortfall > 0) {
     warn += '<p class="modal-warn">Leaves ' + budgetAfter + ' pts for ' + slotsAfter
-      + ' more pick' + (slotsAfter === 1 ? '' : 's') + ' — ' + shortfall + ' pt'
+      + ' more pick' + (slotsAfter === 1 ? '' : 's') + ' - ' + shortfall + ' pt'
       + (shortfall === 1 ? '' : 's') + ' short of the minimum (' + minCost + ' pts each) to fill the roster.</p>';
   }
 
@@ -1153,7 +1153,7 @@ function minLegalCost() {
 }
 
 // Commit a pick: insert the team_pokemon row, advance (or complete) the draft,
-// then update local state and re-render. No realtime yet (Stage 5) — we update
+// then update local state and re-render. No realtime yet (Stage 5) - we update
 // optimistically after the writes succeed.
 async function draftPokemon(mon, teamId, pickNumber) {
   const totalPicks = orderedTeams.length * (season.team_size || 0);
@@ -1332,7 +1332,7 @@ function renderSearchResults() {
   const el = document.getElementById('search-results');
   if (!searchQ) { closeSearchResults(); return; }
   srResults = Object.values(pokemonById)
-    .filter(m => (m.id in tierCost)   // legal only — illegal mons aren't draftable
+    .filter(m => (m.id in tierCost)   // legal only - illegal mons aren't draftable
       && ((m.name || '').toLowerCase().includes(searchQ) || (m.id || '').toLowerCase().startsWith(searchQ)))
     .sort((a, b) => a.name.localeCompare(b.name))
     .slice(0, 18);
@@ -1426,7 +1426,7 @@ document.addEventListener('keydown', e => {
 window.addEventListener('resize', syncOverlayLock);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AUTH — admin status comes from the shared nav (nav.js owns the session);
+// AUTH - admin status comes from the shared nav (nav.js owns the session);
 // we just mirror it into the operator controls.
 // ─────────────────────────────────────────────────────────────────────────────
 function initAuth() {
@@ -1517,7 +1517,7 @@ async function performUndo(last) {
     refreshPoolAfterPickChange();
     updateUndoButton();
     const mon = pokemonById[last.pokemon_id];
-    showToast('Undid pick #' + last.pick_number + ' — ' + (mon ? mon.name : last.pokemon_id) + ' returned to the pool.', 'ok');
+    showToast('Undid pick #' + last.pick_number + ' - ' + (mon ? mon.name : last.pokemon_id) + ' returned to the pool.', 'ok');
   } catch (err) {
     console.error(err);
     showToast('Undo failed: ' + (err.message || err), 'err');
@@ -1546,7 +1546,7 @@ function escapeHtml(s) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACTIVITY LOG (right panel) — draft picks grouped by round + transactions by week,
+// ACTIVITY LOG (right panel) - draft picks grouped by round + transactions by week,
 // newest first. Accordion sections; only the most recent is open by default.
 // Function declarations are hoisted, so refreshDraftState/init can call these.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1672,7 +1672,7 @@ function setActivityCollapsed(collapsed) { document.getElementById('activity').c
 function toggleActivity() { document.getElementById('activity').classList.toggle('collapsed'); syncOverlayLock(); }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REALTIME — subscribe to draft picks + the draft row. On any change, re-fetch the
+// REALTIME - subscribe to draft picks + the draft row. On any change, re-fetch the
 // small slice of state and re-render. Re-fetching (rather than diffing the event
 // payload) keeps inserts/updates/deletes uniform and sidesteps the thin DELETE
 // payload. Client-only state (yellow pins, team selection, collapsed lanes,

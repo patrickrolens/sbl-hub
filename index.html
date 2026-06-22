@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Seasons</title>
+<title>SBL Hub - Seasons</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -132,10 +132,10 @@ function link(page, season) {
 
 // ── Date formatting (full date, e.g. "Jan 14, 2025") ──
 function fmtDate(d) {
-  if (!d) return "—";
+  if (!d) return "-";
   // Treat a bare YYYY-MM-DD as a local date (avoid UTC-shift to the previous day).
   const dt = /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + "T00:00:00") : new Date(d);
-  if (isNaN(dt)) return "—";
+  if (isNaN(dt)) return "-";
   return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
@@ -260,7 +260,7 @@ async function load() {
     // ── Archive grid ──
     html += '<div class="sec-label">' + (current ? "Past seasons" : "Seasons") + '</div>';
     if (!past.length) {
-      html += '<div class="empty">No past seasons archived yet — they\u2019ll appear here as the league grows.</div>';
+      html += '<div class="empty">No past seasons archived yet - they\u2019ll appear here as the league grows.</div>';
     } else {
       html += '<div class="grid">';
       past.forEach(s => {
@@ -275,8 +275,8 @@ async function load() {
               +   '<div class="body">'
               +     '<div class="nm">' + esc(s.name) + '</div>'
               +     '<div class="rows">'
-              +       row("Teams", s.team_size || "—", "Started", fmtDate(s.started_at))
-              +       row("Format", s.vgc_format || "—", "Ended", fmtDate(s.ended_at))
+              +       row("Teams", s.team_size || "-", "Started", fmtDate(s.started_at))
+              +       row("Format", s.vgc_format || "-", "Ended", fmtDate(s.ended_at))
               +     '</div>'
               +     '<div class="results">'
               +       (champ

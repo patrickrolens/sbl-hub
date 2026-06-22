@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Team</title>
+<title>SBL Hub - Team</title>
 
 <!-- Supabase JS client (v2). Same pattern as draft.html / hello-world.html. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 /* ─────────────────────────────────────────────────────────────────────────────
-   TOKENS — shared verbatim with the Planner / Draft page so all hub pages match.
+   TOKENS - shared verbatim with the Planner / Draft page so all hub pages match.
 ───────────────────────────────────────────────────────────────────────────── */
 :root {
   --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
@@ -63,7 +63,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* The logo fills the overlay box. Aspect-ratio keeps it responsive across the
    340px / 320px / full-width breakpoints without a fixed height. */
 .identity .logo-frame {
-  position: relative; width: 100%; aspect-ratio: 16 / 9;   /* 1/1 square — change to 4/3, 16/9, etc. */
+  position: relative; width: 100%; aspect-ratio: 16 / 9;   /* 1/1 square - change to 4/3, 16/9, etc. */
   border-radius: 12px; overflow: hidden;
   background: var(--bg3); border: 1px solid var(--border);
   cursor: pointer; outline: none;
@@ -124,7 +124,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
   padding: 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
 }
-/* Team Stats cells that carry a click tooltip — same hover/press cue as the roster. */
+/* Team Stats cells that carry a click tooltip - same hover/press cue as the roster. */
 .stat-box.has-tip, .kf-cell.has-tip { cursor: pointer; transition: background .12s; }
 .stat-box.has-tip:hover, .kf-cell.has-tip:hover { background: rgba(255,255,255,.05); }
 .stat-box.has-tip:active, .kf-cell.has-tip:active { background: rgba(255,255,255,.09); }
@@ -137,7 +137,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .kf-cell .k { font-size: 9px; font-weight: 700; letter-spacing: .3px; color: var(--text3); text-transform: uppercase; }
 .kf-cell .v { font-size: 14px; font-weight: 700; margin-top: 2px; }
 
-/* ── ROSTER (active member cards) — no header; Copy lives on the identity panel. ── */
+/* ── ROSTER (active member cards) - no header; Copy lives on the identity panel. ── */
 .sec-identity { position: relative; }
 .copy-team-btn {
   position: absolute; bottom: 2px; right: 2px; z-index: 2;
@@ -150,13 +150,13 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .roster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 /* ── MEMBER CARD: 170px sprite block (left) + inline stat grid (right). The card
-   border encodes the Pokémon's type(s) — set inline by JS (solid or split). ── */
+   border encodes the Pokémon's type(s) - set inline by JS (solid or split). ── */
 .member {
   background: var(--bg2); border: 2px solid var(--border); border-radius: 10px;
   display: flex; align-items: stretch; overflow: hidden; min-height: 170px;
 }
 
-/* Sprite block — fills card height; point value + name overlaid; opens popover.
+/* Sprite block - fills card height; point value + name overlaid; opens popover.
    Source art is 250×250; we render at 170 (downscale = crisp, no upscaling blur). */
 .member-sprite-block {
   position: relative; width: 170px; flex-shrink: 0; align-self: stretch;
@@ -187,7 +187,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .sprite-name.n-long { font-size: 12px; }    /* ~15–19 chars */
 .sprite-name.n-xl   { font-size: 10px; }    /* 20+ chars */
 
-/* Stat grid — inline "label value" cells, rows of 2 / 3 / 3, filling the height. */
+/* Stat grid - inline "label value" cells, rows of 2 / 3 / 3, filling the height. */
 .member-statgrid {
   flex: 1; min-width: 0; display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -204,7 +204,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .member-statgrid .sc-v { font-size: 19px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
 .member-statgrid .sc-v.pos { color: var(--blue); }
 .member-statgrid .sc-v.neg { color: var(--red); }
-/* MB/MP/GP cells open a tooltip — signal it's tappable with a hover/press state. */
+/* MB/MP/GP cells open a tooltip - signal it's tappable with a hover/press state. */
 .member-statgrid .sc[data-tip] { cursor: pointer; transition: background .12s; }
 .member-statgrid .sc[data-tip]:hover { background: var(--bg3); }
 .member-statgrid .sc[data-tip]:active { background: var(--border); }
@@ -249,7 +249,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .member-pop .pop-bst b { color: var(--text); font-weight: 800; }
 .member-pop .pop-foot { padding: 9px 13px; font-size: 11px; color: var(--text3); }
 
-/* ── INACTIVE MEMBERS — same card component, just stacked. ── */
+/* ── INACTIVE MEMBERS - same card component, just stacked. ── */
 .inactive-list { display: flex; flex-direction: column; gap: 12px; }
 
 /* Collapsible card header (Recent Transactions): centered label, arrow pinned right. */
@@ -302,7 +302,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   RESPONSIVE — the sketch calls for the roster to drop from 2 columns to 1 on
+   RESPONSIVE - the sketch calls for the roster to drop from 2 columns to 1 on
    narrow screens; the side panels stack under the roster before that. A proper
    mobile pass is Phase 5, so this is just the coarse breakpoints for now.
 ───────────────────────────────────────────────────────────────────────────── */
@@ -401,7 +401,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
-// CONFIG — anon key is public by design; RLS enforces access (same as draft.html).
+// CONFIG - anon key is public by design; RLS enforces access (same as draft.html).
 // ─────────────────────────────────────────────────────────────────────────────
 const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
@@ -412,7 +412,7 @@ const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
 
 const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
 
-// Speed-tier ramp — lifted verbatim from the Planner so card speed colors match.
+// Speed-tier ramp - lifted verbatim from the Planner so card speed colors match.
 const SPEED_TIERS = [
   { l: "≤30",     a: 0,   b: 30,   col: "#7c4dff" },
   { l: "31–50",   a: 31,  b: 50,   col: "#2979ff" },
@@ -427,7 +427,7 @@ function speedTierColor(spe) {
   return t ? t.col : "#f44336";
 }
 
-// Compact stat row order/labels/colors — lifted verbatim from the Planner so the
+// Compact stat row order/labels/colors - lifted verbatim from the Planner so the
 // member-card stat presentation matches the Draft Builder exactly.
 const BAR_SK = ["hp", "atk", "def", "spa", "spd", "spe"];
 const BAR_SL = ["HP", "Atk", "Def", "SpA", "SpD", "Spe"];
@@ -464,13 +464,13 @@ let pokemonById  = {};      // id -> pokemon.json entry
 let currentUser  = null;
 let isAdmin      = false;
 
-// View-only form toggles, keyed by Pokémon id (survives nothing — purely display).
+// View-only form toggles, keyed by Pokémon id (survives nothing - purely display).
 let altFormActive  = new Set();   // base entries currently showing their alt form
 let megaBaseActive = new Set();   // Mega/Primal entries currently showing their base
 let txnExpanded    = false;       // Recent Transactions collapsed by default
 
 // ─────────────────────────────────────────────────────────────────────────────
-// URL / ID HELPERS — mirror the Planner so sprite/icon paths resolve identically.
+// URL / ID HELPERS - mirror the Planner so sprite/icon paths resolve identically.
 //   Member cards lead with the larger SPRITE (sprite → icon → Pokéball); compact
 //   spots (inactive list, transactions) use the smaller ICON (icon → sprite → ball).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -499,19 +499,19 @@ function attachIconFallback(img, mon) {
 // ── FORMAT HELPERS ──
 function signed(n) { return (n > 0 ? '+' : '') + n; }
 function deltaClass(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
-// KOs/Faints ratio: — when nothing happened, ∞ when faints are zero but KOs aren't.
+// KOs/Faints ratio: - when nothing happened, ∞ when faints are zero but KOs aren't.
 function kfRatio(kos, faints) {
-  if (faints === 0) return kos === 0 ? '—' : '∞';
+  if (faints === 0) return kos === 0 ? '-' : '∞';
   return (kos / faints).toFixed(2);
 }
-function pct(part, whole) { return whole > 0 ? Math.round((part / whole) * 100) + '%' : '—'; }
-function fmtKpg(v) { return v == null ? '—' : v.toFixed(2); }
+function pct(part, whole) { return whole > 0 ? Math.round((part / whole) * 100) + '%' : '-'; }
+function fmtKpg(v) { return v == null ? '-' : v.toFixed(2); }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WHICH TEAM? — the hash can be the team's canonical slug or a coach name
+// WHICH TEAM? - the hash can be the team's canonical slug or a coach name
 // (current or past, slugified). On a match via a coach alias we normalize the URL
 // to the canonical slug so every team has one shareable permalink.
 // Collision priority: slug > current coach > past coach. A lower-priority source
@@ -712,8 +712,8 @@ function buildTransactions(faMoves, trades) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STAT AGGREGATION — all derive from the loaded arrays. With no game data these
-// return zeros / nulls, which the renderers turn into "0", "—", or "+0".
+// STAT AGGREGATION - all derive from the loaded arrays. With no game data these
+// return zeros / nulls, which the renderers turn into "0", "-", or "+0".
 // ─────────────────────────────────────────────────────────────────────────────
 function teamMatchRecord() {
   let w = 0, l = 0, gw = 0, gl = 0;
@@ -753,10 +753,10 @@ function strengthOfSchedule() {
   return { sos, sosos };
 }
 
-function fmtRate(r) { return r == null ? '—' : (r * 100).toFixed(0) + '%'; }
+function fmtRate(r) { return r == null ? '-' : (r * 100).toFixed(0) + '%'; }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FORM TOGGLES — ported from the Planner. A Mega/Primal entry (has baseForm) shows
+// FORM TOGGLES - ported from the Planner. A Mega/Primal entry (has baseForm) shows
 // its Mega by default and can flip to the base form; a base entry with an altForm
 // can flip to that alt. Display-only here, so toggling just re-renders the cards.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -838,7 +838,7 @@ function renderIdentity() {
 
   const cur = document.createElement('div');
   cur.className = 'coach-current';
-  cur.innerHTML = '<span class="lead">Coach</span>' + (current.length ? escapeHtml(current.join(', ')) : '—');
+  cur.innerHTML = '<span class="lead">Coach</span>' + (current.length ? escapeHtml(current.join(', ')) : '-');
   overlay.appendChild(cur);
 
   if (past.length) {
@@ -941,7 +941,7 @@ function memberStats(row) {
 }
 // Tooltip line for a participation metric: "83.33% · 15 of 18 matches" + description.
 function partTip(label, raw, count, whole, unit, desc) {
-  const pctStr = raw == null ? '—' : raw.toFixed(2) + '%';
+  const pctStr = raw == null ? '-' : raw.toFixed(2) + '%';
   return pctStr + ' · ' + count + ' of ' + whole + ' ' + unit + '<br>' + desc;
 }
 
@@ -958,7 +958,7 @@ function memberCard(row, opts) {
   opts = opts || {};
   const mon  = pokemonById[row.pokemon_id] || { id: row.pokemon_id, name: row.pokemon_id, stats: {} };
   const disp = getDisplayMon(mon);
-  const cost = (row.pokemon_id in tierCost) ? tierCost[row.pokemon_id] : (mon.points != null ? mon.points : '—');
+  const cost = (row.pokemon_id in tierCost) ? tierCost[row.pokemon_id] : (mon.points != null ? mon.points : '-');
   const st   = memberStats(row);
   const kfDelta = st.kos - st.faints;
   const uid  = 'pop-' + (++_cardSeq);
@@ -969,7 +969,7 @@ function memberCard(row, opts) {
   // Type-colored border. Single type → solid border. Two types → top half is the
   // first type, bottom half the second, painted as a border-box background layer so
   // the corners stay rounded (border-image would square them). Both halves are flat
-  // solid colors with a hard split — no gradient blend.
+  // solid colors with a hard split - no gradient blend.
   const c1 = typeColor(disp.type1), c2 = typeColor(disp.type2);
   if (c1 && c2) {
     card.style.border = '2px solid transparent';
@@ -1027,7 +1027,7 @@ function statCell(rowCls, label, value, valCls, tip) {
 }
 
 // The hover/click detail popover content for a member: types, abilities, base
-// stats, join (and drop) week, and utility moves. Markup only — positioning is
+// stats, join (and drop) week, and utility moves. Markup only - positioning is
 // handled by tooltip.js via the matching data-pop-target id.
 function buildDetailPopover(uid, row, mon, disp) {
   const pop = document.createElement('div');
@@ -1044,7 +1044,7 @@ function buildDetailPopover(uid, row, mon, disp) {
   });
 
   // abilities
-  const abilities = (mon.abilities || []).map(a => '<span class="pop-ability">' + escapeHtml(a) + '</span>').join('') || '<span class="pop-dim">—</span>';
+  const abilities = (mon.abilities || []).map(a => '<span class="pop-ability">' + escapeHtml(a) + '</span>').join('') || '<span class="pop-dim">-</span>';
 
   // base stats (color speed by tier, mirror the old compact row)
   let statsHtml = '';
@@ -1062,10 +1062,10 @@ function buildDetailPopover(uid, row, mon, disp) {
   }
 
   // utility moves (from the drafted entry, like the Planner)
-  const moves = (mon.moves || []).map(m => '<span class="pop-move">' + escapeHtml(m) + '</span>').join('') || '<span class="pop-dim">—</span>';
+  const moves = (mon.moves || []).map(m => '<span class="pop-move">' + escapeHtml(m) + '</span>').join('') || '<span class="pop-dim">-</span>';
 
   // join / drop weeks
-  let weeks = 'Joined Week ' + (row.acquired_week || '—');
+  let weeks = 'Joined Week ' + (row.acquired_week || '-');
   if (row.released_week != null) weeks += ' · Dropped Week ' + row.released_week;
 
   pop.innerHTML =
@@ -1171,7 +1171,7 @@ function renderTransactions() {
     row.innerHTML =
       '<div class="swap"><span class="drop">' + di + ' ' + escapeHtml(dropped.name) + '</span>'
       + '<span>⇄</span><span class="gain">' + ai + ' ' + escapeHtml(added.name) + '</span></div>'
-      + '<div class="with">Week ' + (t.week || '—') + ' · ' + escapeHtml(t.withLabel) + '</div>';
+      + '<div class="with">Week ' + (t.week || '-') + ' · ' + escapeHtml(t.withLabel) + '</div>';
     list.appendChild(row);
     // onerror chains for the inline imgs
     row.querySelectorAll('img').forEach((im, i) => attachIconFallback(im, i === 0 ? dropped : added));
@@ -1215,7 +1215,7 @@ function renderSchedule() {
     a.href = 'matches.html#' + m.id;
     a.innerHTML =
       '<div class="sched-top">'
-      +   '<span class="sched-wk">Week ' + (m.week || '—') + (m.stage !== 'regular' ? ' · ' + escapeHtml(m.stage) : '') + '</span>'
+      +   '<span class="sched-wk">Week ' + (m.week || '-') + (m.stage !== 'regular' ? ' · ' + escapeHtml(m.stage) : '') + '</span>'
       +   resultHtml
       + '</div>'
       + '<div class="sched-match">'
@@ -1230,7 +1230,7 @@ function renderSchedule() {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TEAM SELECTOR — searchable dropdown off the Teams tab. Teams listed as
+// TEAM SELECTOR - searchable dropdown off the Teams tab. Teams listed as
 // "Team Name (Coach)"; selecting one swaps the page in place and updates #slug.
 // ─────────────────────────────────────────────────────────────────────────────
 async function selectTeam(teamId) {

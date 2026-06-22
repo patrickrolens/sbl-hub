@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Postseason</title>
+<title>SBL Hub - Postseason</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ─── TOKENS (shared verbatim with the rest of the hub) ─── */
@@ -154,7 +154,7 @@ a { color: inherit; }
 <div id="boot-banner" class="banner">Loading…</div>
 
 <div id="layout" hidden>
-  <div id="preview-note" class="preview-note" hidden>Preview — this postseason isn’t published yet, so it’s only visible to admins. Publish it from the Matches admin page when you’re ready.</div>
+  <div id="preview-note" class="preview-note" hidden>Preview - this postseason isn’t published yet, so it’s only visible to admins. Publish it from the Matches admin page when you’re ready.</div>
   <div class="page-head">
     <div class="grow">
       <div class="page-title">Postseason</div>
@@ -226,7 +226,7 @@ let isAdmin = false;               // logged-in admin (for previewing before pub
 // ─────────────────────────────────────────────────────────────────────────────
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
-// Coach active for a team during a given week — falls back to current owner, then team name.
+// Coach active for a team during a given week - falls back to current owner, then team name.
 function coachAtWeek(teamId, week) {
   const stints = ownersByTeam[teamId] || [];
   let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
@@ -584,7 +584,7 @@ function gameHtml(m, g, d) {
   if (g.replay_url) head += ' \u00B7 <a class="replay" href="' + escapeHtml(g.replay_url) + '" target="_blank" rel="noopener">Replay \u2197</a>';
   const sideHtml = teamId => {
     const rows = d.stats.filter(s => s.game_id === g.id && s.team_id === teamId);
-    if (!rows.length) return '<div class="dm-empty">—</div>';
+    if (!rows.length) return '<div class="dm-empty">-</div>';
     return rows.map(s => '<div class="game-mon' + ((s.deaths || 0) > 0 ? ' fainted' : '') + '">'
       + '<img src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
       + '<span class="gmn">' + escapeHtml(monName(s.pokemon_id)) + '</span></div>').join('');
@@ -772,7 +772,7 @@ async function init() {
     await detectAdmin();
     if (!published && !isAdmin) {
       banner.className = 'banner';
-      banner.textContent = 'The postseason hasn\u2019t started yet — check back when the brackets go live.';
+      banner.textContent = 'The postseason hasn\u2019t started yet - check back when the brackets go live.';
       banner.hidden = false;
       return;
     }
@@ -812,7 +812,7 @@ async function init() {
       const pj = await pjPromise;
       const arr = Array.isArray(pj) ? pj : (pj.pokemon || []);
       arr.forEach(p => { pokemonById[p.id] = p; });
-    } catch (e) { console.error('pokemon.json:', e); showToast('Pokémon data didn\u2019t load — names/icons may be missing.', 'err'); }
+    } catch (e) { console.error('pokemon.json:', e); showToast('Pokémon data didn\u2019t load - names/icons may be missing.', 'err'); }
 
     document.getElementById('season-sub').textContent = season.name;
     if (!season.postseason_published && isAdmin) document.getElementById('preview-note').hidden = false;

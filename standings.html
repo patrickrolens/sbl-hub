@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Standings</title>
+<title>SBL Hub - Standings</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -244,9 +244,9 @@ function attachIconFallback(img, mon) {
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 function signed(n) { return (n > 0 ? '+' : '') + n; }
 function deltaClass(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
-function kfRatio(kos, faints) { if (faints === 0) return kos === 0 ? '—' : '∞'; return (kos / faints).toFixed(2); }
+function kfRatio(kos, faints) { if (faints === 0) return kos === 0 ? '-' : '∞'; return (kos / faints).toFixed(2); }
 function kfSortValue(kos, faints) { return faints > 0 ? kos / faints : (kos > 0 ? Infinity : 0); }
-function fmtRate(r) { return r == null ? '—' : (r * 100).toFixed(0) + '%'; }
+function fmtRate(r) { return r == null ? '-' : (r * 100).toFixed(0) + '%'; }
 function fmtDateTime(s) {
   if (!s) return 'TBD';
   const d = new Date(s);
@@ -402,7 +402,7 @@ function buildTransactions(faMoves, trades) {
 let _matchIndex = null;
 function matchById(id) { if (!_matchIndex) { _matchIndex = {}; matches.forEach(m => { _matchIndex[m.id] = m; }); } return _matchIndex[id]; }
 
-// Per (pokemon, team) totals across all stages — drives the three leader boards.
+// Per (pokemon, team) totals across all stages - drives the three leader boards.
 function buildLeaders() {
   const map = {};
   statRows.forEach(s => {
@@ -604,7 +604,7 @@ function renderDraftPanel() {
 
   if (status === 'pending') {
     title.textContent = 'Draft';
-    // No draft-date field yet — show TBD; wire the real date here once it exists.
+    // No draft-date field yet - show TBD; wire the real date here once it exists.
     el.innerHTML = '<div class="draft-status">Draft Day</div><div class="draft-sub">TBD</div>';
     return;
   }
