@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Seasons, Teams &amp; Coaches Admin</title>
+<title>SBL Hub - Seasons, Teams &amp; Coaches Admin</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -159,7 +159,7 @@ select:disabled, input:disabled { opacity: .5; }
         <div class="fld"><label for="ns-teamsize">Team Size</label><input type="number" id="ns-teamsize" min="1" step="1" placeholder="10"></div>
         <div class="fld"><label for="ns-start">Started</label><input type="date" id="ns-start"></div>
         <div class="fld"><label for="ns-end">Ended</label><input type="date" id="ns-end"><span class="hint">leave blank if ongoing</span></div>
-        <div class="fld"><label for="ns-current">Current?</label><select id="ns-current"><option value="no">No</option><option value="yes">Yes — make this the current season</option></select></div>
+        <div class="fld"><label for="ns-current">Current?</label><select id="ns-current"><option value="no">No</option><option value="yes">Yes - make this the current season</option></select></div>
       </div>
       <div class="form-actions">
         <button class="btn btn-accent" id="ns-create" onclick="createSeason()">Create season</button>
@@ -210,7 +210,7 @@ select:disabled, input:disabled { opacity: .5; }
   <!-- ───────────── SECTION 3: COACHES / OWNERS ───────────── -->
   <div class="section" id="owners-section">
     <div class="section-title">Coaches &amp; Substitutions</div>
-    <div class="section-sub">Assign a coach to a team, or record a mid-season substitution. A substitution closes the previous coach's stint and opens the new one — by default the prior coach ends the week before the new one starts, which you can override.</div>
+    <div class="section-sub">Assign a coach to a team, or record a mid-season substitution. A substitution closes the previous coach's stint and opens the new one - by default the prior coach ends the week before the new one starts, which you can override.</div>
 
     <div class="controls">
       <div class="group">
@@ -278,12 +278,12 @@ const sb = () => window.sb;
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
-function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '—'; }
-function teamName(id) { for (const sid in teamsBySeason) { const t = (teamsBySeason[sid] || []).find(x => x.id === id); if (t) return t.name; } return '—'; }
+function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '-'; }
+function teamName(id) { for (const sid in teamsBySeason) { const t = (teamsBySeason[sid] || []).find(x => x.id === id); if (t) return t.name; } return '-'; }
 function fmtDate(d) {
-  if (!d) return '—';
+  if (!d) return '-';
   const dt = /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + 'T00:00:00') : new Date(d);
-  if (isNaN(dt)) return '—';
+  if (isNaN(dt)) return '-';
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 function slugify(s) { return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
@@ -365,14 +365,14 @@ async function loadSeasonTeams(seasonId) {
 // ─────────────────────────────────────────────────────────────────────────────
 function renderSeasons() {
   const body = document.getElementById('seasons-body');
-  if (!seasons.length) { body.innerHTML = '<tr class="empty-row"><td colspan="8">No seasons yet — create one below.</td></tr>'; return; }
+  if (!seasons.length) { body.innerHTML = '<tr class="empty-row"><td colspan="8">No seasons yet - create one below.</td></tr>'; return; }
   body.innerHTML = seasons.map(s =>
     '<tr>'
     + '<td>' + esc(s.name) + (s.is_current ? '<span class="badge green">Current</span>' : '') + '</td>'
     + '<td>' + esc(s.slug) + '</td>'
-    + '<td>' + esc(s.vgc_format || '—') + '</td>'
-    + '<td class="num">' + (s.team_size ?? '—') + '</td>'
-    + '<td class="num">' + (s.point_limit ?? '—') + '</td>'
+    + '<td>' + esc(s.vgc_format || '-') + '</td>'
+    + '<td class="num">' + (s.team_size ?? '-') + '</td>'
+    + '<td class="num">' + (s.point_limit ?? '-') + '</td>'
     + '<td>' + esc(fmtDate(s.started_at)) + '</td>'
     + '<td>' + esc(fmtDate(s.ended_at)) + '</td>'
     + '<td class="actions">'
@@ -486,7 +486,7 @@ function renderTeams() {
   const teams = teamsBySeason[selectedSeasonId] || [];
   const hasDiv = seasonDivisions().length > 0;
   const colspan = hasDiv ? 6 : 5;
-  if (!teams.length) { body.innerHTML = '<tr class="empty-row"><td colspan="' + colspan + '">No teams in this season yet — add one below.</td></tr>'; renderDraft(); return; }
+  if (!teams.length) { body.innerHTML = '<tr class="empty-row"><td colspan="' + colspan + '">No teams in this season yet - add one below.</td></tr>'; renderDraft(); return; }
   body.innerHTML = teams.map(t => {
     const coach = coachNameByTeam[t.id];
     const divCell = hasDiv
@@ -495,7 +495,7 @@ function renderTeams() {
     return '<tr>'
       + '<td>' + esc(t.name) + '</td>'
       + '<td>' + esc(t.slug) + '</td>'
-      + '<td class="num">' + (t.initial_seed ?? '—') + '</td>'
+      + '<td class="num">' + (t.initial_seed ?? '-') + '</td>'
       + divCell
       + '<td>' + (coach ? esc(coach) : '<span class="pill pl">none assigned</span>') + '</td>'
       + '<td class="actions">'
@@ -529,7 +529,7 @@ function populateTeamDivisionDropdown() {
   const divs = seasonDivisions();
   if (!divs.length) { fld.hidden = true; sel.innerHTML = ''; return; }
   fld.hidden = false;
-  sel.innerHTML = '<option value="">— unassigned —</option>' + divs.map(d => '<option value="' + d.id + '">' + esc(d.name) + ' (' + esc(d.abbr) + ')</option>').join('');
+  sel.innerHTML = '<option value="">- unassigned -</option>' + divs.map(d => '<option value="' + d.id + '">' + esc(d.name) + ' (' + esc(d.abbr) + ')</option>').join('');
 }
 
 // ── DIVISIONS MANAGER (modal) ──
@@ -563,7 +563,7 @@ function renderDivisionsModalBody() {
   if (!body) return;
   const divs = seasonDivisions();
   if (!divs.length) {
-    body.innerHTML = '<div class="section-sub" style="margin:0;">No divisions yet — this season is undivided.</div>';
+    body.innerHTML = '<div class="section-sub" style="margin:0;">No divisions yet - this season is undivided.</div>';
     return;
   }
   body.innerHTML = '<table class="tbl"><thead><tr><th class="num" style="width:60px;">Order</th><th>Name</th><th>Abbr</th><th>Color</th><th class="actions"></th></tr></thead><tbody>'
@@ -572,7 +572,7 @@ function renderDivisionsModalBody() {
       + '<td class="num">' + (d.sort_order ?? 0) + '</td>'
       + '<td>' + esc(d.name) + '</td>'
       + '<td>' + esc(d.abbr) + '</td>'
-      + '<td>' + (d.color ? '<span style="display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:6px;background:' + esc(d.color) + '"></span>' + esc(d.color) : '<span class="pill pl">—</span>') + '</td>'
+      + '<td>' + (d.color ? '<span style="display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:6px;background:' + esc(d.color) + '"></span>' + esc(d.color) : '<span class="pill pl">-</span>') + '</td>'
       + '<td class="actions">'
         + '<button class="btn btn-sm" onclick="editDivision(\'' + d.id + '\')">Edit</button> '
         + '<button class="btn btn-sm btn-danger" onclick="confirmRemoveDivision(\'' + d.id + '\')">Remove</button>'
@@ -790,7 +790,7 @@ function editTeam(teamId) {
   const divs = seasonDivisions();
   const divField = divs.length
     ? '<div class="fld"><label for="et-division">Division</label><select id="et-division">'
-      + '<option value="">— unassigned —</option>'
+      + '<option value="">- unassigned -</option>'
       + divs.map(d => '<option value="' + d.id + '"' + (t.division_id === d.id ? ' selected' : '') + '>' + esc(d.name) + ' (' + esc(d.abbr) + ')</option>').join('')
       + '</select></div>'
     : '';
@@ -838,7 +838,7 @@ async function saveTeamEdit(teamId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DRAFT SETUP — one block when undivided, one per division otherwise.
+// DRAFT SETUP - one block when undivided, one per division otherwise.
 // Each block is scoped by a key: '__none__' (undivided) or a division_id.
 // Working orders are kept per-scope so editing one block doesn't disturb another.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -985,7 +985,7 @@ function populateOwnerTeamDropdown() {
   const sel = document.getElementById('owner-team');
   const teams = teamsBySeason[selectedSeasonId] || [];
   const prev = ownerTeamId;
-  sel.innerHTML = '<option value="">—</option>' + teams.map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('');
+  sel.innerHTML = '<option value="">-</option>' + teams.map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('');
   if (teams.some(t => t.id === prev)) sel.value = prev;
   else { ownerTeamId = null; }
   renderOwnerDetail();
@@ -1090,7 +1090,7 @@ function confirmRemoveOwner(ownerId) {
   const nm = owner && owner.players ? owner.players.display_name : 'this coach';
   openModal(
     '<h3>Remove coach record?</h3>'
-    + '<p>This deletes the stint for <b>' + esc(nm) + '</b>. If this was a substitution, the previous coach\u2019s record won\u2019t automatically reopen — adjust weeks manually if needed.</p>'
+    + '<p>This deletes the stint for <b>' + esc(nm) + '</b>. If this was a substitution, the previous coach\u2019s record won\u2019t automatically reopen - adjust weeks manually if needed.</p>'
     + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
     + '<button class="btn btn-accent btn-danger" onclick="doRemoveOwner(\'' + ownerId + '\')">Remove</button></div>'
   );
