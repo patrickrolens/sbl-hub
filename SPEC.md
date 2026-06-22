@@ -10,8 +10,8 @@ This doc is meant to outline the web app for the main hub site for the Springfie
 
 Two related but independently deployed applications, sharing a common pokemon.json database:
 
-- **League Hub** (this project): static html/JS frontend + Supabase backend. Hosted at the project's primary domain (TBD).
-- **Draft Planner** (existing): static html/JS frontend with no backend. Hosted on its own subdomain (`planner.<Domain TBD>.com`). Deployed independently with its own repo.
+- **League Hub** (this project): static html/JS frontend + Supabase backend. Hosted at `springfieldbattleleague.com`.
+- **Draft Planner** (existing): static html/JS frontend with no backend. Hosted on its own subdomain, `planner.springfieldbattleleague.com`. Deployed independently with its own repo.
 
 The hub is a static site (no application server). All dynamic data flows through Supabase's REST API. The only server-side code is Supabase's database functions. Eventually functions might be necessary to handle ingesting replay analyzer data, but the initial release will not include this.
 
@@ -19,12 +19,12 @@ The hub is a static site (no application server). All dynamic data flows through
 
 | Component | Technology | Hosted on |
 |-----------|------------|-----------|
-| Hub frontend | Vanilla HTML/CSS/JS | GitHub Pages |
-| Planner frontend | Vanilla HTML/CSS/JS (existing) | GitHub Pages, `planner.<Domain TBD>.com` subdomain |
+| Hub frontend | Vanilla HTML/CSS/JS | GitHub Pages, `springfieldbattleleague.com` |
+| Planner frontend | Vanilla HTML/CSS/JS (existing) | GitHub Pages, `planner.springfieldbattleleague.com` |
 | Database + API | Supabase (Postgres + PostgREST + Auth) | Supabase Cloud |
 | Auth | Supabase magic-link email | Supabase Cloud |
 | Replay ingest | Supabase Edge Function | Supabase Cloud |
-| Pokemon reference data | `pokemon.json` static file | GitHub Pages, likely remaining in planner repository |
+| Pokemon reference data | `pokemon.json` static file | GitHub Pages (planner repo), served from `planner.springfieldbattleleague.com/pokemon.json` |
 
 ### 1.3 Project Structure
 
@@ -38,6 +38,11 @@ One auth boundary: admin or anonymous.
 
 - Admins log in via Supabase magic-link email. A `profiles` table flags which user IDs are admins.
 - Everyone else reads without logging in. Anonymous reads are permitted by Row Level Security policies on every public table.
+- Auth is owned in one place. The shared navigation component (`nav.js`, see 1.5) creates the single Supabase client, drives the magic-link login UI, resolves admin status once, and broadcasts it. Pages do not run their own `getSession`/`onAuthStateChange`; they read admin status from `window.SBLNav.ready` (a promise) and the `sbl-auth` event, and gate their admin-only UI on that.
+
+### 1.5 Shared navigation and client
+
+Every hub page includes a single shared component, `/nav.js`, immediately after `<body>`. It self-injects the navbar - logo, page tabs, a searchable Teams dropdown, and the Admin control - with namespaced CSS so it can't collide with page styles. It is also the source of truth for the Supabase client: it creates the one client and exposes it as `window.sb`, and pages use `const sb = window.sb || supabase.createClient(...)` rather than instantiating their own. (A single auth/session manager avoids the lock contention two clients caused.) All nav links and asset paths are root-absolute (`/index.html`, `/assets/…`, `/admin/…`) so the same component works from the `/admin/` subfolder as from the root. When signed in, the admin's email and a Log out button live in the Admin dropdown; the Postseason tab appears only when the postseason is published or the viewer is an admin.
 
 ---
 
@@ -268,7 +273,7 @@ GROUP BY s.pokemon_id, s.team_id, t.name
 ORDER BY total_kills DESC;
 ```
 
-**Team page — active and inactive rosters with stats:**
+**Team page - active and inactive rosters with stats:**
 ```sql
 -- Active roster
 SELECT tp.pokemon_id, tp.acquired_week,
@@ -338,7 +343,7 @@ WHERE t.season_id = $1;
 
 Notes:
 - This version includes all opponent games when computing opponent win rates, including head-to-head. If the league prefers excluding head-to-head, add a filter to `team_records` to exclude games against the team being evaluated. That's a one-line change.
-- Both SoS and SoSoS naturally extend the standings query — they're just extra columns. The full standings query joins these CTEs onto the wins/losses/differential/KD computation.
+- Both SoS and SoSoS naturally extend the standings query - they're just extra columns. The full standings query joins these CTEs onto the wins/losses/differential/KD computation.
 
 ### 2.5 Row Level Security
 
@@ -353,30 +358,26 @@ Applied to all tables. `profiles` itself has a special policy where users can re
 
 ## 3. Pages
 
-URLs below show the eventual clean structure (`/teams/shrug`). In vanilla v1, these are implemented with hash routing — `/team.html#joel` instead of `/teams/joel` — so the same page can render different teams based on `location.hash`. Hash URLs are still shareable and bookmarkable.
+URLs below show the eventual clean structure (`/teams/shrug`). In vanilla v1, these are implemented with hash routing - `/team.html#joel` instead of `/teams/joel` - so the same page can render different teams based on `location.hash`. Hash URLs are still shareable and bookmarkable.
 
 | Eventual Path | v1 Implementation | Purpose | Source data |
 |------|------|---------|-------------|
-| `/standings` | `standings.html` | Full standings table for the current season; also serves as main landing page | standings view |
-| `/team/[slug]` | `team.html#slug` | Single team page with selector dropdown | team_pokemon + games + matches |
-| `/schedule` | `schedule.html` | Week-by-week schedule with results | matches (stage=regular) |
-| `/matches/[id]` | `match.html#id` | Single match detail: each game, replays, per-Pokemon stats | match + games + stats |
-| `/statistics` | `statistics.html` | KOs, Faints, and all other stats brought together | aggregated stats |
-| `/transactions` | `transactions.html` | Chronological feed of free agency moves and trades | free_agency_moves ∪ trades |
-| `/playoffs` | `playoffs.html` | Single-elimination bracket view for the season | matches (stage=playoffs) |
-| `/cup` | `cup.html` | Same renderer, different data | matches (stage=cup) |
-| `/potw` | `potw.html` | Pokemon of the Week gallery | potw |
-| `/draft` | `draft.html` | Live draft view if active, final draft results if complete | drafts + team_pokemon |
-| `/rules` | `rules.html` | Static rules and resources page | markdown in repo |
+| `/` (landing) | `index.html` (renamed from `standings.html`) | Standings table, stat leaderboards, and recent/upcoming matches; main landing page | standings view |
+| `/team/[slug]` | `team.html#slug` | Single team page; the nav's Teams dropdown swaps teams in place via the URL hash | team_pokemon + games + matches |
+| `/matches` | `matches.html` | Week-by-week schedule + results with in-page match detail (each game, replays, per-Pokemon stats). Absorbs the former `/schedule` and `/matches/[id]`. | matches + games + stats |
+| `/statistics` | `statistics.html` | KOs, Faints, and other stats brought together | aggregated stats |
+| `/postseason` | `postseason.html` | Combined single-elimination brackets - Playoffs on top, Cup below - gated behind `seasons.postseason_published` (admins can preview). Absorbs the former `/playoffs` and `/cup`. | matches (stage = playoffs ∪ cup) |
+| `/draft` | `draft.html` | Public draft view (live or final) **and** the admin operator tool (click-to-pick), with operator controls gated on admin status. Absorbs the former `/admin/draft`. | drafts + team_pokemon |
+| `/potw` | `potw.html` *(deferred)* | Pokemon of the Week gallery | potw |
+| `/rules` | `rules.html` *(deferred)* | Static rules and resources page | markdown in repo |
 | `planner.springfieldbattleleague.com` | (separate deployment) | The existing draft planner, untouched, on its own subdomain | static |
-| `/admin` | `admin.html` | Admin landing page (after login) | — |
-| `/admin/draft` | `admin-draft.html` | Draft operator tool (click-to-pick during live draft) | — |
-| `/admin/tiers` | `admin-tiers.html` | Per-season tier list editor (set legal Pokemon and point costs) | — |
-| `/admin/matches` | `admin-matches.html` | List, create, edit matches and games | — |
-| `/admin/rosters` | `admin-rosters.html` | Manage team rosters, free agency, trades | — |
-| `/admin/seasons` | `admin-seasons.html` | Create new season, set current season | — |
+| `/admin/matches` | `/admin/admin-matches.html` | Schedule + match/game entry; also season selection and postseason seeding/publish | - |
+| `/admin/rosters` | `/admin/admin-rosters.html` | Manage team rosters, free agency, trades | - |
+| `/admin/tiers` | `/admin/admin-tiers.html` | Per-season tier list editor (legal Pokemon and point costs) | - |
 
 The team page should include a dropdown to switch between teams quickly while preserving the URL-based-on-selection pattern. Same for the match detail page when navigated to from a list. This gives users both fast switching (the dropdown) and shareable links (the URL).
+
+Several pages were consolidated rather than built standalone (the recurring "fold it in rather than ship a sparse page" call): schedule and single-match views became one `matches.html`; playoffs and cup became one `postseason.html`; the draft operator tool lives inside `draft.html` behind an admin gate; and transactions have no standalone page - trades and free-agency moves are recorded from `/admin/rosters` and surfaced in the draft Activity panel and the team/match views. The admin pages live under `/admin/` and are reached from the nav's Admin dropdown; there is no separate admin landing page, and season selection lives within `/admin/matches`.
 
 The planner lives on its own subdomain (`planner.springfieldbattleleague.com`) as a fully separate static deployment. The hub never touches the planner's code, and the two have independent repos and deploy pipelines. They share only the parent domain and the canonical `pokemon.json`. Note that as separate origins, the two apps can't share cookies or localStorage across the subdomain boundary.
 
@@ -395,15 +396,15 @@ Build:
 
 - Automatic snake-order calculation and turn validation.
 
-### 4.2 Admin operator tool (`/admin/draft`)
+### 4.2 Admin operator tool (within `/draft`, admin-gated)
 
 Layout:
 - **Status bar**: current pick number, whose turn, snake direction indicator, point budget remaining for the current picker
-- **Left panel — teams**: each team as a card showing name, owner, drafted Pokemon (icon + name + cost), remaining points. Current picker's card highlighted.
-- **Right panel — draft pool**: every legal Pokemon for the season, sourced from `season_pokemon_tiers`. Shows icon, name, cost. Grouped by cost or type, with filters. Drafted Pokemon stay visible but are visually dimmed (grayed out, strikethrough, lower opacity — design call).
-- **Action**: clicking a Pokemon in the pool prompts "Draft [Pokemon] to [current team]?" — on confirm, inserts a `team_pokemon` row, increments `current_pick_number`, both panels re-render.
+- **Left panel - teams**: each team as a card showing name, owner, drafted Pokemon (icon + name + cost), remaining points. Current picker's card highlighted.
+- **Right panel - draft pool**: every legal Pokemon for the season, sourced from `season_pokemon_tiers`. Shows icon, name, cost. Grouped by cost or type, with filters. Drafted Pokemon stay visible but are visually dimmed (grayed out, strikethrough, lower opacity - design call).
+- **Action**: clicking a Pokemon in the pool prompts "Draft [Pokemon] to [current team]?" - on confirm, inserts a `team_pokemon` row, increments `current_pick_number`, both panels re-render.
 
-The visual style should match the planner — same sprite/icon rendering, same type badges, same color tokens. Users of the planner should feel like they're using a sibling tool.
+The visual style should match the planner - same sprite/icon rendering, same type badges, same color tokens. Users of the planner should feel like they're using a sibling tool.
 
 ### 4.3 Public draft view (`/draft`)
 
@@ -415,7 +416,7 @@ For viewers to see live updates without manual refresh, Supabase Realtime subscr
 
 The hub is the primary stage for the draft. Players are on Discord audio while watching the public draft page (or the operator's screen-share). Big sprites, smooth pick transitions, broadcast-friendly layout. Plan for the draft page to require real design time, not just functional UI.
 
-Realtime subscriptions on `team_pokemon` are valuable here — they let viewers see picks land without manual refresh. Worth implementing in v1 if the schedule allows; if not, manual refresh is an acceptable compromise.
+Realtime subscriptions on `team_pokemon` are valuable here - they let viewers see picks land without manual refresh. Worth implementing in v1 if the schedule allows; if not, manual refresh is an acceptable compromise.
 
 ---
 
@@ -459,7 +460,7 @@ Idempotent on `replay_url`. The parser developer adapts their existing script to
 
 - Create Supabase project. Configure auth (magic link only) and email templates.
 - Implement full schema as defined in section 2. Seed `seasons`, `players`, `teams`, `team_owners` for Season 10. Leave `team_pokemon` empty (the draft will populate it).
-- Populate `season_pokemon_tiers` for Season 10 (this is the legal Pokemon and their point costs — likely a one-time bulk import from whatever spreadsheet currently holds the tier list).
+- Populate `season_pokemon_tiers` for Season 10 (this is the legal Pokemon and their point costs - likely a one-time bulk import from whatever spreadsheet currently holds the tier list).
 - Set up RLS policies on every table.
 - Create the static frontend repo. Copy the planner's CSS variables and base styles.
 - Stand up a "Hello World" page that reads from Supabase to validate the connection.
@@ -499,11 +500,12 @@ The draft itself is the first league event the hub needs to support. Build the o
 
 ### Phase 6: Final Pieces and Polish
 
-- Playoffs bracket renderer (won't have data yet, but the page exists for testing).
-- Cup bracket (same renderer).
-- Final visual pass across all pages.
-- Rules and Resources (static markdown rendered).
-- Document admin workflows.
+- Postseason brackets - combined Playoffs (top) and Cup (bottom) into a single seed-driven `postseason.html` with a publish gate and admin preview.
+- Postseason admin tooling in `/admin/matches`: seeding table, publish toggle, per-bracket match generation.
+- Shared navigation component (`nav.js`) rolled out across every page; `standings.html` renamed to `index.html`; admin pages moved under `/admin/`; consolidated onto a single Supabase client (`window.sb`) with nav-owned auth.
+- Final visual pass across all pages. *(in progress)*
+- Rules and Resources page (static markdown). *(deferred)*
+- Document admin workflows. *(deferred)*
 
 ---
 
@@ -527,8 +529,8 @@ Things explicitly punted from v1, recorded so they don't get lost.
 
 ### Open questions
 
-- **Domain choice.** Currently no domain. Develop and deploy on `github.io` URL; pick a domain before launch. Likely springfieldbattleleague.com
-- **Materialized views vs live queries.** Start with live queries (regular SQL `VIEW`s, or just queries from the application). Live queries re-run on every read; materialized views save the result and serve cached rows until refreshed. For a league with dozens of viewers and weekly data changes, live queries are cheap enough and avoid staleness. If a specific page becomes measurably slow, that page's query can be materialized later — the application code doesn't change, only the database object does.
+- **Domain choice.** *Resolved* - the hub is live at `springfieldbattleleague.com` and the planner at `planner.springfieldbattleleague.com`. DNS is managed via Squarespace; both deploy from GitHub Pages.
+- **Materialized views vs live queries.** Start with live queries (regular SQL `VIEW`s, or just queries from the application). Live queries re-run on every read; materialized views save the result and serve cached rows until refreshed. For a league with dozens of viewers and weekly data changes, live queries are cheap enough and avoid staleness. If a specific page becomes measurably slow, that page's query can be materialized later - the application code doesn't change, only the database object does.
 
 ### Known edge cases to handle in admin UX
 
