@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Tier Admin</title>
+<title>SBL Hub - Tier Admin</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -172,7 +172,7 @@ function attachIconFallback(img, mon) {
   };
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
-function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '—'; }
+function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '-'; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA LOAD
@@ -235,7 +235,7 @@ function renderPreview() {
   summary.innerHTML = legalCount
     ? '<b>' + legalCount + '</b> legal Pokémon · total pool value <b>' + totalPts + '</b> pts '
       + '<span class="muted">· ' + (totalMon - legalCount) + ' not legal this season</span>'
-    : '<span class="muted">No tiers set for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet — import from pokemon.json or a CSV to populate it.</span>';
+    : '<span class="muted">No tiers set for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet - import from pokemon.json or a CSV to populate it.</span>';
 
   if (!legalCount) {
     pool.innerHTML = '<div class="empty-state">This season has no tier list yet.</div>';
@@ -397,7 +397,7 @@ async function saveTiers(map) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXPORT — reproduce the tier editor's exact CSV (id, name, points|"N/A"),
+// EXPORT - reproduce the tier editor's exact CSV (id, name, points|"N/A"),
 // covering every Pokémon so it round-trips into the editor / update_pokemon.py.
 // ─────────────────────────────────────────────────────────────────────────────
 function exportCsv() {

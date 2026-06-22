@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Rosters &amp; Transactions Admin</title>
+<title>SBL Hub - Rosters &amp; Transactions Admin</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -192,7 +192,7 @@ select:disabled { opacity: .5; }
 
   <div class="section">
     <div class="section-title">Record Transaction</div>
-    <div class="section-sub">Pick the first team and the Pokémon it gives up. For the second side, choose another team (a trade) or <b>Free Agency</b> to add an unowned legal Pokémon. Budget is checked after the drop and flagged if exceeded — you can still approve it.</div>
+    <div class="section-sub">Pick the first team and the Pokémon it gives up. For the second side, choose another team (a trade) or <b>Free Agency</b> to add an unowned legal Pokémon. Budget is checked after the drop and flagged if exceeded - you can still approve it.</div>
 
     <div class="txn-week">
       <label for="eff-week">Effective Week</label>
@@ -250,7 +250,7 @@ select:disabled { opacity: .5; }
   <!-- ── EDIT TEAM ROSTER (manual cleanup) ── -->
   <div class="section">
     <div class="section-title">Edit Team Roster</div>
-    <div class="section-sub">Direct corrections the recorder can't express — fix a stint's week or acquired-via, move a Pokémon in or out of the active roster, add a missed pick, or remove a row entirely. Edits here write straight to the roster.</div>
+    <div class="section-sub">Direct corrections the recorder can't express - fix a stint's week or acquired-via, move a Pokémon in or out of the active roster, add a missed pick, or remove a row entirely. Edits here write straight to the roster.</div>
 
     <div class="controls">
       <div class="group">
@@ -404,7 +404,7 @@ async function loadPokemon() {
     arr.forEach(p => { pokemonById[p.id] = p; });
   } catch (err) {
     console.error('Could not load pokemon.json:', err);
-    showToast('Pokémon data didn\u2019t load — names/sprites may be missing.', 'err');
+    showToast('Pokémon data didn\u2019t load - names/sprites may be missing.', 'err');
   }
 }
 
@@ -466,7 +466,7 @@ async function loadSeasonData(seasonId) {
     .map(id => ({ id, name: monName(id), cost: costOf(id) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Manual-add pool: every legal mon this season (ownership not filtered — cleanup may re-add).
+  // Manual-add pool: every legal mon this season (ownership not filtered - cleanup may re-add).
   legalPool = Object.keys(tierCost)
     .map(id => ({ id, name: monName(id), cost: costOf(id) }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -485,8 +485,8 @@ function onSeasonChange() {
 function renderTool() {
   populateTeamSelects();
   // Reset second-side widgets to a clean state on (re)load.
-  document.getElementById('drop-a').innerHTML = '<option value="">—</option>';
-  document.getElementById('drop-b').innerHTML = '<option value="">—</option>';
+  document.getElementById('drop-a').innerHTML = '<option value="">-</option>';
+  document.getElementById('drop-b').innerHTML = '<option value="">-</option>';
   document.getElementById('fa-input').value = '';
   faSelected = null;
   syncSecondSideVisibility();
@@ -496,7 +496,7 @@ function renderTool() {
 }
 
 function teamOptionsHtml(includeFA, excludeId) {
-  let h = '<option value="">—</option>';
+  let h = '<option value="">-</option>';
   if (includeFA) h += '<option value="FA">Free Agency</option>';
   sortedTeams().forEach(t => {
     if (t.id === excludeId) return;
@@ -511,7 +511,7 @@ function populateTeamSelects() {
 }
 
 function rosterOptionsHtml(teamId) {
-  let h = '<option value="">—</option>';
+  let h = '<option value="">-</option>';
   activeRoster(teamId).forEach(id => {
     h += '<option value="' + escapeHtml(id) + '">' + escapeHtml(monName(id)) + '  (' + costOf(id) + ')</option>';
   });
@@ -768,7 +768,7 @@ function resetSelectionsKeepContext() {
 function populateEditorTeamSelect() {
   const sel = document.getElementById('editor-team');
   const prev = editorTeamId;
-  let h = '<option value="">—</option>';
+  let h = '<option value="">-</option>';
   sortedTeams().forEach(t => { h += '<option value="' + t.id + '">' + escapeHtml(teamLabelText(t.id)) + '</option>'; });
   sel.innerHTML = h;
   if (prev && teamById[prev]) { sel.value = prev; editorTeamId = prev; }
@@ -848,7 +848,7 @@ function editorRowHtml(r) {
     +   '<div class="er-fields">'
     +     '<label>Wk added <input type="number" class="er-aw" min="1" step="1" value="' + (r.acquired_week == null ? '' : r.acquired_week) + '"></label>'
     +     '<label>Via <select class="er-via">' + viaOptionsHtml(r.acquired_via) + '</select></label>'
-    +     '<label class="er-pick-lbl"' + (r.acquired_via === 'draft' ? '' : ' hidden') + '>Pick # <input type="number" class="er-pick" min="1" step="1" placeholder="—" value="' + (r.draft_pick_number == null ? '' : r.draft_pick_number) + '"></label>'
+    +     '<label class="er-pick-lbl"' + (r.acquired_via === 'draft' ? '' : ' hidden') + '>Pick # <input type="number" class="er-pick" min="1" step="1" placeholder="-" value="' + (r.draft_pick_number == null ? '' : r.draft_pick_number) + '"></label>'
     +     '<label>Notes <input type="text" class="er-notes" value="' + escapeHtml(r.notes || '') + '"></label>'
     +   '</div>'
     + '</div>'
@@ -1017,10 +1017,10 @@ function refreshEditorFooter() {
 
   const lines = [];
   if (activeWork.length > cap) {
-    lines.push('Active roster has <b>' + activeWork.length + '</b> Pokémon — over the season maximum of <b>' + cap + '</b>.');
+    lines.push('Active roster has <b>' + activeWork.length + '</b> Pokémon - over the season maximum of <b>' + cap + '</b>.');
   }
   if (limit > 0 && activeCost > limit) {
-    lines.push('Active roster costs <b>' + activeCost + '</b> points — over the <b>' + limit + '</b>-point budget by <b>' + (activeCost - limit) + '</b>.');
+    lines.push('Active roster costs <b>' + activeCost + '</b> points - over the <b>' + limit + '</b>-point budget by <b>' + (activeCost - limit) + '</b>.');
   }
   document.getElementById('editor-warn').innerHTML = lines.length
     ? '<div class="budget-warn">\u26A0 ' + lines.join('<br>\u26A0 ') + '</div>'
@@ -1075,8 +1075,8 @@ function openConfirmChanges() {
     '<h3>Confirm roster changes</h3>'
     + '<div class="swap">' + escapeHtml(teamName(editorTeamId)) + '<div style="margin-top:6px;color:var(--text3)">' + parts.join(' \u00B7 ') + '</div></div>'
     + (deletes.length ? '<p class="warn">' + deletes.length + ' row' + (deletes.length === 1 ? '' : 's') + ' will be permanently deleted. Any already-recorded game stats are stored separately and are not removed.</p>' : '')
-    + (activeCount > cap ? '<p class="warn">\u26A0 Active roster will have ' + activeCount + ' Pokémon — over the season maximum of ' + cap + '.</p>' : '')
-    + (limit > 0 && activeCost > limit ? '<p class="warn">\u26A0 Active roster will cost ' + activeCost + ' points — over the ' + limit + '-point budget by ' + (activeCost - limit) + '.</p>' : '')
+    + (activeCount > cap ? '<p class="warn">\u26A0 Active roster will have ' + activeCount + ' Pokémon - over the season maximum of ' + cap + '.</p>' : '')
+    + (limit > 0 && activeCost > limit ? '<p class="warn">\u26A0 Active roster will cost ' + activeCost + ' points - over the ' + limit + '-point budget by ' + (activeCost - limit) + '.</p>' : '')
     + (conflicts.length ? '<p class="warn">\u26A0 ' + conflicts.map(c => escapeHtml(monName(c.mon)) + ' is on ' + escapeHtml(teamName(c.owner)) + '\u2019s active roster').join('<br>\u26A0 ') + '.<br><span style="color:var(--text2)">If a trade is intended, the recorder above keeps both sides and the log consistent.</span></p>' : '')
     + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>'
     + '<button class="btn btn-accent" id="confirm-changes-go" onclick="applyEditorChanges()">Confirm</button></div>'

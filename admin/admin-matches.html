@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub — Matches &amp; Schedule Admin</title>
+<title>SBL Hub - Matches &amp; Schedule Admin</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -269,7 +269,7 @@ select:focus, input:focus { border-color: var(--accent); }
       <input type="file" id="csv-file" accept=".csv,text/csv" hidden onchange="onCsvChosen(event)">
     </div>
     <div class="fmt-hint">
-      CSV columns: <code>week, player&nbsp;A, player&nbsp;B</code> — one match per row, header row optional.
+      CSV columns: <code>week, player&nbsp;A, player&nbsp;B</code> - one match per row, header row optional.
       Players are matched to their current team. Every match is created as a best-of-3 with no date set.
     </div>
 
@@ -308,7 +308,7 @@ select:focus, input:focus { border-color: var(--accent); }
       <span class="section-title">Postseason Seeding</span>
     </div>
     <div id="seeding-body" hidden>
-      <div class="section-sub">Seed each bracket, then <b>Start Postseason</b> to publish it. Every team should land in exactly one bracket — Playoffs or Cup. The bracket fills in and advances automatically from these seeds and the match results entered below.</div>
+      <div class="section-sub">Seed each bracket, then <b>Start Postseason</b> to publish it. Every team should land in exactly one bracket - Playoffs or Cup. The bracket fills in and advances automatically from these seeds and the match results entered below.</div>
 
       <div class="controls">
         <div class="group">
@@ -401,7 +401,7 @@ let collapsedScheduleWeeks = new Set(); // week numbers collapsed within Schedul
 
 // ── postseason seeding state ──
 let seedingCollapsed = true;        // section starts collapsed
-let seedBracket = 'playoff';        // 'playoff' | 'cup' — which bracket is being edited
+let seedBracket = 'playoff';        // 'playoff' | 'cup' - which bracket is being edited
 let seedSlots = [];                 // working copy: array of team_id|null, index 0 = seed 1
 let seedSaved = [];                 // committed snapshot for the active bracket (dirty diff baseline)
 
@@ -419,7 +419,7 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 
 // ── HELPERS ──
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
-function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '—'; }
+function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '-'; }
 function fmtDateTime(s) {
   if (!s) return 'TBD';
   const d = new Date(s);
@@ -450,7 +450,7 @@ function teamLabelText(id) {
 function matchHasResults(m) {
   return (gamesCountByMatch[m.id] || 0) > 0 || (m.team_a_score || 0) > 0 || (m.team_b_score || 0) > 0 || !!m.winner_team_id;
 }
-// Regular-season subset — Scheduled Matches, coverage, and the CSV importer only concern themselves
+// Regular-season subset - Scheduled Matches, coverage, and the CSV importer only concern themselves
 // with regular matches. (`matches` also holds postseason matches, which are managed via the bracket.)
 function regularMatches() { return matches.filter(m => m.stage === 'regular'); }
 function sortedTeams() {
@@ -511,7 +511,7 @@ async function loadPokemon() {
     arr.forEach(p => { pokemonById[p.id] = p; });
   } catch (err) {
     console.error('Could not load pokemon.json:', err);
-    showToast('Pokémon data didn\u2019t load — names/sprites may be missing.', 'err');
+    showToast('Pokémon data didn\u2019t load - names/sprites may be missing.', 'err');
   }
 }
 
@@ -656,7 +656,7 @@ function renderCoverage() {
 function toggleCoverage() { coverageCollapsed = !coverageCollapsed; renderCoverage(); }
 
 function populateTeamSelects() {
-  const opts = '<option value="">—</option>' + sortedTeams()
+  const opts = '<option value="">-</option>' + sortedTeams()
     .map(t => '<option value="' + t.id + '">' + escapeHtml(teamLabelText(t.id)) + '</option>').join('');
   document.getElementById('add-team-a').innerHTML = opts;
   document.getElementById('add-team-b').innerHTML = opts;
@@ -670,7 +670,7 @@ function renderMatchList() {
   if (!reg.length) {
     const s = document.createElement('div');
     s.className = 'summary';
-    s.innerHTML = '<span style="color:var(--text3)">No schedule for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet — import a CSV or add matches above.</span>';
+    s.innerHTML = '<span style="color:var(--text3)">No schedule for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet - import a CSV or add matches above.</span>';
     el.appendChild(s);
     return;
   }
@@ -820,7 +820,7 @@ function renderSeeding() {
     const slot = document.createElement('div');
     slot.className = 'seed-slot' + (teamId ? '' : ' empty');
     const avail = availableForSlot(i);
-    let opts = '<option value="">— unassigned —</option>';
+    let opts = '<option value="">- unassigned -</option>';
     avail.forEach(t => { opts += '<option value="' + t.id + '"' + (t.id === teamId ? ' selected' : '') + '>' + escapeHtml(teamLabelText(t.id)) + '</option>'; });
     // If the current pick is somehow not in the available set (shouldn't happen), keep it visible.
     if (teamId && !avail.some(t => t.id === teamId)) {
@@ -1268,7 +1268,7 @@ function toggleMatchCard(matchId) {
 function renderMatchData() {
   const el = document.getElementById('match-data-list');
   if (!el) return;
-  if (!matches.length) { el.innerHTML = '<div class="empty-state">No matches yet — add a schedule above.</div>'; return; }
+  if (!matches.length) { el.innerHTML = '<div class="empty-state">No matches yet - add a schedule above.</div>'; return; }
   const stageOrder = { regular: 0, playoffs: 1, cup: 2 };
   const ordered = [...matches].sort((a, b) =>
     (stageOrder[a.stage] ?? 0) - (stageOrder[b.stage] ?? 0) || a.week - b.week
@@ -1467,7 +1467,7 @@ function openBroughtPicker(m, model, side) {
   const grid = avail.map(id =>
     '<div class="rp-item" data-id="' + escapeHtml(id) + '"><img src="' + spriteUrl(id) + '" alt=""><div class="nm">' + escapeHtml(monName(id)) + '</div></div>'
   ).join('');
-  openModal('<h3>Add brought Pokémon</h3><p>' + escapeHtml(teamLabelText(teamId)) + ' — week ' + m.week + ' roster.</p><div class="rp-grid">' + grid + '</div><div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>');
+  openModal('<h3>Add brought Pokémon</h3><p>' + escapeHtml(teamLabelText(teamId)) + ' - week ' + m.week + ' roster.</p><div class="rp-grid">' + grid + '</div><div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>');
   document.querySelectorAll('#modal .rp-item').forEach(it => {
     const id = it.getAttribute('data-id');
     attachSpriteFallback(it.querySelector('img'), id);
@@ -1522,7 +1522,7 @@ function renderGameTeam(m, model, g, side) {
   g.picks[side].forEach(slot => {
     const row = document.createElement('div'); row.className = 'pick-row';
     const sel = document.createElement('select');
-    let opts = '<option value="">—</option>';
+    let opts = '<option value="">-</option>';
     roster.forEach(id => {
       const dis = pickedThisGame.has(id) && id !== slot.pokemon_id;
       opts += '<option value="' + escapeHtml(id) + '"' + (dis ? ' disabled' : '') + (id === slot.pokemon_id ? ' selected' : '') + '>' + escapeHtml(monName(id)) + '</option>';
@@ -1548,7 +1548,7 @@ function renderGameTeam(m, model, g, side) {
 function markDirty(matchId) { const model = matchModels[matchId]; if (model) model.dirty = true; renderMatchData(); }
 
 // Flip dirty state without a full re-render (used by text/number inputs so we don't
-// rebuild — and destroy — the controls the admin is actively typing into).
+// rebuild - and destroy - the controls the admin is actively typing into).
 function setDirtyLight(matchId) {
   const model = matchModels[matchId]; if (!model) return;
   model.dirty = true;
@@ -1590,7 +1590,7 @@ function confirmSaveMatch(matchId) {
   const sc = scoreFromModel(model);
   const incomplete = model.games.filter(g => !g.winner).length;
   openModal('<h3>Save match data?</h3>'
-    + '<p>' + escapeHtml(teamLabelText(m.team_a_id)) + ' vs ' + escapeHtml(teamLabelText(m.team_b_id)) + ' — '
+    + '<p>' + escapeHtml(teamLabelText(m.team_a_id)) + ' vs ' + escapeHtml(teamLabelText(m.team_b_id)) + ' - '
     + model.games.length + ' game' + (model.games.length === 1 ? '' : 's') + ', score <b>' + sc.a + '\u2013' + sc.b + '</b>.</p>'
     + (incomplete ? '<p class="warn">' + incomplete + ' game(s) have no winner yet and won\u2019t count toward the score.</p>' : '')
     + '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-accent" id="confirm-save-btn">Save</button></div>');
@@ -1821,7 +1821,7 @@ async function runImport(resolved, replacing) {
     season_id: selectedSeasonId, stage: 'regular',
     week: r.week, team_a_id: r.team_a_id, team_b_id: r.team_b_id,
     series_length: 3, team_a_score: 0, team_b_score: 0, match_date: null,
-    // winner_team_id is a generated column — never written.
+    // winner_team_id is a generated column - never written.
   }));
   try {
     if (replacing) {
