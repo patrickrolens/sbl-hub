@@ -414,6 +414,18 @@ async function fetchAllIn(table, columns, column, values) {
   return out;
 }
 
+// Paginate an entire (unfiltered) table past the 1000-row response cap.
+async function fetchAll(table, columns) {
+  const PAGE = 1000, out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (data && data.length) out.push(...data);
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
 async function loadData() {
   const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
     const ct = res.headers.get('content-type') || '';
@@ -434,12 +446,13 @@ async function loadData() {
   if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
   season = seasonRow;
 
-  const [teamsRes, ownersRes, matchRes] = await Promise.all([
+  const [teamsRes, matchRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,initial_seed').eq('season_id', season.id),
-    sb.from('team_owners').select('team_id, ended_week, players(display_name)'),
     sb.from('matches').select('id, stage, week, team_a_id, team_b_id, team_a_score, team_b_score, winner_team_id').eq('season_id', season.id),
   ]);
-  for (const r of [teamsRes, ownersRes, matchRes]) if (r.error) throw r.error;
+  for (const r of [teamsRes, matchRes]) if (r.error) throw r.error;
+  // Unfiltered, all-seasons table → paginate past the 1000-row cap.
+  const ownersAll = await fetchAll('team_owners', 'team_id, ended_week, players(display_name)');
 
   allTeams = teamsRes.data || [];
   teamById = {}; allTeams.forEach(t => { teamById[t.id] = t; });
@@ -447,17 +460,17 @@ async function loadData() {
   // Stable team→color map (consistent across every chart). Keyed by seed order so a
   // team always gets the same color regardless of filtering or render order.
   buildTeamColors();
-  allOwners = (ownersRes.data || []).filter(o => teamIds.includes(o.team_id));
+  allOwners = ownersAll.filter(o => teamIds.includes(o.team_id));
   coachByTeam = {};
   allOwners.filter(o => o.ended_week == null).forEach(o => { if (o.players) coachByTeam[o.team_id] = o.players.display_name; });
   matches = matchRes.data || [];
 
-  // Rosters for every team (each row is an ownership instance).
-  const { data: tp, error: tpErr } = teamIds.length
-    ? await sb.from('team_pokemon').select('team_id, pokemon_id, acquired_week, released_week, acquired_via').in('team_id', teamIds)
-    : { data: [], error: null };
-  if (tpErr) throw tpErr;
-  teamPokemon = tp || [];
+  // Rosters for every team (each row is an ownership instance). Paginated: a full
+  // season's team_pokemon can approach the cap once trades/FA accumulate.
+  const teamPokemonRows = teamIds.length
+    ? await fetchAllIn('team_pokemon', 'team_id, pokemon_id, acquired_week, released_week, acquired_via', 'team_id', teamIds)
+    : [];
+  teamPokemon = teamPokemonRows;
 
   // Games + stats for the whole season (empty until results are entered).
   gamesByMatch = {}; gameToMatch = {}; statRows = []; broughtRows = [];

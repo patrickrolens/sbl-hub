@@ -510,6 +510,33 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
+// Paginate past Supabase's 1000-row response cap. fetchAllIn scopes by an IN() list;
+// fetchAll pulls an entire (unfiltered) table.
+async function fetchAllIn(table, columns, column, values) {
+  const IN_CHUNK = 300, PAGE = 1000, out = [];
+  for (let i = 0; i < values.length; i += IN_CHUNK) {
+    const slice = values.slice(i, i + IN_CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb.from(table).select(columns)
+        .in(column, slice).range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (data && data.length) out.push(...data);
+      if (!data || data.length < PAGE) break;
+    }
+  }
+  return out;
+}
+async function fetchAll(table, columns) {
+  const PAGE = 1000, out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (data && data.length) out.push(...data);
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // WHICH TEAM? - the hash can be the team's canonical slug or a coach name
 // (current or past, slugified). On a match via a coach alias we normalize the URL
@@ -591,13 +618,14 @@ async function loadGlobalData() {
   if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
   season = seasonRow;
 
-  const [teamsRes, ownersRes, tiersRes, regMatchRes] = await Promise.all([
+  const [teamsRes, tiersRes, regMatchRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
-    sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', season.id),
     sb.from('matches').select('team_a_id, team_b_id, winner_team_id').eq('season_id', season.id).eq('stage', 'regular'),
   ]);
-  for (const r of [teamsRes, ownersRes, tiersRes, regMatchRes]) if (r.error) throw r.error;
+  for (const r of [teamsRes, tiersRes, regMatchRes]) if (r.error) throw r.error;
+  // Unfiltered all-seasons table → paginate past the 1000-row cap.
+  const ownersAll = await fetchAll('team_owners', 'team_id, started_week, ended_week, players(display_name)');
 
   allTeams = teamsRes.data || [];
   const teamIds = allTeams.map(t => t.id);
@@ -606,7 +634,7 @@ async function loadGlobalData() {
   (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; });
 
   // Keep every owner row (for per-team history) and derive each team's current coach.
-  allOwners = (ownersRes.data || []).filter(o => teamIds.includes(o.team_id));
+  allOwners = ownersAll.filter(o => teamIds.includes(o.team_id));
   coachByTeam = {};
   allOwners.filter(o => o.ended_week == null).forEach(o => {
     if (o.players) coachByTeam[o.team_id] = o.players.display_name;
@@ -659,13 +687,13 @@ async function loadTeamData() {
   gamesByMatch = {}; statRows = []; broughtByMatch = {};
   const matchIds = matches.map(m => m.id);
   if (matchIds.length) {
-    const [gamesRes, statsRes, mpRes] = await Promise.all([
-      sb.from('games').select('id, match_id, game_number, winner_team_id').in('match_id', matchIds),
+    const [gamesRows, statsRes, mpRes] = await Promise.all([
+      fetchAllIn('games', 'id, match_id, game_number, winner_team_id', 'match_id', matchIds),
       sb.from('game_pokemon_stats').select('game_id, pokemon_id, kills, deaths').eq('team_id', team.id),
       sb.from('match_pokemon').select('match_id, pokemon_id').eq('team_id', team.id).in('match_id', matchIds),
     ]);
-    for (const r of [gamesRes, statsRes, mpRes]) if (r.error) throw r.error;
-    (gamesRes.data || []).forEach(g => { (gamesByMatch[g.match_id] = gamesByMatch[g.match_id] || []).push(g); });
+    for (const r of [statsRes, mpRes]) if (r.error) throw r.error;
+    (gamesRows || []).forEach(g => { (gamesByMatch[g.match_id] = gamesByMatch[g.match_id] || []).push(g); });
     statRows = statsRes.data || [];
     (mpRes.data || []).forEach(r => { (broughtByMatch[r.match_id] = broughtByMatch[r.match_id] || new Set()).add(r.pokemon_id); });
   }

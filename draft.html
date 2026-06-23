@@ -574,6 +574,33 @@ const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
 const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Paginate past Supabase's 1000-row response cap. fetchAllIn scopes by an IN() list;
+// fetchAll pulls an entire (unfiltered) table.
+async function fetchAllIn(table, columns, column, values) {
+  const IN_CHUNK = 300, PAGE = 1000, out = [];
+  for (let i = 0; i < values.length; i += IN_CHUNK) {
+    const slice = values.slice(i, i + IN_CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb.from(table).select(columns)
+        .in(column, slice).range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (data && data.length) out.push(...data);
+      if (!data || data.length < PAGE) break;
+    }
+  }
+  return out;
+}
+async function fetchAll(table, columns) {
+  const PAGE = 1000, out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (data && data.length) out.push(...data);
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
 // Where pokemon.json lives. The icons/ and sprites/ folders live alongside it in
 // the same (planner) repo, so ASSET_BASE is derived by stripping the filename -
 // one URL drives the data and the art. To move everything into the hub repo later,
@@ -777,16 +804,17 @@ async function loadData() {
   if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
   season = seasonRow;
 
-  const [teamsRes, ownersRes, tiersRes, draftRes, tradeRes, faRes, divRes] = await Promise.all([
+  const [teamsRes, tiersRes, draftRes, tradeRes, faRes, divRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed,division_id').eq('season_id', season.id),
-    sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', season.id),
     sb.from('drafts').select('id, division_id, draft_order, current_pick_number, status').eq('season_id', season.id),
     sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at, notes').eq('season_id', season.id),
     sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at, notes').eq('season_id', season.id),
     sb.from('divisions').select('id, name, abbr, color, sort_order').eq('season_id', season.id).order('sort_order', { ascending: true }),
   ]);
-  for (const r of [teamsRes, ownersRes, tiersRes, draftRes, tradeRes, faRes, divRes]) if (r.error) throw r.error;
+  for (const r of [teamsRes, tiersRes, draftRes, tradeRes, faRes, divRes]) if (r.error) throw r.error;
+  // Unfiltered all-seasons table → paginate past the 1000-row cap.
+  const ownersAll = await fetchAll('team_owners', 'team_id, started_week, ended_week, players(display_name)');
 
   teams = teamsRes.data || [];
   const teamIds = teams.map(t => t.id);
@@ -797,7 +825,7 @@ async function loadData() {
 
   // Owner stints (for coach-as-of-week) + current coach (existing usage).
   coachByTeam = {}; ownersByTeam = {};
-  (ownersRes.data || []).forEach(o => {
+  ownersAll.forEach(o => {
     if (!teamIds.includes(o.team_id) || !o.players) return;
     (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
     if (o.ended_week == null) coachByTeam[o.team_id] = o.players.display_name;
@@ -814,11 +842,7 @@ async function loadData() {
   // Drafted picks for this season's teams.
   picksByTeam = {}; draftPicks = []; rosterByTeam = {}; takenByDivision = {};
   if (teamIds.length) {
-    const { data: picks, error: picksErr } = await sb
-      .from('team_pokemon')
-      .select('team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week')
-      .in('team_id', teamIds);
-    if (picksErr) throw picksErr;
+    const picks = await fetchAllIn('team_pokemon', 'team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week', 'team_id', teamIds);
     // Draft LOG (historical): every draft pick ever made, even if later traded away -
     // the log is a permanent record of who originally drafted what.
     (picks || [])
@@ -1710,18 +1734,17 @@ async function refreshDraftState() {
   try {
     const teamIds = teams.map(t => t.id);
 
-    const [draftRes, picksRes, tradeRes, faRes] = await Promise.all([
+    const [draftRes, tradeRes, faRes] = await Promise.all([
       sb.from('drafts').select('id, division_id, draft_order, current_pick_number, status').eq('season_id', season.id),
-      teamIds.length
-        ? sb.from('team_pokemon').select('team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week').in('team_id', teamIds)
-        : Promise.resolve({ data: [], error: null }),
       sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at, notes').eq('season_id', season.id),
       sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at, notes').eq('season_id', season.id),
     ]);
     if (draftRes.error) throw draftRes.error;
-    if (picksRes.error) throw picksRes.error;
     if (tradeRes.error) throw tradeRes.error;
     if (faRes.error) throw faRes.error;
+    const picksRows = teamIds.length
+      ? await fetchAllIn('team_pokemon', 'team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week', 'team_id', teamIds)
+      : [];
 
     // Re-index draft rows by scope.
     draftByDivision = {};
@@ -1729,13 +1752,13 @@ async function refreshDraftState() {
 
     // Rebuild pick-derived state from scratch.
     picksByTeam = {}; draftPicks = []; rosterByTeam = {}; takenByDivision = {};
-    (picksRes.data || [])
+    picksRows
       .filter(p => p.acquired_via === 'draft')
       .sort((a, b) => (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
       .forEach(p => {
         draftPicks.push({ pick_number: p.draft_pick_number, team_id: p.team_id, pokemon_id: p.pokemon_id });
       });
-    (picksRes.data || [])
+    picksRows
       .filter(p => p.released_week == null)
       .sort((a, b) => (a.acquired_week || 0) - (b.acquired_week || 0) || (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
       .forEach(p => {
