@@ -383,6 +383,18 @@ async function fetchAllIn(table, columns, column, values) {
   return out;
 }
 
+// Paginate an entire (unfiltered) table past the 1000-row response cap.
+async function fetchAll(table, columns) {
+  const PAGE = 1000, out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (data && data.length) out.push(...data);
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
 // ── STATE ──
 let isAdmin          = false;
 let seasons          = [];          // all seasons
@@ -546,8 +558,7 @@ async function loadSeasonData(seasonId) {
   const teamIds = new Set(teams.map(t => t.id));
   const teamIdList = teams.map(t => t.id);
 
-  const [ownersRes, matchRes, rosterRows] = await Promise.all([
-    sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
+  const [matchRes, rosterRows] = await Promise.all([
     sb.from('matches')
       .select('id, week, stage, postseason_round, bracket_position, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id')
       .eq('season_id', seasonId).in('stage', ['regular', 'playoffs', 'cup']),
@@ -555,10 +566,12 @@ async function loadSeasonData(seasonId) {
       ? fetchAllIn('team_pokemon', 'team_id, pokemon_id, acquired_week, released_week', 'team_id', teamIdList)
       : Promise.resolve([]),
   ]);
-  for (const r of [ownersRes, matchRes]) if (r.error) throw r.error;
+  if (matchRes.error) throw matchRes.error;
+  // team_owners is unfiltered (all seasons) → paginate past the 1000-row cap.
+  const ownersAll = await fetchAll('team_owners', 'team_id, started_week, ended_week, players(display_name)');
 
   // Active owners give us the player-name -> team key and the display coach.
-  (ownersRes.data || []).filter(o => teamIds.has(o.team_id) && o.ended_week == null).forEach(o => {
+  ownersAll.filter(o => teamIds.has(o.team_id) && o.ended_week == null).forEach(o => {
     const nm = o.players && o.players.display_name;
     if (!nm) return;
     coachByTeam[o.team_id] = nm;
@@ -1231,8 +1244,7 @@ async function loadMatchChildren(matchId) {
     const gameIds = (games || []).map(g => g.id);
     let stats = [];
     if (gameIds.length) {
-      const { data, error } = await sb.from('game_pokemon_stats').select('game_id, team_id, pokemon_id, kills, deaths').in('game_id', gameIds);
-      if (error) throw error; stats = data || [];
+      stats = await fetchAllIn('game_pokemon_stats', 'game_id, team_id, pokemon_id, kills, deaths', 'game_id', gameIds);
     }
     const { data: mp, error: mpErr } = await sb.from('match_pokemon').select('team_id, pokemon_id').eq('match_id', matchId);
     if (mpErr) throw mpErr;

@@ -348,6 +348,33 @@ let addSelected = null;             // chosen pokemon_id to add
 
 // ── HELPERS ──
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// Paginate past Supabase's 1000-row response cap. fetchAllIn scopes by an IN() list;
+// fetchAll pulls an entire (unfiltered) table.
+async function fetchAllIn(table, columns, column, values) {
+  const IN_CHUNK = 300, PAGE = 1000, out = [];
+  for (let i = 0; i < values.length; i += IN_CHUNK) {
+    const slice = values.slice(i, i + IN_CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb.from(table).select(columns)
+        .in(column, slice).range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (data && data.length) out.push(...data);
+      if (!data || data.length < PAGE) break;
+    }
+  }
+  return out;
+}
+async function fetchAll(table, columns) {
+  const PAGE = 1000, out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (data && data.length) out.push(...data);
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
 function monName(id) { const p = pokemonById[id]; return p ? p.name : id; }
 function localId(id) {
   const m = String(id).match(/^(\d+)(.*)$/);
@@ -426,33 +453,31 @@ async function loadSeasonData(seasonId) {
   faSelected = null;
   if (!seasonId) { renderTool(); return; }
 
-  const [teamsRes, ownersRes, tiersRes] = await Promise.all([
+  const [teamsRes, tiersRes] = await Promise.all([
     sb.from('teams').select('id, name, slug, initial_seed').eq('season_id', seasonId),
-    sb.from('team_owners').select('team_id, ended_week, players(display_name)'),
     sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', seasonId),
   ]);
-  for (const r of [teamsRes, ownersRes, tiersRes]) if (r.error) throw r.error;
+  for (const r of [teamsRes, tiersRes]) if (r.error) throw r.error;
+  // Unfiltered all-seasons table → paginate past the 1000-row cap.
+  const ownersAll = await fetchAll('team_owners', 'team_id, ended_week, players(display_name)');
 
   teams = teamsRes.data || [];
   teams.forEach(t => { teamById[t.id] = t; });
   const teamIds = new Set(teams.map(t => t.id));
 
-  (ownersRes.data || []).filter(o => teamIds.has(o.team_id) && o.ended_week == null).forEach(o => {
+  ownersAll.filter(o => teamIds.has(o.team_id) && o.ended_week == null).forEach(o => {
     const nm = o.players && o.players.display_name;
     if (nm) coachByTeam[o.team_id] = nm;
   });
 
   (tiersRes.data || []).forEach(r => { tierCost[r.pokemon_id] = r.point_cost; });
 
-  // Active rosters for every team in the season (one query, filtered client-side by season teams).
+  // Active rosters for every team in the season (paginated against the row cap;
+  // released filter applied client-side since fetchAllIn takes only an IN() scope).
   let rosterRows = [];
   if (teamIds.size) {
-    const { data, error } = await sb.from('team_pokemon')
-      .select('team_id, pokemon_id, released_week')
-      .in('team_id', [...teamIds])
-      .is('released_week', null);
-    if (error) throw error;
-    rosterRows = data || [];
+    const all = await fetchAllIn('team_pokemon', 'team_id, pokemon_id, released_week', 'team_id', [...teamIds]);
+    rosterRows = all.filter(r => r.released_week == null);
   }
   const owned = new Set();
   rosterRows.forEach(r => {
