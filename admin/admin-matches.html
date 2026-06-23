@@ -535,19 +535,27 @@ async function loadSeasonData(seasonId) {
   collapsedScheduleWeeks = new Set(); collapsedDataGroups = new Set(); autoCollapseInit = false;
   if (!seasonId) { renderTool(); return; }
 
-  const [teamsRes, ownersRes, matchRes, rosterRes] = await Promise.all([
-    sb.from('teams').select('id, name, slug, initial_seed, playoff_seed, cup_seed').eq('season_id', seasonId),
+  // Teams first, so the roster fetch can be scoped to just this season's teams.
+  // (team_pokemon spans every season; an unfiltered select silently truncates at
+  // Supabase's 1000-row cap once the backfill grows, dropping arbitrary roster rows.)
+  const teamsRes = await sb.from('teams')
+    .select('id, name, slug, initial_seed, playoff_seed, cup_seed').eq('season_id', seasonId);
+  if (teamsRes.error) throw teamsRes.error;
+  teams = teamsRes.data || [];
+  teams.forEach(t => { teamById[t.id] = t; });
+  const teamIds = new Set(teams.map(t => t.id));
+  const teamIdList = teams.map(t => t.id);
+
+  const [ownersRes, matchRes, rosterRows] = await Promise.all([
     sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('matches')
       .select('id, week, stage, postseason_round, bracket_position, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id')
       .eq('season_id', seasonId).in('stage', ['regular', 'playoffs', 'cup']),
-    sb.from('team_pokemon').select('team_id, pokemon_id, acquired_week, released_week'),
+    teamIdList.length
+      ? fetchAllIn('team_pokemon', 'team_id, pokemon_id, acquired_week, released_week', 'team_id', teamIdList)
+      : Promise.resolve([]),
   ]);
-  for (const r of [teamsRes, ownersRes, matchRes, rosterRes]) if (r.error) throw r.error;
-
-  teams = teamsRes.data || [];
-  teams.forEach(t => { teamById[t.id] = t; });
-  const teamIds = new Set(teams.map(t => t.id));
+  for (const r of [ownersRes, matchRes]) if (r.error) throw r.error;
 
   // Active owners give us the player-name -> team key and the display coach.
   (ownersRes.data || []).filter(o => teamIds.has(o.team_id) && o.ended_week == null).forEach(o => {
@@ -559,7 +567,7 @@ async function loadSeasonData(seasonId) {
     nameToTeam[key] = o.team_id;
   });
 
-  (rosterRes.data || []).filter(r => teamIds.has(r.team_id)).forEach(r => {
+  (rosterRows || []).filter(r => teamIds.has(r.team_id)).forEach(r => {
     (rosterByTeam[r.team_id] = rosterByTeam[r.team_id] || []).push(r);
   });
 
