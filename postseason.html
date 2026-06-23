@@ -225,6 +225,33 @@ let isAdmin = false;               // logged-in admin (for previewing before pub
 // HELPERS (mirror the rest of the hub)
 // ─────────────────────────────────────────────────────────────────────────────
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// Paginate past Supabase's 1000-row response cap. fetchAllIn scopes by an IN() list;
+// fetchAll pulls an entire (unfiltered) table.
+async function fetchAllIn(table, columns, column, values) {
+  const IN_CHUNK = 300, PAGE = 1000, out = [];
+  for (let i = 0; i < values.length; i += IN_CHUNK) {
+    const slice = values.slice(i, i + IN_CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb.from(table).select(columns)
+        .in(column, slice).range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (data && data.length) out.push(...data);
+      if (!data || data.length < PAGE) break;
+    }
+  }
+  return out;
+}
+async function fetchAll(table, columns) {
+  const PAGE = 1000, out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (data && data.length) out.push(...data);
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
 function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
 // Coach active for a team during a given week - falls back to current owner, then team name.
 function coachAtWeek(teamId, week) {
@@ -533,8 +560,7 @@ async function loadMatchDetail(id) {
     const gameIds = (games || []).map(g => g.id);
     let stats = [];
     if (gameIds.length) {
-      const { data, error } = await sb.from('game_pokemon_stats').select('game_id, team_id, pokemon_id, kills, deaths').in('game_id', gameIds);
-      if (error) throw error; stats = data || [];
+      stats = await fetchAllIn('game_pokemon_stats', 'game_id, team_id, pokemon_id, kills, deaths', 'game_id', gameIds);
     }
     matchDetailCache[id] = { games: games || [], stats };
   } catch (err) {
@@ -779,18 +805,19 @@ async function init() {
 
     const pjPromise = fetch(POKEMON_JSON_URL).then(r => r.ok ? r.json() : Promise.reject(new Error('pokemon.json ' + r.status)));
 
-    const [teamsRes, ownersRes, matchRes] = await Promise.all([
+    const [teamsRes, matchRes] = await Promise.all([
       sb.from('teams').select('id, name, slug, logo_url, playoff_seed, cup_seed').eq('season_id', season.id),
-      sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
       sb.from('matches').select('id, stage, week, postseason_round, series_length, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id')
         .eq('season_id', season.id).in('stage', ['playoffs', 'cup']),
     ]);
-    for (const r of [teamsRes, ownersRes, matchRes]) if (r.error) throw r.error;
+    for (const r of [teamsRes, matchRes]) if (r.error) throw r.error;
+    // Unfiltered all-seasons table → paginate past the 1000-row cap.
+    const ownersAll = await fetchAll('team_owners', 'team_id, started_week, ended_week, players(display_name)');
 
     teams = teamsRes.data || [];
     teams.forEach(t => { teamById[t.id] = t; });
     const teamIds = new Set(teams.map(t => t.id));
-    (ownersRes.data || []).filter(o => teamIds.has(o.team_id) && o.players).forEach(o => {
+    ownersAll.filter(o => teamIds.has(o.team_id) && o.players).forEach(o => {
       (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
     });
     Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
@@ -800,12 +827,12 @@ async function init() {
     // Rosters for bracket teams + brought-sets for postseason matches (small, scoped data → instant expand).
     const seededIds = teams.filter(t => t.playoff_seed != null || t.cup_seed != null).map(t => t.id);
     const matchIds = matches.map(m => m.id);
-    const [tpRes, mpRes] = await Promise.all([
-      seededIds.length ? sb.from('team_pokemon').select('team_id, pokemon_id, acquired_week, released_week, draft_pick_number').in('team_id', seededIds) : Promise.resolve({ data: [] }),
+    const [tpRows, mpRes] = await Promise.all([
+      seededIds.length ? fetchAllIn('team_pokemon', 'team_id, pokemon_id, acquired_week, released_week, draft_pick_number', 'team_id', seededIds) : Promise.resolve([]),
       matchIds.length ? sb.from('match_pokemon').select('match_id, team_id, pokemon_id').in('match_id', matchIds) : Promise.resolve({ data: [] }),
     ]);
-    for (const r of [tpRes, mpRes]) if (r.error) throw r.error;
-    (tpRes.data || []).forEach(r => { (rosterByTeam[r.team_id] = rosterByTeam[r.team_id] || []).push(r); });
+    if (mpRes.error) throw mpRes.error;
+    (tpRows || []).forEach(r => { (rosterByTeam[r.team_id] = rosterByTeam[r.team_id] || []).push(r); });
     (mpRes.data || []).forEach(r => { const k = r.match_id + '|' + r.team_id; (broughtMap[k] = broughtMap[k] || new Set()).add(r.pokemon_id); });
 
     try {
