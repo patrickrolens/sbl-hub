@@ -254,6 +254,14 @@ function fmtDateTime(s) {
   const p = n => String(n).padStart(2, '0');
   return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
+// Date-only (no time). A bare YYYY-MM-DD is parsed as local to avoid the UTC shift
+// that would otherwise display the previous day.
+function fmtDateOnly(s) {
+  if (!s) return 'TBD';
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T00:00:00') : new Date(s);
+  if (isNaN(d.getTime())) return 'TBD';
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
 // Mobile uses coach-only labels in the feed; track the breakpoint and re-render on cross.
 const MOBILE_MQ = window.matchMedia('(max-width: 680px)');
 let IS_MOBILE = MOBILE_MQ.matches;
@@ -343,7 +351,7 @@ async function loadData() {
   const [teamsRes, ownersRes, draftRes, matchRes, faRes, tradeRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
     sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
-    sb.from('drafts').select('status, started_at, completed_at').eq('season_id', season.id).maybeSingle(),
+    sb.from('drafts').select('status, started_at, completed_at, draft_date').eq('season_id', season.id).maybeSingle(),
     sb.from('matches').select('id, stage, week, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id').eq('season_id', season.id),
     sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at').eq('season_id', season.id),
     sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at').eq('season_id', season.id),
@@ -604,8 +612,8 @@ function renderDraftPanel() {
 
   if (status === 'pending') {
     title.textContent = 'Draft';
-    // No draft-date field yet - show TBD; wire the real date here once it exists.
-    el.innerHTML = '<div class="draft-status">Draft Day</div><div class="draft-sub">TBD</div>';
+    const when = fmtDateOnly(draftRow && draftRow.draft_date);
+    el.innerHTML = '<div class="draft-status">Draft Day</div><div class="draft-sub">' + when + '</div>';
     return;
   }
   if (status === 'in_progress') {
