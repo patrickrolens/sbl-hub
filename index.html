@@ -105,7 +105,7 @@ a { color: inherit; }
   <div class="masthead">
     <div>
       <h1>Springfield Battle League</h1>
-      <div class="sub">A 20-player Pokémon VGC draft league. Pick a season to explore.</div>
+      <div class="sub">This is the landing page for the SBL Hub. Select a season below.</div>
     </div>
     <div class="meta" id="meta"></div>
   </div>
@@ -208,7 +208,9 @@ async function load() {
     if (matchRes.error) throw matchRes.error;
     if (draftRes.error) throw draftRes.error;
 
-    const teamName = {}; (teamsRes.data || []).forEach(t => { teamName[t.id] = t.name; });
+    const teamName = {}; const teamCountBy = {};
+    seasonIds.forEach(id => { teamCountBy[id] = 0; });
+    (teamsRes.data || []).forEach(t => { teamName[t.id] = t.name; teamCountBy[t.season_id] = (teamCountBy[t.season_id] || 0) + 1; });
 
     // Bucket matches and drafts by season.
     const playoffsBy = {}, regBy = {}, draftBy = {};
@@ -242,7 +244,7 @@ async function load() {
             +     '<h2>' + esc(current.name) + '</h2>'
             +     '<div class="fmt">' + esc(current.vgc_format || "") + '</div>'
             +     '<div class="facts">'
-            +       (current.team_size ? '<div class="fact"><div class="k">Teams</div><div class="v">' + esc(current.team_size) + '</div></div>' : '')
+            +       (teamCountBy[current.id] ? '<div class="fact"><div class="k">Teams</div><div class="v">' + esc(teamCountBy[current.id]) + '</div></div>' : '')
             +       '<div class="fact"><div class="k">Started</div><div class="v">' + esc(fmtDate(current.started_at)) + '</div></div>'
             +     '</div>'
             +     '<div class="cta-row">'
@@ -275,7 +277,7 @@ async function load() {
               +   '<div class="body">'
               +     '<div class="nm">' + esc(s.name) + '</div>'
               +     '<div class="rows">'
-              +       row("Teams", s.team_size || "-", "Started", fmtDate(s.started_at))
+              +       row("Teams", teamCountBy[s.id] || "-", "Started", fmtDate(s.started_at))
               +       row("Format", s.vgc_format || "-", "Ended", fmtDate(s.ended_at))
               +     '</div>'
               +     '<div class="results">'
