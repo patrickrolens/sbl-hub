@@ -426,6 +426,29 @@ async function fetchAll(table, columns) {
   return out;
 }
 
+// Carry the active ?season=<slug> onto internal links so navigating from a past
+// season keeps you in it. Absent (current season) → bare; external untouched;
+// preserves any existing query/hash on the href.
+const SEASON_SLUG = new URLSearchParams(location.search).get('season') || '';
+function withSeason(href) {
+  if (!SEASON_SLUG) return href;
+  if (/^https?:\/\//i.test(href)) return href;
+  const hashI = href.indexOf('#');
+  const hash = hashI === -1 ? '' : href.slice(hashI);
+  const base = hashI === -1 ? href : href.slice(0, hashI);
+  const sep = base.indexOf('?') === -1 ? '?' : '&';
+  return base + sep + 'season=' + encodeURIComponent(SEASON_SLUG) + hash;
+}
+function patchStaticSeasonLinks() {
+  if (!SEASON_SLUG) return;
+  document.querySelectorAll('a[href]').forEach(a => {
+    const raw = a.getAttribute('href');
+    if (!raw || raw.startsWith('#') || /^https?:\/\//i.test(raw) || raw.startsWith('mailto:')) return;
+    if (/[?&]season=/.test(raw)) return;
+    a.setAttribute('href', withSeason(raw));
+  });
+}
+
 async function loadData() {
   const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
     const ct = res.headers.get('content-type') || '';
@@ -1336,7 +1359,7 @@ function showMatrixTip(e, ci) {
     const verb = c.state === 'win' ? 'Won' : 'Lost';
     body = '<div class="ct-sub">' + verb + ' ' + scoreStr(c.mine, c.theirs) + '</div>';
   }
-  const link = c.id ? '<a class="ct-link" href="matches.html#' + encodeURIComponent(c.id) + '">View match →</a>' : '';
+  const link = c.id ? '<a class="ct-link" href="' + withSeason('matches.html#' + encodeURIComponent(c.id)) + '">View match →</a>' : '';
   tip.innerHTML = '<div class="ct-head">' + escapeHtml(c.row) + ' vs ' + escapeHtml(c.col) + '</div>' + body + link;
   tip.style.display = 'block';
   const tr = tip.getBoundingClientRect();
@@ -1371,6 +1394,7 @@ async function init() {
     renderMatrix();
     banner.hidden = true;
     document.getElementById('wrap').hidden = false;
+    patchStaticSeasonLinks();
   } catch (err) {
     console.error(err);
     banner.className = 'banner err';

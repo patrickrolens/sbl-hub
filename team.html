@@ -537,6 +537,29 @@ async function fetchAll(table, columns) {
   return out;
 }
 
+// Carry the active ?season=<slug> onto internal links so navigating from a past
+// season keeps you in it. Absent (current season) → bare; external untouched;
+// preserves any existing query/hash on the href.
+const SEASON_SLUG = new URLSearchParams(location.search).get('season') || '';
+function withSeason(href) {
+  if (!SEASON_SLUG) return href;
+  if (/^https?:\/\//i.test(href)) return href;
+  const hashI = href.indexOf('#');
+  const hash = hashI === -1 ? '' : href.slice(hashI);
+  const base = hashI === -1 ? href : href.slice(0, hashI);
+  const sep = base.indexOf('?') === -1 ? '?' : '&';
+  return base + sep + 'season=' + encodeURIComponent(SEASON_SLUG) + hash;
+}
+function patchStaticSeasonLinks() {
+  if (!SEASON_SLUG) return;
+  document.querySelectorAll('a[href]').forEach(a => {
+    const raw = a.getAttribute('href');
+    if (!raw || raw.startsWith('#') || /^https?:\/\//i.test(raw) || raw.startsWith('mailto:')) return;
+    if (/[?&]season=/.test(raw)) return;
+    a.setAttribute('href', withSeason(raw));
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // WHICH TEAM? - the hash can be the team's canonical slug or a coach name
 // (current or past, slugified). On a match via a coach alias we normalize the URL
@@ -1240,7 +1263,7 @@ function renderSchedule() {
 
     const a = document.createElement('a');
     a.className = 'sched-row ' + cls;
-    a.href = 'matches.html#' + m.id;
+    a.href = withSeason('matches.html#' + m.id);
     a.innerHTML =
       '<div class="sched-top">'
       +   '<span class="sched-wk">Week ' + (m.week || '-') + (m.stage !== 'regular' ? ' · ' + escapeHtml(m.stage) : '') + '</span>'
@@ -1300,6 +1323,7 @@ async function init() {
     render();
     banner.hidden = true;
     document.getElementById('layout').hidden = false;
+    patchStaticSeasonLinks();
   } catch (err) {
     console.error(err);
     banner.className = 'banner err';

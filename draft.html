@@ -601,6 +601,30 @@ async function fetchAll(table, columns) {
   return out;
 }
 
+// Carry the active ?season=<slug> onto internal links so navigating from a past
+// season keeps you in it. Absent (current season) → bare; external links untouched;
+// preserves any existing query/hash on the href.
+const SEASON_SLUG = new URLSearchParams(location.search).get('season') || '';
+function withSeason(href) {
+  if (!SEASON_SLUG) return href;
+  if (/^https?:\/\//i.test(href)) return href;
+  const hashI = href.indexOf('#');
+  const hash = hashI === -1 ? '' : href.slice(hashI);
+  const base = hashI === -1 ? href : href.slice(0, hashI);
+  const sep = base.indexOf('?') === -1 ? '?' : '&';
+  return base + sep + 'season=' + encodeURIComponent(SEASON_SLUG) + hash;
+}
+// Rewrite static internal links on load (generated links use withSeason() inline).
+function patchStaticSeasonLinks() {
+  if (!SEASON_SLUG) return;
+  document.querySelectorAll('a[href]').forEach(a => {
+    const raw = a.getAttribute('href');
+    if (!raw || raw.startsWith('#') || /^https?:\/\//i.test(raw) || raw.startsWith('mailto:')) return;
+    if (/[?&]season=/.test(raw)) return;
+    a.setAttribute('href', withSeason(raw));
+  });
+}
+
 // Where pokemon.json lives. The icons/ and sprites/ folders live alongside it in
 // the same (planner) repo, so ASSET_BASE is derived by stripping the filename -
 // one URL drives the data and the art. To move everything into the hub repo later,
@@ -960,7 +984,7 @@ function renderSidebar() {
     // single name once in the bold primary format.
     const slug = teamSlug(id);
     nameWrap.innerHTML =
-      '<a class="team-card-name" href="team.html#' + encodeURIComponent(slug) + '" onclick="event.stopPropagation()">' + escapeHtml(cName) + '</a>'
+      '<a class="team-card-name" href="' + withSeason('team.html#' + encodeURIComponent(slug)) + '" onclick="event.stopPropagation()">' + escapeHtml(cName) + '</a>'
       + (same ? '' : '<div class="team-card-coach">' + escapeHtml(tName) + '</div>');
     head.appendChild(nameWrap);
 
@@ -1607,7 +1631,7 @@ function logTeamHtml(teamId, week) {
   // Coach-only here to save space in the narrow activity column; fall back to the
   // team name if no coach is on record for that week.
   const label = escapeHtml(coachAtWeek(teamId, week) || teamName(teamId));
-  return slug ? '<a class="li-team" href="team.html#' + encodeURIComponent(slug) + '">' + label + '</a>'
+  return slug ? '<a class="li-team" href="' + withSeason('team.html#' + encodeURIComponent(slug)) + '">' + label + '</a>'
               : '<span class="li-team">' + label + '</span>';
 }
 function logMonHtml(id, cls, prefix) {
@@ -1814,6 +1838,7 @@ async function init() {
     if (isMobile()) { setSidebarCollapsed(true); setActivityCollapsed(true); }   // phones open to the tier-lanes view
     banner.hidden = true;
     document.getElementById('layout').hidden = false;
+    patchStaticSeasonLinks();
     initAuth();       // non-blocking; reveals admin controls once the session resolves
     initRealtime();   // live updates for all viewers
   } catch (err) {
