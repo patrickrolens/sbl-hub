@@ -242,6 +242,20 @@ function attachIconFallback(img, mon) {
 
 // ── FORMAT HELPERS ──
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// Carry the active ?season=<slug> onto internal links so navigating from a past
+// season keeps you in it. Absent (current season) → links stay bare. Preserves any
+// existing query/hash on the href.
+const SEASON_SLUG = new URLSearchParams(location.search).get('season') || '';
+function withSeason(href) {
+  if (!SEASON_SLUG) return href;
+  if (/^https?:\/\//i.test(href)) return href;            // external, leave alone
+  const hashI = href.indexOf('#');
+  const hash = hashI === -1 ? '' : href.slice(hashI);
+  const base = hashI === -1 ? href : href.slice(0, hashI);
+  const sep = base.indexOf('?') === -1 ? '?' : '&';
+  return base + sep + 'season=' + encodeURIComponent(SEASON_SLUG) + hash;
+}
 function signed(n) { return (n > 0 ? '+' : '') + n; }
 function deltaClass(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
 function kfRatio(kos, faints) { if (faints === 0) return kos === 0 ? '-' : '∞'; return (kos / faints).toFixed(2); }
@@ -291,7 +305,7 @@ function teamLabelHtml(id, opts) {
   if (!t) return 'TBD';
   const c = coachFor(id);
   const inner = escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : '');
-  if (opts && opts.link && t.slug) return '<a class="team-link" href="team.html#' + encodeURIComponent(t.slug) + '">' + inner + '</a>';
+  if (opts && opts.link && t.slug) return '<a class="team-link" href="' + withSeason('team.html#' + encodeURIComponent(t.slug)) + '">' + inner + '</a>';
   return inner;
 }
 // Coach-only label (used in the compact mobile feed and where space is tight).
@@ -300,7 +314,7 @@ function coachOnlyHtml(id, opts) {
   if (!t) return 'TBD';
   const label = coachByTeam[id] || t.name;
   const esc = escapeHtml(label);
-  if (opts && opts.link && t.slug) return '<a class="team-link" href="team.html#' + encodeURIComponent(t.slug) + '">' + esc + '</a>';
+  if (opts && opts.link && t.slug) return '<a class="team-link" href="' + withSeason('team.html#' + encodeURIComponent(t.slug)) + '">' + esc + '</a>';
   return esc;
 }
 
@@ -328,18 +342,6 @@ async function fetchAllIn(table, columns, column, values) {
   return out;
 }
 
-// Paginate an entire (unfiltered) table past the 1000-row response cap.
-async function fetchAll(table, columns) {
-  const PAGE = 1000, out = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
-    if (error) throw error;
-    if (data && data.length) out.push(...data);
-    if (!data || data.length < PAGE) break;
-  }
-  return out;
-}
-
 async function loadData() {
   const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
     const ct = res.headers.get('content-type') || '';
@@ -360,24 +362,22 @@ async function loadData() {
   if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
   season = seasonRow;
 
-  const [teamsRes, draftRes, matchRes, faRes, tradeRes] = await Promise.all([
+  const [teamsRes, ownersRes, draftRes, matchRes, faRes, tradeRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
+    sb.from('team_owners').select('team_id, started_week, ended_week, players(display_name)'),
     sb.from('drafts').select('status, started_at, completed_at, draft_date').eq('season_id', season.id).maybeSingle(),
     sb.from('matches').select('id, stage, week, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id').eq('season_id', season.id),
     sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at').eq('season_id', season.id),
     sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at').eq('season_id', season.id),
   ]);
-  for (const r of [teamsRes, draftRes, matchRes, faRes, tradeRes]) if (r.error) throw r.error;
-  // team_owners spans all seasons and is unfiltered here, so paginate to avoid the
-  // 1000-row response cap silently dropping coach attributions as the league grows.
-  const ownersAll = await fetchAll('team_owners', 'team_id, started_week, ended_week, players(display_name)');
+  for (const r of [teamsRes, ownersRes, draftRes, matchRes, faRes, tradeRes]) if (r.error) throw r.error;
 
   allTeams = teamsRes.data || [];
   teamById = {};
   allTeams.forEach(t => { teamById[t.id] = t; });
   const teamIds = allTeams.map(t => t.id);
 
-  allOwners = ownersAll.filter(o => teamIds.includes(o.team_id));
+  allOwners = (ownersRes.data || []).filter(o => teamIds.includes(o.team_id));
   coachByTeam = {};
   allOwners.filter(o => o.ended_week == null).forEach(o => { if (o.players) coachByTeam[o.team_id] = o.players.display_name; });
 
@@ -685,7 +685,7 @@ function renderCompleted() {
     const dateStr = m.match_date ? fmtDate(m.match_date) : '';
     const row = document.createElement('a');
     row.className = 'done-row';
-    row.href = 'matches.html#' + m.id;
+    row.href = withSeason('matches.html#' + m.id);
     row.innerHTML =
       (dateStr ? '<div class="done-date">' + dateStr + '</div>' : '')
       + '<div class="done-grid">'
@@ -746,6 +746,15 @@ if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
 async function init() {
   const banner = document.getElementById('boot-banner');
+  // Carry ?season onto any static (non-generated) internal links on the page.
+  if (SEASON_SLUG) {
+    document.querySelectorAll('a[href]').forEach(a => {
+      const raw = a.getAttribute('href');
+      if (!raw || raw.startsWith('#') || /^https?:\/\//i.test(raw) || raw.startsWith('mailto:')) return;
+      if (/[?&]season=/.test(raw)) return;                 // already carries it
+      a.setAttribute('href', withSeason(raw));
+    });
+  }
   try {
     await loadData();
     render();
