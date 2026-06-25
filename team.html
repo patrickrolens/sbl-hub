@@ -930,9 +930,9 @@ function renderTeamStats() {
     + '<div class="games">(' + rec.gw + '–' + rec.gl + ')</div>'
     + '</div>'
     + '<div class="stat-grid">'
-    +   statBox('SOS', fmtRate(sos.sos), '', 'Strength of Schedule: average win rate of the opponents this team has faced')
+    +   statBox('OW%', fmtRate(sos.sos), '', 'Strength of Schedule: average win rate of the opponents this team has faced')
     +   statBox('Match Δ', signed(matchDelta), deltaClass(matchDelta), 'Match wins minus match losses')
-    +   statBox('SOSOS', fmtRate(sos.sosos), '', 'Strength of Strength of Schedule: average win rate of this team\'s opponents\' opponents')
+    +   statBox('OOW%', fmtRate(sos.sosos), '', 'Strength of Strength of Schedule: average win rate of this team\'s opponents\' opponents')
     +   statBox('Game Δ', signed(gameDelta), deltaClass(gameDelta), 'Games won minus games lost')
     + '</div>'
     + '<div class="kf-row">'
