@@ -784,6 +784,7 @@ function switchDivision(divId) {
   renderSidebar();
   renderStatus();
   renderPool();
+  renderActivity();   // log filters to the active division
 }
 
 function teamAtPick(pickNumber) {
@@ -1663,21 +1664,32 @@ function pickItemHtml(p) {
   + '</div>';
 }
 
+// A transaction's division = the division of the team(s) it involves (trades are
+// within-division, so teamA suffices). Returns the scope key.
+function txnScope(x) {
+  const t = x.kind === 'trade' ? x.teamA : x.team;
+  return teamDivision[t] || '__none__';
+}
+
 function buildActivitySections() {
   const sections = [];
+  const scope = activeScope();   // '__none__' when undivided → no filtering effect
+  const inScope = id => !hasDivisions() || (teamDivision[id] || '__none__') === scope;
 
-  // Transactions grouped by week, newest week first.
+  // Transactions grouped by week, newest week first — filtered to the active division.
   const byWeek = {};
-  txns.forEach(x => { (byWeek[x.week] = byWeek[x.week] || []).push(x); });
+  txns.filter(x => !hasDivisions() || txnScope(x) === scope).forEach(x => { (byWeek[x.week] = byWeek[x.week] || []).push(x); });
   Object.keys(byWeek).map(Number).sort((a, b) => b - a).forEach(w => {
     const items = byWeek[w].slice().sort((a, b) => String(b.when || '').localeCompare(String(a.when || '')));
     sections.push({ key: 'week-' + w, label: 'Week ' + w, count: items.length, body: items.map(txnItemHtml).join('') });
   });
 
-  // Draft picks grouped into rounds of (team count), newest round first.
-  const per = Math.max(1, teams.length);
+  // Draft picks grouped into rounds — filtered to the active division. Round size is
+  // the active division's team count (each division drafts independently).
+  const scopeTeams = hasDivisions() ? teams.filter(t => (t.division_id || '__none__') === scope) : teams;
+  const per = Math.max(1, scopeTeams.length);
   const byRound = {};
-  draftPicks.forEach(p => {
+  draftPicks.filter(p => inScope(p.team_id)).forEach(p => {
     const rd = Math.floor(((p.pick_number || 1) - 1) / per) + 1;
     (byRound[rd] = byRound[rd] || []).push(p);
   });

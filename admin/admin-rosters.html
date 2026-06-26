@@ -326,9 +326,14 @@ let teamById         = {};
 let coachByTeam      = {};          // team_id -> active owner display name
 let rosterByTeam     = {};          // team_id -> [pokemon_id] currently active
 let tierCost         = {};          // pokemon_id -> point_cost (null treated as 0)
-let faPool           = [];          // [{id, name, cost}] legal + unowned, sorted by name
 let legalPool        = [];          // [{id, name, cost}] every legal mon this season (for manual add)
 let pokemonById      = {};
+
+// ── DIVISION state (empty/__none__ when the season is undivided) ──
+let divisions        = [];          // [{id, name, abbr, sort_order}]
+let hasDivisions     = false;
+let teamDivision     = {};          // team_id -> division_id | '__none__'
+let ownedByDivision  = {};          // division scope -> Set(pokemon_id) owned in that division
 
 // FA search state
 let faResults = [];
@@ -449,21 +454,30 @@ function populateSeasonDropdown() {
 }
 
 async function loadSeasonData(seasonId) {
-  teams = []; teamById = {}; coachByTeam = {}; rosterByTeam = {}; tierCost = {}; faPool = [];
+  teams = []; teamById = {}; coachByTeam = {}; rosterByTeam = {}; tierCost = {};
+  divisions = []; hasDivisions = false; teamDivision = {}; ownedByDivision = {};
   faSelected = null;
   if (!seasonId) { renderTool(); return; }
 
-  const [teamsRes, tiersRes] = await Promise.all([
-    sb.from('teams').select('id, name, slug, initial_seed').eq('season_id', seasonId),
+  const [teamsRes, tiersRes, divRes] = await Promise.all([
+    sb.from('teams').select('id, name, slug, initial_seed, division_id').eq('season_id', seasonId),
     sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', seasonId),
+    sb.from('divisions').select('id, name, abbr, sort_order').eq('season_id', seasonId).order('sort_order', { ascending: true }),
   ]);
-  for (const r of [teamsRes, tiersRes]) if (r.error) throw r.error;
+  for (const r of [teamsRes, tiersRes, divRes]) if (r.error) throw r.error;
   // Unfiltered all-seasons table → paginate past the 1000-row cap.
   const ownersAll = await fetchAll('team_owners', 'team_id, ended_week, players(display_name)');
 
   teams = teamsRes.data || [];
   teams.forEach(t => { teamById[t.id] = t; });
   const teamIds = new Set(teams.map(t => t.id));
+
+  // Divisions for this season (empty when undivided). teamDivision maps each team to
+  // its division scope; '__none__' is the sentinel for undivided seasons.
+  divisions = divRes.data || [];
+  hasDivisions = divisions.length > 0;
+  teamDivision = {};
+  teams.forEach(t => { teamDivision[t.id] = (hasDivisions && t.division_id) ? t.division_id : '__none__'; });
 
   ownersAll.filter(o => teamIds.has(o.team_id) && o.ended_week == null).forEach(o => {
     const nm = o.players && o.players.display_name;
@@ -479,24 +493,39 @@ async function loadSeasonData(seasonId) {
     const all = await fetchAllIn('team_pokemon', 'team_id, pokemon_id, released_week', 'team_id', [...teamIds]);
     rosterRows = all.filter(r => r.released_week == null);
   }
-  const owned = new Set();
+  // Per-division ownership: a Pokémon is "taken" within the division of whichever
+  // team rosters it. The same id can be owned in multiple divisions (separate pools).
+  ownedByDivision = {};
   rosterRows.forEach(r => {
     (rosterByTeam[r.team_id] = rosterByTeam[r.team_id] || []).push(r.pokemon_id);
-    owned.add(r.pokemon_id);
+    const scope = teamDivision[r.team_id] || '__none__';
+    (ownedByDivision[scope] = ownedByDivision[scope] || new Set()).add(r.pokemon_id);
   });
 
-  // Free-agent pool: legal this season AND not on any active roster.
-  faPool = Object.keys(tierCost)
-    .filter(id => !owned.has(id))
-    .map(id => ({ id, name: monName(id), cost: costOf(id) }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  // Manual-add pool: every legal mon this season (ownership not filtered - cleanup may re-add).
+  // FA pool is now division-dependent, so it's computed on demand (see faPoolFor).
+  // Manual-add pool stays the full legal list (cleanup may re-add anything).
   legalPool = Object.keys(tierCost)
     .map(id => ({ id, name: monName(id), cost: costOf(id) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   renderTool();
+}
+
+// Free-agent pool for a given division scope: legal this season AND not owned within
+// THAT division. For an undivided season the single '__none__' scope reproduces the
+// old "not on any active roster" behavior exactly.
+function faPoolFor(scope) {
+  const owned = ownedByDivision[scope] || new Set();
+  return Object.keys(tierCost)
+    .filter(id => !owned.has(id))
+    .map(id => ({ id, name: monName(id), cost: costOf(id) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The division scope of the currently-selected Team A (drives FA pool + trade partners).
+function activeScope() {
+  const aTeam = document.getElementById('team-a') ? document.getElementById('team-a').value : '';
+  return aTeam ? (teamDivision[aTeam] || '__none__') : '__none__';
 }
 
 function onSeasonChange() {
@@ -520,11 +549,15 @@ function renderTool() {
   renderEditor();
 }
 
-function teamOptionsHtml(includeFA, excludeId) {
+function teamOptionsHtml(includeFA, excludeId, sameDivisionAs) {
   let h = '<option value="">-</option>';
   if (includeFA) h += '<option value="FA">Free Agency</option>';
+  // When a reference team is given in a divisioned season, only same-division teams
+  // are eligible trade partners (trades are within-division only).
+  const scope = (sameDivisionAs && hasDivisions) ? (teamDivision[sameDivisionAs] || '__none__') : null;
   sortedTeams().forEach(t => {
     if (t.id === excludeId) return;
+    if (scope !== null && (teamDivision[t.id] || '__none__') !== scope) return;
     h += '<option value="' + t.id + '">' + escapeHtml(teamLabelText(t.id)) + '</option>';
   });
   return h;
@@ -549,8 +582,12 @@ function onTeamAChange() {
   // Keep B from pointing at the same team as A.
   const bSel = document.getElementById('team-b');
   const keepB = bSel.value;
-  bSel.innerHTML = teamOptionsHtml(true, aId);
+  bSel.innerHTML = teamOptionsHtml(true, aId, aId);   // same-division trade partners only
   bSel.value = (keepB === aId) ? '' : keepB;
+  // If the previously-selected B is now out of scope (different division), clear it.
+  if (bSel.value && bSel.value !== 'FA' && !bSel.querySelector('option[value="' + bSel.value + '"]')) bSel.value = '';
+  // Re-point the FA pool at A's division (typing re-filters, but clear a stale pick).
+  if (faSelected) { faSelected = null; document.getElementById('fa-input').value = ''; closeFaResults(); }
   onTeamBChange();
 }
 
@@ -651,7 +688,7 @@ function doFaSearch(q) {
   q = q.trim().toLowerCase();
   faSelected = null;          // typing invalidates a prior pick until re-selected
   if (!q) { closeFaResults(); updateReadouts(); return; }
-  faResults = faPool.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().startsWith(q)).slice(0, 18);
+  faResults = faPoolFor(activeScope()).filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().startsWith(q)).slice(0, 18);
   const el = document.getElementById('fa-results');
   if (!faResults.length) {
     el.innerHTML = '<div class="fa-empty">No legal, unowned Pokémon match.</div>';
