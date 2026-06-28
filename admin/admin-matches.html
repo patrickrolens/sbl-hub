@@ -1394,6 +1394,86 @@ function renderMatchCard(m) {
   return card;
 }
 
+// ── PASTE FILL ──
+function detectPasteLeftIsA(text, m) {
+  // Returns true if left column looks like team_a, false if team_b, null if ambiguous.
+  const firstLine = text.replace(/\r\n/g, '\n').split('\n')[0];
+  const parts = firstLine.split('\t').map(s => s.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const pasteLeft = parts[0], pasteRight = parts[1];
+  function nm(paste, cmp) {
+    const p = paste.toLowerCase(), c = cmp.toLowerCase();
+    return p === c || c.startsWith(p) || p.startsWith(c);
+  }
+  const coachA = coachByTeam[m.team_a_id] || '', coachB = coachByTeam[m.team_b_id] || '';
+  const tnA = (teamById[m.team_a_id] || {}).name || '', tnB = (teamById[m.team_b_id] || {}).name || '';
+  const lA = nm(pasteLeft, coachA) || nm(pasteLeft, tnA);
+  const lB = nm(pasteLeft, coachB) || nm(pasteLeft, tnB);
+  const rA = nm(pasteRight, coachA) || nm(pasteRight, tnA);
+  const rB = nm(pasteRight, coachB) || nm(pasteRight, tnB);
+  if (lA && rB) return true;
+  if (lB && rA) return false;
+  return null;
+}
+
+function parsePasteIntoModel(text, leftIsA) {
+  if (!text.trim()) return { error: 'Nothing to parse.' };
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const leftSide  = leftIsA ? 'a' : 'b';
+  const rightSide = leftIsA ? 'b' : 'a';
+
+  // Build pokemon name -> id lookup (case-insensitive)
+  const nameToId = {};
+  Object.values(pokemonById).forEach(p => { if (p && p.name) nameToId[p.name.toLowerCase()] = String(p.id); });
+
+  // Parse game blocks — each game is preceded by a "Pokemon\tKills\tDeaths\t..." header row
+  const gamePicks = [];
+  let cur = null;
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const cols = line.split('\t').map(s => s.trim());
+    if (cols[0].toLowerCase() === 'pokemon') {
+      if (cur !== null) gamePicks.push(cur);
+      cur = [];
+      continue;
+    }
+    if (cur !== null && (cols[0] || cols[3])) {
+      cur.push({
+        left:  { name: cols[0] || '', k: parseInt(cols[1]) || 0, d: parseInt(cols[2]) || 0 },
+        right: { name: cols[3] || '', k: parseInt(cols[4]) || 0, d: parseInt(cols[5]) || 0 }
+      });
+    }
+  }
+  if (cur !== null && cur.length) gamePicks.push(cur);
+  // Drop games where every row is empty on both sides (e.g. blank trailing blocks)
+  const filledGamePicks = gamePicks.filter(picks => picks.some(p => p.left.name || p.right.name));
+  if (!filledGamePicks.length) return { error: 'No game data found. Each game needs a "Pokémon  Kills  Deaths" header row.' };
+
+  const warnings = [];
+  const newGames = filledGamePicks.map((picks, gi) => {
+    const g = emptyGame(gi + 1);
+    let leftDeaths = 0, rightDeaths = 0;
+    picks.slice(0, 4).forEach((pick, pi) => {
+      const lid = nameToId[pick.left.name.toLowerCase()] || '';
+      if (pick.left.name && !lid) warnings.push('Game ' + (gi + 1) + ': "' + pick.left.name + '" not found in Pokémon list.');
+      g.picks[leftSide][pi] = { pokemon_id: lid, kills: pick.left.k, deaths: pick.left.d };
+      leftDeaths += pick.left.d;
+
+      const rid = nameToId[pick.right.name.toLowerCase()] || '';
+      if (pick.right.name && !rid) warnings.push('Game ' + (gi + 1) + ': "' + pick.right.name + '" not found in Pokémon list.');
+      g.picks[rightSide][pi] = { pokemon_id: rid, kills: pick.right.k, deaths: pick.right.d };
+      rightDeaths += pick.right.d;
+    });
+    // Winner = side with fewer deaths (the other side lost all their mons)
+    if (leftDeaths > rightDeaths) g.winner = rightSide;
+    else if (rightDeaths > leftDeaths) g.winner = leftSide;
+    return g;
+  });
+
+  return { games: newGames, warnings };
+}
+
 function buildMatchBody(body, m, model) {
   // Postseason matches carry a per-match series length (Bo5/Bo7 vary by round and season).
   if (m.stage && m.stage !== 'regular') {
@@ -1406,6 +1486,94 @@ function buildMatchBody(body, m, model) {
     sr.appendChild(sel);
     body.appendChild(sr);
   }
+
+  // ── Paste fill section ──
+  const pasteWrap = document.createElement('div');
+  pasteWrap.style.cssText = 'margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;';
+  const pasteHead = document.createElement('div');
+  pasteHead.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);cursor:pointer;user-select:none;';
+  const pasteCaret = document.createElement('span');
+  pasteCaret.style.cssText = 'font-size:11px;color:var(--text3);';
+  pasteCaret.textContent = '▶';
+  const pasteTitle = document.createElement('span');
+  pasteTitle.style.cssText = 'font-size:12px;font-weight:700;';
+  pasteTitle.textContent = 'Fill from paste';
+  pasteHead.appendChild(pasteCaret);
+  pasteHead.appendChild(pasteTitle);
+
+  const pasteBody = document.createElement('div');
+  pasteBody.style.cssText = 'display:none;padding:10px 12px;';
+  const pasteHint = document.createElement('div');
+  pasteHint.style.cssText = 'font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5;';
+  pasteHint.textContent = 'Paste the match sheet data. Each game block starts with a "Pokémon  Kills  Deaths" header row.';
+
+  // Column-order selector
+  const orderRow = document.createElement('div');
+  orderRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;';
+  const orderLabel = document.createElement('label');
+  orderLabel.style.cssText = 'font-size:10px;font-weight:700;letter-spacing:.4px;color:var(--text3);text-transform:uppercase;white-space:nowrap;';
+  orderLabel.textContent = 'Left column';
+  const orderSel = document.createElement('select');
+  orderSel.style.cssText = 'font-size:12px;padding:4px 7px;';
+  const optA = document.createElement('option'); optA.value = 'a'; optA.textContent = teamLabelText(m.team_a_id);
+  const optB = document.createElement('option'); optB.value = 'b'; optB.textContent = teamLabelText(m.team_b_id);
+  orderSel.appendChild(optA); orderSel.appendChild(optB);
+  const orderRight = document.createElement('span');
+  orderRight.style.cssText = 'font-size:12px;color:var(--text2);';
+  function updateOrderRight() {
+    orderRight.textContent = '→ right: ' + (orderSel.value === 'a' ? teamLabelText(m.team_b_id) : teamLabelText(m.team_a_id));
+  }
+  orderSel.onchange = updateOrderRight;
+  updateOrderRight();
+  orderRow.appendChild(orderLabel); orderRow.appendChild(orderSel); orderRow.appendChild(orderRight);
+
+  const pasteTa = document.createElement('textarea');
+  pasteTa.rows = 8;
+  pasteTa.style.cssText = 'width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:monospace;padding:8px;resize:vertical;display:block;margin-bottom:8px;';
+  pasteTa.placeholder = 'PlayerA\t\t\tPlayerB\nPokémon\tKills\tDeaths\tPokémon\tKills\tDeaths\n…';
+
+  // Auto-detect column order when text is pasted
+  pasteTa.addEventListener('paste', () => {
+    setTimeout(() => {
+      const detected = detectPasteLeftIsA(pasteTa.value, m);
+      if (detected !== null) { orderSel.value = detected ? 'a' : 'b'; updateOrderRight(); }
+    }, 0);
+  });
+
+  const pasteBtn = document.createElement('button');
+  pasteBtn.className = 'btn btn-accent btn-sm';
+  pasteBtn.textContent = 'Fill games';
+  const pasteMsg = document.createElement('div');
+  pasteMsg.style.cssText = 'font-size:11px;margin-top:8px;display:none;white-space:pre-wrap;line-height:1.5;';
+
+  pasteBtn.onclick = () => {
+    pasteMsg.style.display = 'none';
+    const leftIsA = orderSel.value === 'a';
+    const result = parsePasteIntoModel(pasteTa.value, leftIsA);
+    if (result.error) {
+      pasteMsg.style.color = '#ff9c9c'; pasteMsg.textContent = result.error; pasteMsg.style.display = 'block'; return;
+    }
+    model.games = result.games;
+    if (result.warnings.length) {
+      pasteMsg.style.color = 'var(--yellow)'; pasteMsg.textContent = result.warnings.join('\n'); pasteMsg.style.display = 'block';
+    }
+    markDirty(m.id);
+  };
+
+  pasteHead.onclick = () => {
+    const open = pasteBody.style.display === 'none';
+    pasteBody.style.display = open ? 'block' : 'none';
+    pasteCaret.textContent = open ? '▼' : '▶';
+  };
+
+  pasteBody.appendChild(pasteHint);
+  pasteBody.appendChild(orderRow);
+  pasteBody.appendChild(pasteTa);
+  pasteBody.appendChild(pasteBtn);
+  pasteBody.appendChild(pasteMsg);
+  pasteWrap.appendChild(pasteHead);
+  pasteWrap.appendChild(pasteBody);
+  body.appendChild(pasteWrap);
 
   const broughtWrap = document.createElement('div');
   broughtWrap.className = 'brought-wrap';
