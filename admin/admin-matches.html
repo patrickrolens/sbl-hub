@@ -1395,25 +1395,95 @@ function renderMatchCard(m) {
 }
 
 // ── PASTE FILL ──
+
+function findGameDataOffset(lines) {
+  for (const line of lines) {
+    const cols = line.split('\t').map(s => s.trim());
+    for (let i = 0; i < cols.length - 3; i++) {
+      if (cols[i].toLowerCase() === 'pokemon' &&
+          cols[i + 1].toLowerCase() === 'kills' &&
+          cols[i + 2].toLowerCase() === 'deaths' &&
+          cols[i + 3].toLowerCase() === 'pokemon') {
+        return i;
+      }
+    }
+  }
+  return 0;
+}
+
+// Returns { leftName, rightName } for either paste format.
+// Spreadsheet format (col[1] of first row = "Kills"): player names are in the
+// right-section header row, at the game-data column offset.
+// Simple format: player names are the first two non-empty values on line 0.
+function extractPastePlayerNames(text) {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  if (!lines.length) return { leftName: '', rightName: '' };
+  const firstCols = lines[0].split('\t').map(s => s.trim());
+  if (firstCols[1] && firstCols[1].toLowerCase() === 'kills') {
+    const offset = findGameDataOffset(lines);
+    for (let i = 0; i < lines.length; i++) {
+      const cols = lines[i].split('\t').map(s => s.trim());
+      if (cols[offset] && cols[offset].toLowerCase() === 'pokemon' &&
+          cols[offset + 1] && cols[offset + 1].toLowerCase() === 'kills') {
+        if (i > 0) {
+          const prev = lines[i - 1].split('\t').map(s => s.trim());
+          return { leftName: prev[offset] || '', rightName: prev[offset + 3] || '' };
+        }
+      }
+    }
+    return { leftName: '', rightName: '' };
+  }
+  const parts = firstCols.filter(Boolean);
+  return { leftName: parts[0] || '', rightName: parts[1] || '' };
+}
+
 function detectPasteLeftIsA(text, m) {
-  // Returns true if left column looks like team_a, false if team_b, null if ambiguous.
-  const firstLine = text.replace(/\r\n/g, '\n').split('\n')[0];
-  const parts = firstLine.split('\t').map(s => s.trim()).filter(Boolean);
-  if (parts.length < 2) return null;
-  const pasteLeft = parts[0], pasteRight = parts[1];
+  const { leftName, rightName } = extractPastePlayerNames(text);
+  if (!leftName || !rightName) return null;
   function nm(paste, cmp) {
     const p = paste.toLowerCase(), c = cmp.toLowerCase();
     return p === c || c.startsWith(p) || p.startsWith(c);
   }
   const coachA = coachByTeam[m.team_a_id] || '', coachB = coachByTeam[m.team_b_id] || '';
   const tnA = (teamById[m.team_a_id] || {}).name || '', tnB = (teamById[m.team_b_id] || {}).name || '';
-  const lA = nm(pasteLeft, coachA) || nm(pasteLeft, tnA);
-  const lB = nm(pasteLeft, coachB) || nm(pasteLeft, tnB);
-  const rA = nm(pasteRight, coachA) || nm(pasteRight, tnA);
-  const rB = nm(pasteRight, coachB) || nm(pasteRight, tnB);
+  const lA = nm(leftName, coachA) || nm(leftName, tnA);
+  const lB = nm(leftName, coachB) || nm(leftName, tnB);
+  const rA = nm(rightName, coachA) || nm(rightName, tnA);
+  const rB = nm(rightName, coachB) || nm(rightName, tnB);
   if (lA && rB) return true;
   if (lB && rA) return false;
   return null;
+}
+
+// Parses the left aggregate section of a spreadsheet-format paste to get each
+// team's full brought-six. Returns { [leftSide]: [id,...], [rightSide]: [id,...] }.
+// First player header in the left section = left column in game data = leftSide.
+function parseSpreadsheetBrought(lines, leftSide, rightSide, nameToId, warnings) {
+  const result = {};
+  result[leftSide] = [];
+  result[rightSide] = [];
+  let side = null;
+  let count = 0;
+  for (const line of lines) {
+    const cols = line.split('\t').map(s => s.trim());
+    if (!cols[0]) continue;
+    if (cols[0].toLowerCase() === 'games:') break;
+    if (cols[1] && cols[1].toLowerCase() === 'kills') {
+      side = side === null ? leftSide : rightSide;
+      count = 0;
+      continue;
+    }
+    if (side !== null && count < 6 && cols[0]) {
+      const id = nameToId[cols[0].toLowerCase()];
+      if (id) {
+        result[side].push(id);
+      } else {
+        warnings.push('Brought six: "' + cols[0] + '" not found in Pokémon list.');
+      }
+      count++;
+    }
+  }
+  return result;
 }
 
 function parsePasteIntoModel(text, leftIsA) {
@@ -1426,22 +1496,29 @@ function parsePasteIntoModel(text, leftIsA) {
   const nameToId = {};
   Object.values(pokemonById).forEach(p => { if (p && p.name) nameToId[p.name.toLowerCase()] = String(p.id); });
 
-  // Parse game blocks — each game is preceded by a "Pokemon\tKills\tDeaths\t..." header row
+  // Spreadsheet format: first row col[1] = "Kills" (player summary header)
+  const firstCols = lines[0].split('\t').map(s => s.trim());
+  const isSpreadsheet = !!(firstCols[1] && firstCols[1].toLowerCase() === 'kills');
+  const offset = isSpreadsheet ? findGameDataOffset(lines) : 0;
+
+  // Parse game blocks — each game is preceded by a "Pokemon Kills Deaths Pokemon..." header row
   const gamePicks = [];
   let cur = null;
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = isSpreadsheet ? 0 : 1; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
     const cols = line.split('\t').map(s => s.trim());
-    if (cols[0].toLowerCase() === 'pokemon') {
+    const c0 = (cols[offset] || '').toLowerCase();
+    const c1 = (cols[offset + 1] || '').toLowerCase();
+    if (c0 === 'pokemon' && c1 === 'kills') {
       if (cur !== null) gamePicks.push(cur);
       cur = [];
       continue;
     }
-    if (cur !== null && (cols[0] || cols[3])) {
+    if (cur !== null && (cols[offset] || cols[offset + 3])) {
       cur.push({
-        left:  { name: cols[0] || '', k: parseInt(cols[1]) || 0, d: parseInt(cols[2]) || 0 },
-        right: { name: cols[3] || '', k: parseInt(cols[4]) || 0, d: parseInt(cols[5]) || 0 }
+        left:  { name: cols[offset] || '',     k: parseInt(cols[offset + 1]) || 0, d: parseInt(cols[offset + 2]) || 0 },
+        right: { name: cols[offset + 3] || '', k: parseInt(cols[offset + 4]) || 0, d: parseInt(cols[offset + 5]) || 0 }
       });
     }
   }
@@ -1471,7 +1548,8 @@ function parsePasteIntoModel(text, leftIsA) {
     return g;
   });
 
-  return { games: newGames, warnings };
+  const brought = isSpreadsheet ? parseSpreadsheetBrought(lines, leftSide, rightSide, nameToId, warnings) : null;
+  return { games: newGames, warnings, brought };
 }
 
 function buildMatchBody(body, m, model) {
@@ -1554,6 +1632,10 @@ function buildMatchBody(body, m, model) {
       pasteMsg.style.color = '#ff9c9c'; pasteMsg.textContent = result.error; pasteMsg.style.display = 'block'; return;
     }
     model.games = result.games;
+    if (result.brought) {
+      model.manualBrought.a = result.brought.a || [];
+      model.manualBrought.b = result.brought.b || [];
+    }
     if (result.warnings.length) {
       pasteMsg.style.color = 'var(--yellow)'; pasteMsg.textContent = result.warnings.join('\n'); pasteMsg.style.display = 'block';
     }
