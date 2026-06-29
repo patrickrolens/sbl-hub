@@ -4,11 +4,28 @@
 <script>
   (function () {
     var slug = new URLSearchParams(location.search).get('season');
-    if (!slug) return;                          // no param → this IS the current rules
-    if (/^[a-z0-9-]+$/.test(slug) === false) return;  // ignore junk slugs
-    // Guard against redirect loops: only redirect if we're not already on the archived path.
-    if (location.pathname.indexOf('/rules/') !== -1) return;
-    location.replace('/rules/' + slug + '.html');
+    if (!slug) return;                                  // no param → this IS the current rules
+    if (/^[a-z0-9-]+$/.test(slug) === false) return;    // ignore junk slugs
+    if (location.pathname.indexOf('/rules/') !== -1) return;  // already archived → no loop
+
+    // Hide the page until we know whether an archived rules page exists, so a hit
+    // redirects cleanly with no flash of the current rules.
+    var hide = document.createElement('style');
+    hide.textContent = 'html{visibility:hidden}';
+    document.documentElement.appendChild(hide);
+
+    function reveal() { hide.remove(); }
+
+    fetch('/rules/' + slug + '.html', { method: 'HEAD' })
+      .then(function (r) {
+        if (r.ok) { location.replace('/rules/' + slug + '.html'); return; }
+        reveal();
+        window.__rulesFallback = true;   // picked up after DOM is ready to show the notice
+      })
+      .catch(function () {
+        reveal();
+        window.__rulesFallback = true;
+      });
   })();
 </script>
 <meta charset="utf-8">
@@ -343,6 +360,18 @@ document.querySelectorAll('.toc a').forEach(a => {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 });
+
+// If the redirect probe fell back to the current rules, show a soft notice.
+if (window.__rulesFallback) {
+  var wrap = document.querySelector('.wrap');
+  if (wrap) {
+    var n = document.createElement('div');
+    n.className = 'note';
+    n.style.cssText = 'max-width:860px;margin:0 auto 14px;display:flex;align-items:center;gap:10px';
+    n.innerHTML = '<span class="k">Heads up:</span> That season doesn’t have its own archived rules page yet — showing the current rules below.';
+    wrap.insertBefore(n, wrap.firstChild);
+  }
+}
 </script>
 
 </body>
