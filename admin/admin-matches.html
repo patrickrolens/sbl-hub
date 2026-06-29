@@ -1548,6 +1548,19 @@ function parsePasteIntoModel(text, leftIsA) {
     return g;
   });
 
+  // Spreadsheet format: extract replay URLs from the "Games:" section and assign by order
+  if (isSpreadsheet) {
+    let inGames = false, urlIdx = 0;
+    for (const line of lines) {
+      const cols = line.split('\t').map(s => s.trim());
+      if ((cols[0] || '').toLowerCase() === 'games:') { inGames = true; continue; }
+      if (inGames && cols[0] && cols[0].startsWith('http') && urlIdx < newGames.length) {
+        newGames[urlIdx].replay_url = cols[0];
+        urlIdx++;
+      }
+    }
+  }
+
   const brought = isSpreadsheet ? parseSpreadsheetBrought(lines, leftSide, rightSide, nameToId, warnings) : null;
   return { games: newGames, warnings, brought };
 }
