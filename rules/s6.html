@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+  (function () {
+    var slug = new URLSearchParams(location.search).get('season');
+    if (!slug) return;                          // no param → this IS the current rules
+    if (/^[a-z0-9-]+$/.test(slug) === false) return;  // ignore junk slugs
+    // Guard against redirect loops: only redirect if we're not already on the archived path.
+    if (location.pathname.indexOf('/rules/') !== -1) return;
+    location.replace('/rules/' + slug + '.html');
+  })();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<title>Rules &amp; Resources · Springfield Battle League</title>
+<style>
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+}
+* { box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; margin: 0; line-height: 1.55; }
+
+.wrap { max-width: 100%; margin: 0 auto; padding: 16px 16px 60px; }
+
+.upper { max-width: 860px; margin: 0 auto;}
+.lower { column-width: 480px; column-gap: 8px }
+
+/* PAGE HEADER */
+.page-head { text-align: center; padding: 14px 8px 6px; }
+.page-head .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+.page-head h1 { font-size: 26px; font-weight: 800; margin: 6px 0 4px; line-height: 1.15; }
+.page-head .sub { font-size: 13px; color: var(--text2); }
+
+/* INTRO / SIGNUP CALLOUT */
+.intro { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; padding: 14px 16px; margin: 14px 0 8px; }
+.intro p { margin: 0 0 8px; color: var(--text); }
+.intro p:last-child { margin-bottom: 0; }
+.intro .fmt { color: var(--text2); }
+.intro code, .ic { background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-family: inherit; font-size: 12px; color: var(--text); }
+
+/* TABLE OF CONTENTS */
+.toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 18px; }
+.toc a { font-size: 12px; font-weight: 600; color: var(--text2); text-decoration: none; background: var(--bg2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; transition: color .12s, border-color .12s; }
+.toc a:hover { color: var(--text); border-color: var(--accent); }
+
+/* SECTION CARDS (reuses the site's card + collapse pattern) */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; scroll-margin-top: 14px; flex: 1 1 360px; break-inside: avoid;}
+.sec-head { display: flex; align-items: center; gap: 10px; position: relative; cursor: pointer; }
+.sec-head .num { font-size: 12px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; min-width: 22px; }
+.sec-head .title { font-size: 15px; font-weight: 800; letter-spacing: .2px; }
+.sec-head .sec-arrow { margin-left: auto; font-size: 11px; color: var(--text3); transition: transform .15s; }
+.card.collapsed .sec-head .sec-arrow { transform: rotate(-90deg); }
+.card.collapsed .sec-body { display: none; }
+.sec-body { margin-top: 12px; }
+
+/* CONTENT TYPOGRAPHY */
+.sec-body p { margin: 0 0 10px; }
+.sec-body p:last-child { margin-bottom: 0; }
+.sec-body ul { margin: 0 0 10px; padding-left: 20px; }
+.sec-body ul li { margin-bottom: 5px; }
+.sec-body ul li::marker { color: var(--text3); }
+.sec-body .lead { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin: 16px 0 8px; }
+.sec-body .lead:first-child { margin-top: 0; }
+.muted { color: var(--text2); }
+.note { font-size: 12px; color: var(--text2); background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; margin: 10px 0; }
+.note .k { font-weight: 700; color: var(--text); }
+
+/* FORMAT / TIEBREAKER CALLOUT (compact ordered chips) */
+.steps { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.step { display: flex; align-items: baseline; gap: 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.step .n { font-size: 12px; font-weight: 800; color: var(--accent); min-width: 16px; }
+.step .lab { font-weight: 700; }
+.step .desc { color: var(--text2); }
+
+.fmt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 8px; }
+.fmt-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.fmt-cell .ph { font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); }
+.fmt-cell .bo { font-size: 18px; font-weight: 800; margin-top: 3px; }
+
+/* TIER TABLE (the page's visual anchor) */
+.tier-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: 6px 0 4px; }
+.tier { background: var(--bg3); border: 1px solid var(--border); border-radius: 9px; padding: 10px 6px; text-align: center; position: relative; overflow: hidden; }
+.tier::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tc, var(--accent)); }
+.tier .tname { font-size: 15px; font-weight: 800; letter-spacing: .3px; }
+.tier .tpts { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.tier .tpts b { color: var(--text); font-size: 14px; }
+
+/* AWARDS */
+.awards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 16px; margin: 4px 0; }
+.awards .aw { display: flex; align-items: baseline; gap: 8px; }
+.awards .aw::before { content: '★'; color: var(--yellow); font-size: 11px; }
+
+/* RESOURCES */
+.res { display: flex; flex-direction: column; gap: 8px; }
+.res .r { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.res .r .rn { font-weight: 700; color: var(--text); }
+.res .r .rd { color: var(--text2); font-size: 12px; margin-top: 2px; }
+
+.foot { text-align: center; color: var(--text3); font-size: 12px; margin-top: 24px; line-height: 1.6; }
+
+@media (max-width: 560px) {
+  .fmt-grid { grid-template-columns: 1fr; }
+  .awards { grid-template-columns: 1fr; }
+  .page-head h1 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<script src="/nav.js"></script>
+
+<div class="wrap">
+
+  <div class="upper">
+    <div class="page-head">
+      <div class="eyebrow">Springfield Battle League · Season 8</div>
+      <h1>Rules &amp; Resources</h1>
+      <div class="sub">Everything you need to draft, battle, and compete this season.</div>
+    </div>
+
+    <div class="intro">
+      <p>The Springfield Battle League is a VGC Draft League (4v4 doubles) played in Pokémon Showdown and Pokémon Scarlet and Violet. Each player drafts a team from a shared pool and plays one match per week across a ten-week regular season, followed by a postseason bracket.</p>
+      <p class="fmt">Format: <span class="ic">[Gen 9] VGC 2024 Reg G</span> - select this when building your team and challenging your opponent. Matches are reported by <b>11:59&nbsp;pm Sunday</b> each week.</p>
+      <p><b>Signups:</b> The league begins with signups! Interested players should post in the signups channel in the Discord or DM <span class="ic">jdawgin13</span> to be added to the roster.</p>
+    </div>
+
+    <nav class="toc">
+      <a href="#format">Match Format</a>
+      <a href="#seeding">Seeding &amp; Schedule</a>
+      <a href="#draft">The Draft</a>
+      <a href="#tiers">Tiers &amp; Budget</a>
+      <a href="#battle">In-Match Rules</a>
+      <a href="#transactions">Trades &amp; Free Agency</a>
+      <a href="#standings">Standings &amp; Playoffs</a>
+      <a href="#allstar">All-Star &amp; Awards</a>
+      <a href="#integrity">Competitive Integrity</a>
+      <a href="#resources">Resources</a>
+    </nav>
+  </div>
+
+  <div class="lower">
+    <!-- 1 · MATCH FORMAT -->
+    <div class="card" id="format">
+      <div class="sec-head"><span class="num">01</span><span class="title">Match Format</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <p>All matches are double battles. Series length depends on the stage of the season:</p>
+        <div class="fmt-grid">
+          <div class="fmt-cell"><div class="ph">Regular Season</div><div class="bo">Best of 3</div></div>
+          <div class="fmt-cell"><div class="ph">Playoffs</div><div class="bo">Best of 5</div></div>
+          <div class="fmt-cell"><div class="ph">Grand Finals</div><div class="bo">Best of 7</div></div>
+        </div>
+        <p>Matches are played on Pokémon Showdown. Playoff finals are played on cart in Pokémon Scarlet &amp; Violet.</p>
+      </div>
+    </div>
+
+    <!-- 2 · SEEDING & SCHEDULE -->
+    <div class="card" id="seeding">
+      <div class="sec-head"><span class="num">02</span><span class="title">Seeding &amp; Schedule</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <p>Once the roster is finalized, players are seeded based on performance in past SBL seasons. Where data on a player is limited, the commissioner determines seeding from the available information.</p>
+        <p>Seeding is used to build the schedule. Because of the number of entrants, not everyone plays everyone - instead, seeding gives every player a roughly equally challenging season. Each player plays <b>one match per week over ten weeks</b>, facing ten different opponents. Schedules can be viewed in the Schedule &amp; Results tab.</p>
+      </div>
+    </div>
+
+    <!-- 3 · THE DRAFT -->
+    <div class="card" id="draft">
+      <div class="sec-head"><span class="num">03</span><span class="title">The Draft</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <p>After seeding is set, the draft order is decided randomly and announced. All players draft from the same pool, and the draft runs <b>snake-style</b>: picks go down the order, then reverse at the end and come back up, repeating until every player has a full team of <b>ten Pokémon</b>.</p>
+
+        <div class="lead">Draft order &amp; swaps</div>
+        <ul>
+          <li>Two players may swap positions in the draft order if both agree. Each player may swap <b>only once</b>.</li>
+          <li>If a player swaps with someone who later drops before teams are drafted, they return to their original position.</li>
+        </ul>
+
+        <div class="lead">Live draft &amp; absences</div>
+        <ul>
+          <li>The commissioner will try to find a time when all players can draft live. Otherwise, drafting proceeds gradually through Discord until everyone has ten Pokémon.</li>
+          <li>If a player who agreed to attend is absent, they automatically draft the highest-usage Pokémon (per Pikalytics) from the highest tier they still have open.</li>
+        </ul>
+
+        <div class="lead">Draft timer</div>
+        <ul>
+          <li>Any player may request a turn timer at any point during a match - <b>2 minutes per turn</b> by default.</li>
+          <li>Players may agree to a different time; if they can't agree, the 2-minute default applies.</li>
+          <li>The timer is kept by a third party (preferably jdawg or Shrug), displayed if possible, otherwise announced regularly.</li>
+        </ul>
+
+        <div class="note"><span class="k">Opening swap window:</span> For the first 24–48 hours after the draft (the exact length is announced), players may make unlimited trades and Free Agency swaps. These are processed effective <b>Week 1</b>, so anything picked up in this window is available immediately.</div>
+      </div>
+    </div>
+
+    <!-- 4 · TIERS & BUDGET -->
+    <div class="card" id="tiers">
+      <div class="sec-head"><span class="num">04</span><span class="title">Tiers &amp; Budget</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <p>Pokémon are divided into tiers (see the Tiers tab), each with a point value. Every player drafts within a budget of <b>215 points</b>.</p>
+        <div class="tier-grid">
+          <div class="tier" style="--tc:#e05555"><div class="tname">S+</div><div class="tpts"><b>70</b> pts</div></div>
+          <div class="tier" style="--tc:#ef7044"><div class="tname">S−</div><div class="tpts"><b>60</b> pts</div></div>
+          <div class="tier" style="--tc:#f0992f"><div class="tname">A+</div><div class="tpts"><b>50</b> pts</div></div>
+          <div class="tier" style="--tc:#f0c060"><div class="tname">A−</div><div class="tpts"><b>40</b> pts</div></div>
+          <div class="tier" style="--tc:#c9d04f"><div class="tname">B+</div><div class="tpts"><b>30</b> pts</div></div>
+          <div class="tier" style="--tc:#8fc85a"><div class="tname">B−</div><div class="tpts"><b>25</b> pts</div></div>
+          <div class="tier" style="--tc:#4caf7d"><div class="tname">C+</div><div class="tpts"><b>20</b> pts</div></div>
+          <div class="tier" style="--tc:#3fae9c"><div class="tname">C−</div><div class="tpts"><b>15</b> pts</div></div>
+          <div class="tier" style="--tc:#60a5fa"><div class="tname">D</div><div class="tpts"><b>10</b> pts</div></div>
+          <div class="tier" style="--tc:#7c6ff7"><div class="tname">E</div><div class="tpts"><b>5</b> pts</div></div>
+        </div>
+        <div class="note">A team's total drafted points may not exceed <b>215</b>. Any transaction that would push a player over budget is invalid.</div>
+      </div>
+    </div>
+
+    <!-- 5 · IN-MATCH RULES -->
+    <div class="card" id="battle">
+      <div class="sec-head"><span class="num">05</span><span class="title">In-Match Rules</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <div class="lead">Team selection</div>
+        <ul>
+          <li>4v4 double battle format. Each player brings <b>6 Pokémon per match</b> and selects 4 to use each game.</li>
+          <li>Once your first game of a match begins, you must use the <b>same team of 6</b> for every game in that match.</li>
+          <li>You may pick a different set of 4 from your 6 each game, but you may not change moves, items, abilities, stats, natures, or anything else between games.</li>
+        </ul>
+
+        <div class="lead">Banned moves, abilities &amp; items</div>
+        <ul>
+          <li>Moves that exclusively raise evasion or lower accuracy - Sand Attack, Double Team, Minimize, and similar - are banned (including items like Bright Powder and Mud Slap).</li>
+          <li>No Commander, Moody, or Booster Energy.</li>
+          <li>Duplicate items are not allowed.</li>
+        </ul>
+
+        <div class="lead">Forfeits</div>
+        <ul>
+          <li>A forfeited match results in a <b>−2 game differential</b> and a <b>−4 K/D</b> for the forfeiting player.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 6 · TRADES & FREE AGENCY -->
+    <div class="card" id="transactions">
+      <div class="sec-head"><span class="num">06</span><span class="title">Trades &amp; Free Agency</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <p>Players can adjust their drafted teams through <b>Free Agency swaps</b> (trading for undrafted Pokémon) or <b>trades</b> with other players.</p>
+        <ul>
+          <li>Outside the opening window, each player gets up to <b>10 swaps and trades total</b> for the season.</li>
+          <li>No trades or swaps are allowed <b>after Week 8</b>.</li>
+          <li>All transactions are processed <b>effective the week after they're announced</b> - e.g. a pickup announced in Week 3 is usable in Week 4. This gives opponents time to prepare.</li>
+          <li>Announce all swaps and trades in the <span class="ic">#sbl-transactions</span> channel on Discord.</li>
+        </ul>
+        <p class="muted">(The opening 24–48 hour window after the draft is the exception - those are unlimited and effective Week 1. See <a href="#draft" style="color:var(--accent);text-decoration:none">The Draft</a>.)</p>
+      </div>
+    </div>
+
+    <!-- 7 · STANDINGS & PLAYOFFS -->
+    <div class="card" id="standings">
+      <div class="sec-head"><span class="num">07</span><span class="title">Standings &amp; Playoffs</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <p>Players are ranked on the Standings sheet by the following factors, in order of importance:</p>
+        <div class="steps">
+          <div class="step"><span class="n">1</span><span class="lab">Matches Won</span></div>
+          <div class="step"><span class="n">2</span><span class="lab">Game Differential</span></div>
+          <div class="step"><span class="n">3</span><span class="lab">K/D</span></div>
+        </div>
+        <p>After the regular season, the <b>top 10 records</b> advance to the Top Cut bracket and the <b>bottom 10</b> play in the Amateur Cup. Finals are played on cart in Pokémon Scarlet &amp; Violet.</p>
+      </div>
+    </div>
+
+    <!-- 8 · ALL-STAR & AWARDS -->
+    <div class="card" id="allstar">
+      <div class="sec-head"><span class="num">08</span><span class="title">All-Star Match &amp; Awards</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <div class="lead">All-Star Match</div>
+        <p>An optional, for-fun side event. Players vote on the season's true All-Star Pokémon, which are split into two groups led by chosen team captains. Players present in Discord are picked schoolyard-style onto each team, given time to build, and face off in a best-of-five set. Pokémon can be swapped each game, but their movesets, stats, and so on cannot change. It's entirely optional but very much worth joining.</p>
+
+        <div class="lead">Awards</div>
+        <p>The commissioner releases a poll for season awards in these categories:</p>
+        <div class="awards">
+          <span class="aw">Biggest Brain Play</span>
+          <span class="aw">Most Improved Player</span>
+          <span class="aw">King of Hax</span>
+          <span class="aw">MVP</span>
+          <span class="aw">Best Nickname (Individual)</span>
+          <span class="aw">Best Nicknames (Team)</span>
+          <span class="aw">Biggest Blunder</span>
+          <span class="aw">Game/Match of the Season</span>
+          <span class="aw">Coolest Team</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9 · COMPETITIVE INTEGRITY -->
+    <div class="card" id="integrity">
+      <div class="sec-head"><span class="num">09</span><span class="title">Competitive Integrity &amp; Enforcement</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <ul>
+          <li>Sabotage of matches - match fixing, intentionally losing, or otherwise undermining the league's competitive integrity - is not allowed.</li>
+          <li>Spectators are welcome but should avoid giving advice or information, intentionally or accidentally, to players in <b>ongoing</b> matches.</li>
+          <li>Helping players prepare for upcoming matches is fine - but don't build a complete Poképaste for another player. The sharing restriction applies specifically to ongoing matches.</li>
+        </ul>
+        <p>Violations are punished based on their nature and the commissioner's judgment, ranging from a warning to removal from the league. Anything not covered here is resolved case-by-case. Reach out to the commissioner for clarification on any rule.</p>
+      </div>
+    </div>
+
+    <!-- 10 · RESOURCES -->
+    <div class="card" id="resources">
+      <div class="sec-head"><span class="num">10</span><span class="title">Resources</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-body">
+        <div class="res">
+          <div class="r"><div class="rn">Pokémon Showdown</div><div class="rd">The battle simulator used for matches, with a teambuilder and an online ladder for testing your team.</div></div>
+          <div class="r"><div class="rn">Draft Planner</div><div class="rd">Shrug's tool for planning your draft - it collects and displays stats, typing, and key utility moves for the Pokémon you're considering.</div></div>
+          <div class="r"><div class="rn">Pikalytics</div><div class="rd">Usage and meta information for VGC Pokémon, helpful both for drafting and for weekly match prep.</div></div>
+          <div class="r"><div class="rn">Damage Calculator</div><div class="rd">For team prep and checking damage calculations mid-game.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Questions or edge cases not covered here are resolved by the commissioner.<br>
+    Springfield Battle League · Season 8
+  </div>
+
+</div>
+
+<script>
+// Collapsible sections - same behavior as the rest of the site, available on all
+// widths here since a rules page benefits from jump-to-section on desktop too.
+document.querySelectorAll('.card .sec-head').forEach(head => {
+  head.addEventListener('click', () => head.closest('.card').classList.toggle('collapsed'));
+});
+// Smooth-scroll the table of contents to its section.
+document.querySelectorAll('.toc a').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (!target) return;
+    e.preventDefault();
+    target.classList.remove('collapsed');           // make sure it's open when jumped to
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+</script>
+
+</body>
+</html>
