@@ -90,6 +90,10 @@ select:disabled { opacity: .5; }
 /* budget advisory */
 .budget-warn { margin-top: 14px; border: 1px solid rgba(240,192,96,.5); background: rgba(240,192,96,.08); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--yellow); line-height: 1.55; }
 .budget-warn b { color: var(--yellow); }
+.fa-tera { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 7px 9px; background: rgba(240,192,96,.08); border: 1px solid rgba(240,192,96,.4); border-radius: 6px; font-size: 12px; color: var(--text); cursor: pointer; }
+.fa-tera input { accent-color: var(--yellow); width: 14px; height: 14px; cursor: pointer; }
+.fa-tera .ft-prices { color: var(--text2); }
+.fa-tera .ft-prices b { color: var(--yellow); }
 
 /* footer row */
 .txn-foot { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
@@ -110,6 +114,10 @@ select:disabled { opacity: .5; }
 .er-main { flex: 1 1 auto; min-width: 0; }
 .er-name { font-size: 13px; font-weight: 700; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .er-name .er-cost { color: var(--text3); font-weight: 400; font-size: 11px; }
+.er-name .er-cost.tera { color: var(--yellow); }
+.er-fields .er-tera-lbl { color: var(--yellow); }
+.er-fields .er-tera-lbl .er-tera-px { color: var(--text3); font-weight: 400; }
+.er-fields .er-tera { accent-color: var(--yellow); }
 .er-fields { display: flex; flex-wrap: wrap; gap: 7px 12px; align-items: center; }
 .er-fields label { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--text3); }
 .er-fields input, .er-fields select { font-size: 12px; padding: 4px 6px; }
@@ -326,6 +334,8 @@ let teamById         = {};
 let coachByTeam      = {};          // team_id -> active owner display name
 let rosterByTeam     = {};          // team_id -> [pokemon_id] currently active
 let tierCost         = {};          // pokemon_id -> point_cost (null treated as 0)
+let teraCost         = {};          // pokemon_id -> tera_point_cost (null unless season prices Tera, e.g. S9)
+let teraByEntry      = {};          // (team_id + '|' + pokemon_id) -> is_tera, for the active roster entry
 let legalPool        = [];          // [{id, name, cost}] every legal mon this season (for manual add)
 let pokemonById      = {};
 
@@ -339,6 +349,7 @@ let ownedByDivision  = {};          // division scope -> Set(pokemon_id) owned i
 let faResults = [];
 let faHighlight = -1;
 let faSelected = null;              // chosen free-agent pokemon_id
+let faTera     = false;             // Tera choice for the FA add-side mon (default OFF)
 
 // ── MANUAL ROSTER EDITOR state ──
 let editorTeamId  = null;
@@ -399,12 +410,28 @@ function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
 function teamLabelText(id) { const t = teamById[id]; if (!t) return 'TBD'; const c = coachByTeam[id]; return t.name + (c ? ' (' + c + ')' : ''); }
 function sortedTeams() { return [...teams].sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name)); }
 function costOf(id) { const c = tierCost[id]; return (c == null ? 0 : c); }
+// Tera price for a mon (null when the season doesn't price Tera for it).
+function teraPriceOf(id) { const c = teraCost[id]; return (c == null ? null : c); }
+// Cost of a specific HELD entry: its Tera price when that entry took Tera and the
+// season prices Tera for it, else the base price. Collapses to costOf for every
+// non-Tera season/entry.
+function costOfEntry(teamId, id) {
+  const isTera = teraByEntry[teamId + '|' + id];
+  const tp = teraPriceOf(id);
+  return (isTera && tp != null) ? tp : costOf(id);
+}
 function pointLimit() { const s = seasonById[selectedSeasonId]; return s ? (s.point_limit || 0) : 0; }
+// Effective cost of an editor working-copy row, honoring its own is_tera flag.
+function rowCost(r) {
+  const tp = teraPriceOf(r.pokemon_id);
+  return (r.is_tera && tp != null) ? tp : costOf(r.pokemon_id);
+}
 function activeRoster(teamId) { return (rosterByTeam[teamId] || []).slice().sort((a, b) => monName(a).localeCompare(monName(b))); }
-// Budget headroom for a team after giving up `dropId`: limit − Σ(cost of every other active mon).
+// Budget headroom for a team after giving up `dropId`: limit − Σ(cost of every other
+// active mon), each costed at its own stored Tera choice.
 function remainingAfterDrop(teamId, dropId) {
   let spentOthers = 0;
-  (rosterByTeam[teamId] || []).forEach(id => { if (id !== dropId) spentOthers += costOf(id); });
+  (rosterByTeam[teamId] || []).forEach(id => { if (id !== dropId) spentOthers += costOfEntry(teamId, id); });
   return pointLimit() - spentOthers;
 }
 
@@ -454,14 +481,14 @@ function populateSeasonDropdown() {
 }
 
 async function loadSeasonData(seasonId) {
-  teams = []; teamById = {}; coachByTeam = {}; rosterByTeam = {}; tierCost = {};
+  teams = []; teamById = {}; coachByTeam = {}; rosterByTeam = {}; tierCost = {}; teraCost = {}; teraByEntry = {};
   divisions = []; hasDivisions = false; teamDivision = {}; ownedByDivision = {};
   faSelected = null;
   if (!seasonId) { renderTool(); return; }
 
   const [teamsRes, tiersRes, divRes] = await Promise.all([
     sb.from('teams').select('id, name, slug, initial_seed, division_id').eq('season_id', seasonId),
-    sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', seasonId),
+    sb.from('season_pokemon_tiers').select('pokemon_id, point_cost, tera_point_cost').eq('season_id', seasonId),
     sb.from('divisions').select('id, name, abbr, sort_order').eq('season_id', seasonId).order('sort_order', { ascending: true }),
   ]);
   for (const r of [teamsRes, tiersRes, divRes]) if (r.error) throw r.error;
@@ -484,13 +511,13 @@ async function loadSeasonData(seasonId) {
     if (nm) coachByTeam[o.team_id] = nm;
   });
 
-  (tiersRes.data || []).forEach(r => { tierCost[r.pokemon_id] = r.point_cost; });
+  (tiersRes.data || []).forEach(r => { tierCost[r.pokemon_id] = r.point_cost; teraCost[r.pokemon_id] = r.tera_point_cost; });
 
   // Active rosters for every team in the season (paginated against the row cap;
   // released filter applied client-side since fetchAllIn takes only an IN() scope).
   let rosterRows = [];
   if (teamIds.size) {
-    const all = await fetchAllIn('team_pokemon', 'team_id, pokemon_id, released_week', 'team_id', [...teamIds]);
+    const all = await fetchAllIn('team_pokemon', 'team_id, pokemon_id, released_week, is_tera', 'team_id', [...teamIds]);
     rosterRows = all.filter(r => r.released_week == null);
   }
   // Per-division ownership: a Pokémon is "taken" within the division of whichever
@@ -498,6 +525,7 @@ async function loadSeasonData(seasonId) {
   ownedByDivision = {};
   rosterRows.forEach(r => {
     (rosterByTeam[r.team_id] = rosterByTeam[r.team_id] || []).push(r.pokemon_id);
+    teraByEntry[r.team_id + '|' + r.pokemon_id] = !!r.is_tera;
     const scope = teamDivision[r.team_id] || '__none__';
     (ownedByDivision[scope] = ownedByDivision[scope] || new Set()).add(r.pokemon_id);
   });
@@ -599,6 +627,7 @@ function onTeamBChange() {
   } else {
     document.getElementById('fa-input').value = '';
     faSelected = null;
+    faTera = false;
     closeFaResults();
   }
   updateReadouts();
@@ -632,13 +661,21 @@ function setReadout(elId, id, teamId, recvCost) {
   el.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
 }
 
+// Cost Team A pays for the FA mon it adds, honoring the Tera toggle. In trade mode
+// this isn't used (no FA add). Falls back to base when the mon has no Tera price.
+function faReceivedCost() {
+  if (!faSelected) return 0;
+  const tp = teraPriceOf(faSelected);
+  return (faTera && tp != null) ? tp : costOf(faSelected);
+}
+
 // Recompute readouts, budget advisory, and the Apply button on every change.
 function updateReadouts() {
   const m = mode();
   const aTeam = teamAId(), aDrop = dropAId();
   const bTeam = teamBId(), bDrop = dropBId();
   const recvId = (m === 'fa') ? faSelected : bDrop;     // what Team A receives
-  const recvCostA = recvId ? costOf(recvId) : 0;
+  const recvCostA = recvId ? ((m === 'fa') ? faReceivedCost() : costOf(recvId)) : 0;
 
   // Left readout: A gives up aDrop, receives recvId → show A's remaining vs recvCostA.
   setReadout('readout-a', aDrop, aTeam, aDrop ? recvCostA : 0);
@@ -646,6 +683,7 @@ function updateReadouts() {
   // Right readout.
   if (m === 'fa') {
     setReadout('readout-b', faSelected, null, null);    // free agent: no budget row
+    injectFaTeraToggle();                               // add Tera choice when applicable
   } else {
     // B gives up bDrop, receives aDrop → show B's remaining vs cost(aDrop).
     const recvCostB = aDrop ? costOf(aDrop) : 0;
@@ -656,13 +694,30 @@ function updateReadouts() {
   updateApplyEnabled(m, aTeam, aDrop, bTeam, recvId);
 }
 
+// Append a Tera toggle to the FA add-side readout, only when the selected free agent
+// has a Tera price this season. Defaults to the current faTera state.
+function injectFaTeraToggle() {
+  if (!faSelected) return;
+  const tp = teraPriceOf(faSelected);
+  if (tp == null) return;                               // no Tera option for this mon
+  const el = document.getElementById('readout-b');
+  if (!el) return;
+  const base = costOf(faSelected);
+  const row = document.createElement('label');
+  row.className = 'fa-tera';
+  row.innerHTML = '<input type="checkbox"' + (faTera ? ' checked' : '') + '>'
+    + '<span>Terastallize <span class="ft-prices">(base ' + base + ' \u00b7 <b>Tera ' + tp + '</b> pts)</span></span>';
+  row.querySelector('input').addEventListener('change', e => { faTera = e.target.checked; updateReadouts(); });
+  el.appendChild(row);
+}
+
 function renderBudgetWarn(m, aTeam, aDrop, bTeam, bDrop, recvId) {
   const el = document.getElementById('budget-warn');
   const lines = [];
 
   if (aTeam && aDrop && recvId) {
     const remA = remainingAfterDrop(aTeam, aDrop);
-    const need = costOf(recvId);
+    const need = (m === 'fa') ? faReceivedCost() : costOf(recvId);
     if (need > remA) lines.push('<b>' + escapeHtml(teamName(aTeam)) + '</b> would exceed its budget by <b>' + (need - remA) + '</b> point' + (need - remA === 1 ? '' : 's') + '.');
   }
   if (m === 'trade' && bTeam && bDrop && aDrop) {
@@ -687,6 +742,7 @@ function updateApplyEnabled(m, aTeam, aDrop, bTeam, recvId) {
 function doFaSearch(q) {
   q = q.trim().toLowerCase();
   faSelected = null;          // typing invalidates a prior pick until re-selected
+  faTera = false;
   if (!q) { closeFaResults(); updateReadouts(); return; }
   faResults = faPoolFor(activeScope()).filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().startsWith(q)).slice(0, 18);
   const el = document.getElementById('fa-results');
@@ -719,6 +775,7 @@ function pickFa(i) {
   const p = faResults[i];
   if (!p) return;
   faSelected = p.id;
+  faTera = false;                 // each new pick starts non-Tera
   document.getElementById('fa-input').value = p.name;
   closeFaResults();
   updateReadouts();
@@ -746,15 +803,17 @@ function openConfirm() {
   } else {
     recvId = faSelected;
     title = 'Confirm free-agency move';
+    const teraNote = (faTera && teraPriceOf(faSelected) != null)
+      ? ' <span style="color:var(--yellow)">(Tera, ' + teraPriceOf(faSelected) + ' pts)</span>' : '';
     swapHtml =
       '<div><span class="lbl">' + escapeHtml(teamName(aTeam)) + '</span> drops <span class="mon">' + escapeHtml(monName(aDrop)) + '</span>'
-      + '<span class="arrow">\u2192</span> adds <span class="mon">' + escapeHtml(monName(recvId)) + '</span></div>';
+      + '<span class="arrow">\u2192</span> adds <span class="mon">' + escapeHtml(monName(recvId)) + '</span>' + teraNote + '</div>';
   }
 
   // Budget advisory text inside the modal (mirror of the inline warning).
   const warnLines = [];
   if (aTeam && aDrop && recvId) {
-    const remA = remainingAfterDrop(aTeam, aDrop), need = costOf(recvId);
+    const remA = remainingAfterDrop(aTeam, aDrop), need = (m === 'fa') ? faReceivedCost() : costOf(recvId);
     if (need > remA) warnLines.push(teamName(aTeam) + ' exceeds budget by ' + (need - remA));
   }
   if (m === 'trade') {
@@ -800,6 +859,7 @@ async function applyTransaction() {
         p_team_id: teamAId(),
         p_pokemon_dropped: dropAId(), p_pokemon_added: faSelected,
         p_effective_week: w, p_exclude_inactive: exclude, p_notes: notes,
+        p_is_tera: (faTera && teraPriceOf(faSelected) != null),
       });
     }
     if (res.error) throw res.error;
@@ -822,6 +882,7 @@ function resetSelectionsKeepContext() {
   document.getElementById('fa-input').value = '';
   document.getElementById('txn-notes').value = '';
   faSelected = null;
+  faTera = false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -847,7 +908,7 @@ function onEditorTeamChange() {
 async function loadEditorTeam(teamId) {
   try {
     const { data, error } = await sb.from('team_pokemon')
-      .select('id, pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number, notes')
+      .select('id, pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number, notes, is_tera')
       .eq('team_id', teamId);
     if (error) throw error;
     editorRows = data || [];
@@ -872,6 +933,7 @@ function buildWorkFromRows() {
     acquired_via: o.acquired_via,
     draft_pick_number: o.draft_pick_number,
     notes: o.notes,
+    is_tera: !!o.is_tera,
     isNew: false, isDeleted: false,
   }));
 }
@@ -901,16 +963,20 @@ function editorRowHtml(r) {
     + '</div>';
   }
   const active = r.released_week == null;
+  const tp = teraPriceOf(r.pokemon_id);
+  const isTeraRow = !!r.is_tera && tp != null;
+  const shownCost = isTeraRow ? tp : costOf(r.pokemon_id);
   return '<div class="er-row' + (active ? '' : ' inactive') + '" data-key="' + r.key + '">'
     + '<img class="er-icon" src="' + iconUrl(r.pokemon_id) + '" data-mon="' + escapeHtml(r.pokemon_id) + '" alt="">'
     + '<div class="er-main">'
     +   '<div class="er-name">' + escapeHtml(monName(r.pokemon_id))
     +     (r.isNew ? '<span class="er-tag new">new</span>' : '')
-    +     ' <span class="er-cost">' + costOf(r.pokemon_id) + ' pts' + (active ? '' : ' \u00B7 dropped wk ' + r.released_week) + '</span></div>'
+    +     ' <span class="er-cost' + (isTeraRow ? ' tera' : '') + '">' + shownCost + ' pts' + (isTeraRow ? ' \u00b7 Tera' : '') + (active ? '' : ' \u00B7 dropped wk ' + r.released_week) + '</span></div>'
     +   '<div class="er-fields">'
     +     '<label>Wk added <input type="number" class="er-aw" min="1" step="1" value="' + (r.acquired_week == null ? '' : r.acquired_week) + '"></label>'
     +     '<label>Via <select class="er-via">' + viaOptionsHtml(r.acquired_via) + '</select></label>'
     +     '<label class="er-pick-lbl"' + (r.acquired_via === 'draft' ? '' : ' hidden') + '>Pick # <input type="number" class="er-pick" min="1" step="1" placeholder="-" value="' + (r.draft_pick_number == null ? '' : r.draft_pick_number) + '"></label>'
+    +     (tp != null ? '<label class="er-tera-lbl"><input type="checkbox" class="er-tera"' + (r.is_tera ? ' checked' : '') + '> Tera <span class="er-tera-px">(' + tp + ')</span></label>' : '')
     +     '<label>Notes <input type="text" class="er-notes" value="' + escapeHtml(r.notes || '') + '"></label>'
     +   '</div>'
     + '</div>'
@@ -958,12 +1024,23 @@ function renderEditor() {
     row.querySelector('.er-via').addEventListener('change', e => onViaChange(key, e.target.value, row));
     const pickInp = row.querySelector('.er-pick');
     if (pickInp) pickInp.addEventListener('input', e => onFieldInput(key, 'draft_pick_number', e.target.value));
+    const teraInp = row.querySelector('.er-tera');
+    if (teraInp) teraInp.addEventListener('change', e => onTeraToggle(key, e.target.checked));
     row.querySelector('.er-notes').addEventListener('input', e => onFieldInput(key, 'notes', e.target.value));
     row.querySelector('.er-toggle').addEventListener('click', () => toggleWork(key));
     row.querySelector('.er-remove').addEventListener('click', () => removeWork(key));
   });
 
   refreshEditorFooter();
+}
+
+// Per-row Tera toggle: update the working copy and re-render so the cost label and
+// budget footer reflect the change. (Checkbox state is preserved across the re-render.)
+function onTeraToggle(key, checked) {
+  const r = workByKey(key);
+  if (!r) return;
+  r.is_tera = !!checked;
+  renderEditor();
 }
 
 // Field edits update the working copy in place (no re-render → keeps input focus).
@@ -1051,6 +1128,7 @@ function rowChanged(r) {
       || (o.released_week ?? null) !== (r.released_week ?? null)
       || (o.acquired_via ?? null) !== (r.acquired_via ?? null)
       || (o.draft_pick_number ?? null) !== (r.draft_pick_number ?? null)
+      || (!!o.is_tera) !== (!!r.is_tera)
       || (o.notes || null) !== (r.notes || null);
 }
 
@@ -1075,7 +1153,7 @@ function refreshEditorFooter() {
   const activeWork = editorWork.filter(r => !r.isDeleted && r.released_week == null);
   const cap = activeCap();
   const limit = pointLimit();
-  const activeCost = activeWork.reduce((s, r) => s + costOf(r.pokemon_id), 0);
+  const activeCost = activeWork.reduce((s, r) => s + rowCost(r), 0);
 
   const lines = [];
   if (activeWork.length > cap) {
@@ -1121,7 +1199,7 @@ function openConfirmChanges() {
   const activeWork = editorWork.filter(r => !r.isDeleted && r.released_week == null);
   const activeCount = activeWork.length;
   const limit = pointLimit();
-  const activeCost = activeWork.reduce((s, r) => s + costOf(r.pokemon_id), 0);
+  const activeCost = activeWork.reduce((s, r) => s + rowCost(r), 0);
 
   const parts = [];
   if (inserts.length) parts.push(inserts.length + ' to add');
@@ -1161,7 +1239,7 @@ async function applyEditorChanges() {
     for (const r of updates) {
       const { error } = await sb.from('team_pokemon')
         .update({ acquired_week: r.acquired_week, released_week: r.released_week, acquired_via: r.acquired_via,
-          draft_pick_number: r.acquired_via === 'draft' ? (r.draft_pick_number ?? null) : null, notes: r.notes })
+          draft_pick_number: r.acquired_via === 'draft' ? (r.draft_pick_number ?? null) : null, notes: r.notes, is_tera: !!r.is_tera })
         .eq('id', r.id);
       if (error) throw error;
     }
@@ -1171,7 +1249,7 @@ async function applyEditorChanges() {
         acquired_week: r.acquired_week, released_week: r.released_week,
         acquired_via: r.acquired_via,
         draft_pick_number: r.acquired_via === 'draft' ? (r.draft_pick_number ?? null) : null,
-        notes: r.notes,
+        notes: r.notes, is_tera: !!r.is_tera,
       });
       if (error) throw error;
     }
@@ -1263,7 +1341,7 @@ function addRosterRow() {
   editorWork.push({
     key: 'new-' + (++editorKeySeq), id: null,
     pokemon_id: addSelected, acquired_week: w, released_week: null,
-    acquired_via: via, draft_pick_number: pick, notes: null, isNew: true, isDeleted: false,
+    acquired_via: via, draft_pick_number: pick, notes: null, is_tera: false, isNew: true, isDeleted: false,
   });
   resetAddPicker();
   renderEditor();
