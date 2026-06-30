@@ -249,8 +249,31 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .member-pop .pop-bst b { color: var(--text); font-weight: 800; }
 .member-pop .pop-foot { padding: 9px 13px; font-size: 11px; color: var(--text3); }
 
-/* ── INACTIVE MEMBERS - same card component, just stacked. ── */
-.inactive-list { display: flex; flex-direction: column; gap: 12px; }
+/* ── INACTIVE SECTION - inside col-main, directly below the roster. ── */
+.sec-inactive {
+  padding-top: 16px;
+}
+.inactive-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 4px 0 10px;
+}
+.inactive-bar .card-title { margin: 0; flex: none; }
+.inactive-count { font-size: 11px; color: var(--text3); }
+.inactive-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.sort-group { display: flex; gap: 3px; }
+.sort-btn, .filter-btn {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text2); cursor: pointer; font-size: 11px; font-weight: 600;
+  font-family: inherit; padding: 4px 10px; transition: color .12s, border-color .12s, background .12s;
+}
+.sort-btn:hover, .filter-btn:hover { color: var(--text); border-color: var(--accent); }
+.sort-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(124,111,247,.1); }
+.filter-btn.active { color: var(--green); border-color: var(--green); background: rgba(76,175,125,.1); }
+.inactive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
 
 /* Collapsible card header (Recent Transactions): centered label, arrow pinned right. */
 .card-title.center { text-align: center; }
@@ -318,16 +341,17 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   .col-left { border-right: none; }
   /* Every flattened section is a full-width flex item with consistent side margins;
      the roster column drops its grid padding so its cards line up with the rest. */
-  .sec-identity, .sec-stats, .sec-txns, .sec-inactive, .sec-right-sched {
+  .sec-identity, .sec-stats, .sec-txns, .sec-right-sched {
     width: auto; align-self: stretch;
   }
   .col-main { padding: 0; margin: 8px; }
   .sec-identity { order: 1; } .sec-stats { order: 2; }
   .sec-roster { order: 3; } .sec-right-sched { order: 4; }
-  .sec-txns { order: 5; } .sec-inactive { order: 6; }
+  .sec-txns { order: 5; }
   .roster-grid { grid-template-columns: 1fr; }
   /* Reclaim a little horizontal room for the cards on mobile. */
   .card { margin: 8px; }
+  .inactive-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 460px) {
   /* Team Stats KO/Faint/Ratio/Δ row: 2×2 instead of a cramped single row of four. */
@@ -371,17 +395,30 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
       </div>
       <div id="transactions"><!-- free agency / trades --></div>
     </div>
-
-    <div class="card sec-inactive">
-      <div class="card-title center">Inactive Team Members</div>
-      <div id="inactive"><!-- released team_pokemon --></div>
-    </div>
   </div>
 
-  <!-- ── CENTER: active member cards ── -->
+  <!-- ── CENTER: active member cards + inactive members ── -->
   <div class="col col-main sec-roster">
     <div class="roster-grid" id="roster"><!-- member cards --></div>
+
+  <div class="sec-inactive">
+    <div class="inactive-bar">
+      <span class="card-title">Inactive Team Members</span>
+      <span class="inactive-count" id="inactive-count"></span>
+      <div class="inactive-toolbar" id="inactive-toolbar">
+        <div class="sort-group">
+          <button class="sort-btn active" id="sort-dropped"   onclick="setInactiveSort('dropped')">Recent</button>
+          <button class="sort-btn"        id="sort-most-used" onclick="setInactiveSort('most-used')">Most Used</button>
+          <button class="sort-btn"        id="sort-most-kos"  onclick="setInactiveSort('most-kos')">Most KOs</button>
+        </div>
+        <button class="filter-btn active" id="filter-stats-btn" onclick="toggleInactiveFilter()">Hide Unused</button>
+      </div>
+      <button class="expand-arrow" id="inactive-arrow" onclick="toggleInactive()">▲</button>
+    </div>
+    <div class="inactive-grid" id="inactive"><!-- released team_pokemon --></div>
   </div>
+
+  </div><!-- /col-main -->
 
   <!-- ── RIGHT: player schedule ── -->
   <div class="col col-right">
@@ -465,9 +502,12 @@ let currentUser  = null;
 let isAdmin      = false;
 
 // View-only form toggles, keyed by Pokémon id (survives nothing - purely display).
-let altFormActive  = new Set();   // base entries currently showing their alt form
-let megaBaseActive = new Set();   // Mega/Primal entries currently showing their base
-let txnExpanded    = false;       // Recent Transactions collapsed by default
+let altFormActive      = new Set();   // base entries currently showing their alt form
+let megaBaseActive     = new Set();   // Mega/Primal entries currently showing their base
+let txnExpanded        = false;       // Recent Transactions collapsed by default
+let inactiveSortMode   = 'dropped';   // 'dropped' | 'most-used' | 'most-kos'
+let inactiveShowAll    = false;       // false = hide mons with zero battle appearances
+let inactiveExpanded   = true;        // false = grid + toolbar hidden (collapsed)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // URL / ID HELPERS - mirror the Planner so sprite/icon paths resolve identically.
@@ -930,10 +970,10 @@ function renderTeamStats() {
     + '<div class="games">(' + rec.gw + '–' + rec.gl + ')</div>'
     + '</div>'
     + '<div class="stat-grid">'
-    +   statBox('OW%', fmtRate(sos.sos), '', 'Strength of Schedule: average win rate of the opponents this team has faced')
-    +   statBox('Match Δ', signed(matchDelta), deltaClass(matchDelta), 'Match wins minus match losses')
-    +   statBox('OOW%', fmtRate(sos.sosos), '', 'Strength of Strength of Schedule: average win rate of this team\'s opponents\' opponents')
-    +   statBox('Game Δ', signed(gameDelta), deltaClass(gameDelta), 'Games won minus games lost')
+    +   statBox('OW%', fmtRate(sos.sos), '', 'Opponents\' Win Percentage — the combined win rate of all opponents this team has faced in the regular season. A higher value means a harder schedule.')
+    +   statBox('Match Δ', signed(matchDelta), deltaClass(matchDelta), 'Match Differential — match wins minus match losses')
+    +   statBox('OOW%', fmtRate(sos.sosos), '', 'Opponents\' Opponents\' Win Percentage — the combined win rate of all opponents\' opponents. Used as a second-degree strength of schedule tiebreaker.')
+    +   statBox('Game Δ', signed(gameDelta), deltaClass(gameDelta), 'Game Differential — individual games won minus games lost across all matches')
     + '</div>'
     + '<div class="kf-row">'
     +   kfCell('KOs', kf.kos, '', 'KOs: total number of Knock Outs scored by this team\'s Pokémon (does not include friendly fire KOs)')
@@ -1151,21 +1191,78 @@ function nameTier(name) {
 }
 
 function renderInactive() {
-  const el = document.getElementById('inactive');
-  el.innerHTML = '';
-  const inactive = roster
-    .filter(r => r.released_week != null && r.released_week !== 1)
-    .sort((a, b) => (b.released_week || 0) - (a.released_week || 0));
+  const el       = document.getElementById('inactive');
+  const countEl  = document.getElementById('inactive-count');
+  el.innerHTML   = '';
 
-  if (!inactive.length) { el.innerHTML = '<div class="empty">No inactive Pokémon.</div>'; return; }
+  const allInactive = roster
+    .filter(r => r.released_week != null && r.released_week !== 1);
 
-  // Same card component as the active roster (with Week Dropped added). The narrow
-  // left column makes these wrap; we'll tune the compact layout once data exists.
-  const list = document.createElement('div');
-  list.className = 'inactive-list';
-  inactive.forEach(r => list.appendChild(memberCard(r, { inactive: true })));
-  el.appendChild(list);
+  if (!allInactive.length) {
+    el.innerHTML = '<div class="empty">No inactive Pokémon.</div>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+
+  // Pre-compute stats so we can sort and filter before rendering.
+  const withStats = allInactive.map(r => ({ row: r, st: memberStats(r) }));
+
+  // Filter: hide mons that never appeared in a game and have zero KOs/faints.
+  const displayed = inactiveShowAll
+    ? withStats
+    : withStats.filter(({ st }) => st.gpCount > 0 || st.kos > 0 || st.faints > 0);
+
+  // Sort.
+  const cmp = {
+    'dropped':   (a, b) => (b.row.released_week || 0) - (a.row.released_week || 0),
+    'most-used': (a, b) => b.st.mbCount - a.st.mbCount || b.st.gpCount - a.st.gpCount || (b.row.released_week || 0) - (a.row.released_week || 0),
+    'most-kos':  (a, b) => b.st.kos - a.st.kos || b.st.faints - a.st.faints     || (b.row.released_week || 0) - (a.row.released_week || 0),
+  };
+  const sorted = [...displayed].sort(cmp[inactiveSortMode] || cmp['dropped']);
+
+  // Update count label.
+  if (countEl) {
+    const total = allInactive.length;
+    countEl.textContent = sorted.length === total
+      ? total + ' inactive'
+      : sorted.length + ' of ' + total + ' shown';
+  }
+
+  if (!sorted.length) {
+    el.innerHTML = '<div class="empty">No inactive Pokémon with battle stats.</div>';
+    return;
+  }
+
+  // Hide grid + toolbar when collapsed; update arrow direction.
+  const toolbar = document.getElementById('inactive-toolbar');
+  const arrow   = document.getElementById('inactive-arrow');
+  if (el)      el.hidden      = !inactiveExpanded;
+  if (toolbar) toolbar.hidden = !inactiveExpanded;
+  if (arrow)   arrow.textContent = inactiveExpanded ? '▲' : '▼';
+  if (!inactiveExpanded) return;
+
+  sorted.forEach(({ row }) => el.appendChild(memberCard(row, { inactive: true })));
   if (window.SBLTooltip) window.SBLTooltip.refresh();
+}
+
+function setInactiveSort(mode) {
+  inactiveSortMode = mode;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('sort-' + mode);
+  if (btn) btn.classList.add('active');
+  renderInactive();
+}
+
+function toggleInactiveFilter() {
+  inactiveShowAll = !inactiveShowAll;
+  const btn = document.getElementById('filter-stats-btn');
+  if (btn) btn.classList.toggle('active', !inactiveShowAll);
+  renderInactive();
+}
+
+function toggleInactive() {
+  inactiveExpanded = !inactiveExpanded;
+  renderInactive();
 }
 
 function toggleTxns() { txnExpanded = !txnExpanded; renderTransactions(); }
