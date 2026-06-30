@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SBL Hub - Tier Admin</title>
+<title>SBL Hub — Tier Admin</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -61,7 +61,8 @@ select#season-select:focus { border-color: var(--accent); }
 .tier-collapse-icon { font-size: 11px; color: var(--text3); margin-left: 4px; }
 .tier-body { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; min-height: 58px; }
 .tier-body.collapsed { display: none; }
-.pmon { display: flex; flex-direction: column; align-items: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 5px 5px 3px; width: 68px; }
+.pmon { display: flex; flex-direction: column; align-items: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 5px 5px 3px; width: 68px; position: relative; }
+.pmon-tera { position: absolute; top: -5px; right: -5px; background: var(--yellow); color: #1a1d27; font-size: 9px; font-weight: 800; line-height: 1; padding: 2px 4px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
 .pmon img { width: 40px; height: 40px; image-rendering: pixelated; display: block; }
 .pmon-name { font-size: 9px; color: var(--text2); text-align: center; margin-top: 2px; line-height: 1.2; word-break: break-word; }
 .empty-state { text-align: center; color: var(--text3); font-size: 13px; padding: 40px; font-style: italic; }
@@ -153,7 +154,8 @@ let isAdmin     = false;
 let pokemonById = {};               // id -> pokemon.json entry
 let seasons     = [];               // all seasons
 let selectedSeasonId = null;
-let currentTiers = {};              // pokemon_id -> point_cost for the selected season
+let currentTiers = {};              // pokemon_id -> { point_cost, tera_point_cost } for the selected season
+                                    // tera_point_cost is null unless the season prices Tera separately (S9).
 let collapsed = new Set();
 
 // ── HELPERS ──
@@ -172,7 +174,7 @@ function attachIconFallback(img, mon) {
   };
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
-function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '-'; }
+function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '—'; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA LOAD
@@ -208,9 +210,9 @@ function populateSeasonDropdown() {
 async function loadSeasonTiers(seasonId) {
   currentTiers = {};
   if (!seasonId) { renderPreview(); return; }
-  const { data, error } = await sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', seasonId);
+  const { data, error } = await sb.from('season_pokemon_tiers').select('pokemon_id, point_cost, tera_point_cost').eq('season_id', seasonId);
   if (error) { showToast('Could not load tiers: ' + error.message, 'err'); return; }
-  (data || []).forEach(r => { currentTiers[r.pokemon_id] = r.point_cost; });
+  (data || []).forEach(r => { currentTiers[r.pokemon_id] = { point_cost: r.point_cost, tera_point_cost: r.tera_point_cost }; });
   renderPreview();
 }
 
@@ -230,21 +232,23 @@ function renderPreview() {
   const ids = Object.keys(currentTiers);
   const legalCount = ids.length;
   const totalMon = Object.keys(pokemonById).length;
-  const totalPts = ids.reduce((s, id) => s + (currentTiers[id] || 0), 0);
+  const totalPts = ids.reduce((s, id) => s + (currentTiers[id].point_cost || 0), 0);
+  const teraCount = ids.filter(id => currentTiers[id].tera_point_cost != null).length;
 
   summary.innerHTML = legalCount
     ? '<b>' + legalCount + '</b> legal Pokémon · total pool value <b>' + totalPts + '</b> pts '
       + '<span class="muted">· ' + (totalMon - legalCount) + ' not legal this season</span>'
-    : '<span class="muted">No tiers set for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet - import from pokemon.json or a CSV to populate it.</span>';
+      + (teraCount ? ' <span style="color:var(--yellow)">· ' + teraCount + ' with Tera pricing</span>' : '')
+    : '<span class="muted">No tiers set for ' + escapeHtml(seasonName(selectedSeasonId)) + ' yet — import from pokemon.json or a CSV to populate it.</span>';
 
   if (!legalCount) {
     pool.innerHTML = '<div class="empty-state">This season has no tier list yet.</div>';
     return;
   }
 
-  const costs = [...new Set(Object.values(currentTiers))].sort((a, b) => b - a);
+  const costs = [...new Set(ids.map(id => currentTiers[id].point_cost))].sort((a, b) => b - a);
   costs.forEach(cost => {
-    const mons = ids.filter(id => currentTiers[id] === cost)
+    const mons = ids.filter(id => currentTiers[id].point_cost === cost)
       .map(id => pokemonById[id] || { id, name: id })
       .sort((a, b) => a.name.localeCompare(b.name));
     pool.appendChild(makeLane(cost, mons));
@@ -268,13 +272,21 @@ function makeLane(cost, mons) {
   mons.forEach(mon => {
     const card = document.createElement('div');
     card.className = 'pmon';
-    card.title = mon.name;
+    const tera = currentTiers[mon.id] && currentTiers[mon.id].tera_point_cost;
+    card.title = tera != null ? mon.name + ' — Tera ' + tera + ' pts' : mon.name;
     const img = document.createElement('img');
     img.src = iconUrl(mon); img.alt = mon.name;
     attachIconFallback(img, mon);
     const nm = document.createElement('div');
     nm.className = 'pmon-name'; nm.textContent = mon.name;
     card.appendChild(img); card.appendChild(nm);
+    if (tera != null) {
+      const badge = document.createElement('div');
+      badge.className = 'pmon-tera';
+      badge.textContent = '+' + (tera - cost);
+      badge.title = 'Tera price: ' + tera + ' pts';
+      card.appendChild(badge);
+    }
     body.appendChild(card);
   });
   lane.appendChild(body);
@@ -286,16 +298,19 @@ function makeLane(cost, mons) {
 // ─────────────────────────────────────────────────────────────────────────────
 function tierSummaryLine(map) {
   const ids = Object.keys(map);
-  const total = ids.reduce((s, id) => s + (map[id] || 0), 0);
-  return ids.length + ' legal Pokémon, ' + total + ' total points';
+  const total = ids.reduce((s, id) => s + (map[id].point_cost || 0), 0);
+  const tera = ids.filter(id => map[id].tera_point_cost != null).length;
+  return ids.length + ' legal Pokémon, ' + total + ' total points'
+    + (tera ? ', ' + tera + ' Tera-priced' : '');
 }
 
 function importFromPokemonJson() {
   if (!selectedSeasonId) { showToast('Pick a season first.', 'err'); return; }
   // pokemon.json: legal mon with a point value become this season's tiers.
+  // The json has no Tera concept, so tera_point_cost is null across the board.
   const map = {};
   Object.values(pokemonById).forEach(p => {
-    if (p.legal && p.points != null) map[p.id] = p.points;
+    if (p.legal && p.points != null) map[p.id] = { point_cost: p.points, tera_point_cost: null };
   });
   if (!Object.keys(map).length) { showToast('pokemon.json has no legal Pokémon with point values.', 'err'); return; }
   confirmImport(map, 'the pokemon.json baseline');
@@ -311,9 +326,10 @@ function onCsvChosen(event) {
     try {
       const map = parseTierCsv(reader.result);
       if (!Object.keys(map.tiers).length) { showToast('No legal Pokémon found in that CSV.', 'err'); return; }
-      let note = '';
-      if (map.unknown.length) note = map.unknown.length + ' row(s) had IDs not in pokemon.json and were skipped.';
-      confirmImport(map.tiers, 'the uploaded CSV', note);
+      const notes = [];
+      if (map.unknown.length) notes.push(map.unknown.length + ' row(s) had IDs not in pokemon.json and were skipped.');
+      if (map.teraBelowBase.length) notes.push('⚠ ' + map.teraBelowBase.length + ' row(s) have a Tera price below the base price (' + map.teraBelowBase.slice(0, 5).join(', ') + (map.teraBelowBase.length > 5 ? '…' : '') + ') — double-check the Tera column wasn\u2019t transposed.');
+      confirmImport(map.tiers, 'the uploaded CSV', notes.join(' '));
     } catch (err) {
       console.error(err);
       showToast('Could not parse that CSV: ' + (err.message || err), 'err');
@@ -322,22 +338,31 @@ function onCsvChosen(event) {
   reader.readAsText(file);
 }
 
-// Parse the tier editor's CSV (columns: id, name, points|"N/A"). Returns the legal
-// {id -> cost} map plus any unknown ids encountered.
+// Parse the tier editor's CSV. Columns: id, name, points|"N/A", and an OPTIONAL
+// 4th tera-points column (number or "N/A"/blank). Returns { id -> {point_cost,
+// tera_point_cost} } for legal rows, plus any unknown ids and any rows whose Tera
+// price is below the base (a likely transposition/typo, surfaced as a soft warning).
 function parseTierCsv(text) {
   const rows = parseCsvRows(text);
-  const tiers = {}; const unknown = [];
+  const tiers = {}; const unknown = []; const teraBelowBase = [];
   rows.forEach((row, i) => {
     if (row.length < 3) return;
     const id = (row[0] || '').trim();
     const pts = (row[2] || '').trim();
+    const teraRaw = (row[3] || '').trim();   // undefined for 3-col CSVs => ''
     if (i === 0 && (id === '#' || pts.toLowerCase() === 'points')) return;  // header
     if (!id) return;
     if (!/^-?\d+$/.test(pts)) return;   // "N/A" or blank => illegal => skip
     if (!(id in pokemonById)) { unknown.push(id); return; }
-    tiers[id] = parseInt(pts, 10);
+    const point_cost = parseInt(pts, 10);
+    let tera_point_cost = null;
+    if (/^-?\d+$/.test(teraRaw)) {
+      tera_point_cost = parseInt(teraRaw, 10);
+      if (tera_point_cost < point_cost) teraBelowBase.push(pokemonById[id].name || id);
+    }
+    tiers[id] = { point_cost, tera_point_cost };
   });
-  return { tiers, unknown };
+  return { tiers, unknown, teraBelowBase };
 }
 
 // Minimal RFC-style CSV parser (handles quoted fields and escaped quotes).
@@ -380,7 +405,7 @@ function confirmImport(map, sourceLabel, note) {
 }
 
 async function saveTiers(map) {
-  const rows = Object.entries(map).map(([pokemon_id, point_cost]) => ({ season_id: selectedSeasonId, pokemon_id, point_cost }));
+  const rows = Object.entries(map).map(([pokemon_id, v]) => ({ season_id: selectedSeasonId, pokemon_id, point_cost: v.point_cost, tera_point_cost: v.tera_point_cost }));
   try {
     // Replace = clear the season's rows, then insert the new set.
     const { error: delErr } = await sb.from('season_pokemon_tiers').delete().eq('season_id', selectedSeasonId);
@@ -397,19 +422,28 @@ async function saveTiers(map) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXPORT - reproduce the tier editor's exact CSV (id, name, points|"N/A"),
-// covering every Pokémon so it round-trips into the editor / update_pokemon.py.
+// EXPORT — reproduce the tier editor's CSV (id, name, points|"N/A"), covering every
+// Pokémon so it round-trips into the editor / update_pokemon.py. If (and only if) the
+// season prices Tera, a 4th "Tera Points" column is appended; non-Tera seasons export
+// the identical 3-column CSV as before so the editor paste path is unaffected.
 // ─────────────────────────────────────────────────────────────────────────────
 function exportCsv() {
   if (!Object.keys(pokemonById).length) return;
-  const rows = [['#', 'Pokémon', 'Points']];
+  const hasTera = Object.keys(currentTiers).some(id => currentTiers[id].tera_point_cost != null);
+  const rows = [hasTera ? ['#', 'Pokémon', 'Points', 'Tera Points'] : ['#', 'Pokémon', 'Points']];
   const sorted = [...Object.values(pokemonById)].sort((a, b) => {
     const na = parseInt(a.id), nb = parseInt(b.id);
     return na !== nb ? na - nb : a.id.localeCompare(b.id);
   });
   sorted.forEach(p => {
-    const has = p.id in currentTiers;
-    rows.push([p.id, p.name, has ? String(currentTiers[p.id]) : 'N/A']);
+    const entry = currentTiers[p.id];
+    const ptsCell = entry ? String(entry.point_cost) : 'N/A';
+    if (hasTera) {
+      const teraCell = (entry && entry.tera_point_cost != null) ? String(entry.tera_point_cost) : 'N/A';
+      rows.push([p.id, p.name, ptsCell, teraCell]);
+    } else {
+      rows.push([p.id, p.name, ptsCell]);
+    }
   });
   const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
