@@ -284,6 +284,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   transition: border-color .15s, opacity .15s, box-shadow .15s, background .15s;
 }
 .pmon:hover { border-color: var(--accent); }
+.pmon-tera-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 0 1.5px var(--bg2); }
+.team-card-icons img.tera-icon, .now-icons img.tera-icon { box-shadow: 0 0 0 2px var(--yellow); border-radius: 5px; }
+.modal-tera { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 8px 10px; background: rgba(240,192,96,.08); border: 1px solid rgba(240,192,96,.4); border-radius: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
+.modal-tera input { accent-color: var(--yellow); width: 15px; height: 15px; cursor: pointer; }
+.modal-tera .mt-prices { color: var(--text2); font-size: 12px; }
+.modal-tera .mt-prices b { color: var(--yellow); }
 .pmon img { width: 40px; height: 40px; image-rendering: pixelated; pointer-events: none; display: block; }
 /* Fixed two-line name area so 1- and 2-line names take the same height - keeps every
    card uniform so the grid rows line up cleanly (e.g. on the big draft-night screen). */
@@ -642,6 +648,8 @@ let coachByTeam  = {};              // team_id -> current coach display_name
 let ownersByTeam = {};              // team_id -> [{started_week, ended_week, name}] stints
 let txns         = [];              // unified transaction feed for the activity log
 let tierCost     = {};              // pokemon_id -> point_cost (this season's legal set)
+let teraCost     = {};              // pokemon_id -> tera_point_cost (null unless season prices Tera, e.g. S9)
+let teraByEntry  = {};              // (team_id + '|' + pokemon_id) -> is_tera, for the active roster entry
 let draft        = null;            // ACTIVE division's drafts row (or the sole row when undivided)
 let picksByTeam  = {};              // team_id -> [pokemon_id, …] CURRENT active roster (icons/points)
 let rosterByTeam = {};              // alias of the above current-roster map
@@ -831,7 +839,7 @@ async function loadData() {
 
   const [teamsRes, tiersRes, draftRes, tradeRes, faRes, divRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed,division_id').eq('season_id', season.id),
-    sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', season.id),
+    sb.from('season_pokemon_tiers').select('pokemon_id, point_cost, tera_point_cost').eq('season_id', season.id),
     sb.from('drafts').select('id, division_id, draft_order, current_pick_number, status').eq('season_id', season.id),
     sb.from('trades').select('team_a_id, pokemon_a_id, team_b_id, pokemon_b_id, effective_week, occurred_at, notes').eq('season_id', season.id),
     sb.from('free_agency_moves').select('team_id, pokemon_added_id, pokemon_dropped_id, effective_week, occurred_at, notes').eq('season_id', season.id),
@@ -857,17 +865,17 @@ async function loadData() {
   });
   Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
 
-  tierCost = {};
-  (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; });
+  tierCost = {}; teraCost = {};
+  (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; teraCost[t.pokemon_id] = t.tera_point_cost; });
 
   // Index draft rows by division scope ('__none__' when undivided).
   draftByDivision = {};
   (draftRes.data || []).forEach(d => { draftByDivision[d.division_id || '__none__'] = d; });
 
   // Drafted picks for this season's teams.
-  picksByTeam = {}; draftPicks = []; rosterByTeam = {}; takenByDivision = {};
+  picksByTeam = {}; draftPicks = []; rosterByTeam = {}; takenByDivision = {}; teraByEntry = {};
   if (teamIds.length) {
-    const picks = await fetchAllIn('team_pokemon', 'team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week', 'team_id', teamIds);
+    const picks = await fetchAllIn('team_pokemon', 'team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week, is_tera', 'team_id', teamIds);
     // Draft LOG (historical): every draft pick ever made, even if later traded away -
     // the log is a permanent record of who originally drafted what.
     (picks || [])
@@ -886,6 +894,9 @@ async function loadData() {
         (rosterByTeam[p.team_id] = rosterByTeam[p.team_id] || []).push(p.pokemon_id);
         const scope = teamDivision[p.team_id] || '__none__';
         (takenByDivision[p.pokemon_id] = takenByDivision[p.pokemon_id] || new Set()).add(scope);
+        const key = p.team_id + '|' + p.pokemon_id;
+        if (key in teraByEntry) console.warn('Duplicate active roster entry for', key, '— teraByEntry overwritten');
+        teraByEntry[key] = !!p.is_tera;
       });
     picksByTeam = rosterByTeam;
   }
@@ -929,11 +940,18 @@ async function loadData() {
 function teamName(id)  { const t = teams.find(x => x.id === id); return t ? t.name : '-'; }
 function teamSlug(id)  { const t = teams.find(x => x.id === id); return t && t.slug ? t.slug : (t ? t.id : id); }
 function coachName(id) { return coachByTeam[id] || '-'; }
-function pointsUsed(id){ return (picksByTeam[id] || []).reduce((s, pid) => s + (tierCost[pid] || 0), 0); }
+// Cost of one active roster entry: the Tera price when this entry took Tera AND the
+// season prices Tera for that mon; otherwise the base price. Collapses to tierCost
+// for every non-Tera season (teraCost is null → base) and every non-Tera entry.
+function entryCost(teamId, pid){
+  const tera = teraByEntry[teamId + '|' + pid];
+  return (tera && teraCost[pid] != null) ? teraCost[pid] : (tierCost[pid] || 0);
+}
+function pointsUsed(id){ return (picksByTeam[id] || []).reduce((s, pid) => s + entryCost(id, pid), 0); }
 
 // Render a row of drafted icons, optionally padded out to `slotCount` total slots
 // with faded Pokéball placeholders for not-yet-drafted roster spots.
-function iconRow(pokemonIds, sizeClass, slotCount) {
+function iconRow(pokemonIds, sizeClass, slotCount, teamId) {
   const wrap = document.createElement('div');
   wrap.className = sizeClass;
   const ids = pokemonIds || [];
@@ -943,6 +961,12 @@ function iconRow(pokemonIds, sizeClass, slotCount) {
     img.src = iconUrl(mon || { id: pid });
     img.alt = mon ? mon.name : pid;
     img.title = mon ? mon.name : pid;
+    // Gold ring marks an entry that took Tera (only when a team context is given and
+    // the season prices Tera for it). Harmless no-op for non-Tera seasons/entries.
+    if (teamId && teraByEntry[teamId + '|' + pid] && teraCost[pid] != null) {
+      img.classList.add('tera-icon');
+      img.title = (mon ? mon.name : pid) + ' (Tera)';
+    }
     attachIconFallback(img, mon || { id: pid });
     wrap.appendChild(img);
   });
@@ -1000,7 +1024,7 @@ function renderSidebar() {
     card.appendChild(head);
 
     // Icon row: all roster slots in a single row.
-    card.appendChild(iconRow(picksByTeam[id], 'team-card-icons', season.team_size));
+    card.appendChild(iconRow(picksByTeam[id], 'team-card-icons', season.team_size, id));
 
     body.appendChild(card);
   });
@@ -1035,7 +1059,7 @@ function renderStatus() {
   const co  = document.createElement('div'); co.className = 'now-coach'; co.textContent = cName;
   nowCard.appendChild(co);
   if (!same) { const tm = document.createElement('div'); tm.className = 'now-team'; tm.textContent = tName; nowCard.appendChild(tm); }
-  nowCard.appendChild(iconRow(picksByTeam[curId], 'now-icons', season.team_size));
+  nowCard.appendChild(iconRow(picksByTeam[curId], 'now-icons', season.team_size, curId));
   const limit = season.point_limit ?? 0;
   const spent = pointsUsed(curId);
   const pts = document.createElement('div'); pts.className = 'now-pts';
@@ -1072,6 +1096,15 @@ function makeCard(mon) {
   nm.className = 'pmon-name';
   nm.textContent = mon.name;
   card.appendChild(nm);
+
+  // Gold corner dot marks Pokémon the season prices Tera for. Pure affordance —
+  // never present in a non-Tera season (teraCost is null for every mon there).
+  if (teraCost[mon.id] != null) {
+    const dot = document.createElement('div');
+    dot.className = 'pmon-tera-dot';
+    dot.title = 'Tera available — base ' + (tierCost[mon.id] || 0) + ' · Tera ' + teraCost[mon.id] + ' pts';
+    card.appendChild(dot);
+  }
 
   // Single-click = yellow pin; double-click = draft (admin, Stage 3). A single
   // click is delayed briefly so a double-click can cancel it - otherwise every
@@ -1143,50 +1176,67 @@ function onPoolDblClick(mon, card) {
   const teamId = teamAtPick(draft.current_pick_number);
   if (!teamId) { showToast('No team is on the clock.', 'err'); return; }
 
-  const cost  = tierCost[mon.id] || 0;
+  const teraPrice = teraCost[mon.id];          // null unless this season prices Tera for this mon
+  const canTera   = teraPrice != null;
+  const baseCost  = tierCost[mon.id] || 0;
   const left  = remaining(teamId);
   const picksMade = (picksByTeam[teamId] || []).length;
   const rosterFull = picksMade >= (season.team_size || Infinity);
-
-  // Forward-looking budget check: after this pick, can the team still fill every
-  // remaining roster slot at the cheapest legal cost? If not, flag it so the admin
-  // can warn the player before committing.
   const minCost = minLegalCost();
   const slotsAfter = Math.max(0, (season.team_size || 0) - picksMade - 1);
-  const budgetAfter = left - cost;
-  const minNeeded = slotsAfter * minCost;
-  const shortfall = minNeeded - budgetAfter;
 
-  // Confirmation - surfaces team, cost, and any budget/roster warning before committing.
-  let warn = '';
-  if (cost > left)  warn += '<p class="modal-warn">Over budget by ' + (cost - left) + ' pts (' + left + ' remaining).</p>';
-  if (rosterFull)   warn += '<p class="modal-warn">' + escapeHtml(teamName(teamId)) + ' already has a full roster.</p>';
-  if (!rosterFull && cost <= left && slotsAfter > 0 && shortfall > 0) {
-    warn += '<p class="modal-warn">Leaves ' + budgetAfter + ' pts for ' + slotsAfter
-      + ' more pick' + (slotsAfter === 1 ? '' : 's') + ' - ' + shortfall + ' pt'
-      + (shortfall === 1 ? '' : 's') + ' short of the minimum (' + minCost + ' pts each) to fill the roster.</p>';
+  // Budget math as a function of the Tera choice, so the toggle can re-render it live.
+  function budgetView(isTera) {
+    const cost = (isTera && canTera) ? teraPrice : baseCost;
+    const budgetAfter = left - cost;
+    const minNeeded = slotsAfter * minCost;
+    const shortfall = minNeeded - budgetAfter;
+    let warn = '';
+    if (cost > left)  warn += '<p class="modal-warn">Over budget by ' + (cost - left) + ' pts (' + left + ' remaining).</p>';
+    if (rosterFull)   warn += '<p class="modal-warn">' + escapeHtml(teamName(teamId)) + ' already has a full roster.</p>';
+    if (!rosterFull && cost <= left && slotsAfter > 0 && shortfall > 0) {
+      warn += '<p class="modal-warn">Leaves ' + budgetAfter + ' pts for ' + slotsAfter
+        + ' more pick' + (slotsAfter === 1 ? '' : 's') + ' - ' + shortfall + ' pt'
+        + (shortfall === 1 ? '' : 's') + ' short of the minimum (' + minCost + ' pts each) to fill the roster.</p>';
+    }
+    return { cost, budgetAfter, warn };
   }
 
-  openModal(
-    '<h3>Draft this Pok\u00e9mon?</h3>'
-    + '<div class="modal-mon">'
-    +   '<img src="' + iconUrl(mon) + '" alt="">'
-    +   '<div><div class="mm-name">' + escapeHtml(mon.name) + '</div>'
-    +   '<div class="mm-cost">' + cost + ' pts</div></div>'
-    + '</div>'
-    + '<p>To <b>' + escapeHtml(teamName(teamId)) + '</b> (' + escapeHtml(coachName(teamId)) + ')'
-    +   ' \u2014 pick #' + draft.current_pick_number + '. '
-    +   'Budget after: ' + (left - cost) + '/' + (season.point_limit ?? '\u2014') + '.</p>'
-    + warn
-    + '<div class="modal-actions">'
-    +   '<button class="btn" onclick="closeModal()">Cancel</button>'
-    +   '<button class="btn btn-accent" id="confirm-draft-btn">Draft</button>'
-    + '</div>'
-  );
-  document.getElementById('confirm-draft-btn').onclick = () => {
-    closeModal();
-    draftPokemon(mon, teamId, draft.current_pick_number);
-  };
+  // Tera toggle row, only when the season prices Tera for this mon. Defaults OFF.
+  const teraRow = canTera
+    ? '<label class="modal-tera"><input type="checkbox" id="confirm-tera-toggle">'
+      + '<span>Terastallize <span class="mt-prices">(base ' + baseCost + ' \u00b7 <b>Tera ' + teraPrice + '</b> pts)</span></span></label>'
+    : '';
+
+  function renderModal(isTera) {
+    const v = budgetView(isTera);
+    openModal(
+      '<h3>Draft this Pok\u00e9mon?</h3>'
+      + '<div class="modal-mon">'
+      +   '<img src="' + iconUrl(mon) + '" alt="">'
+      +   '<div><div class="mm-name">' + escapeHtml(mon.name) + '</div>'
+      +   '<div class="mm-cost" id="confirm-cost">' + v.cost + ' pts' + (isTera && canTera ? ' \u00b7 Tera' : '') + '</div></div>'
+      + '</div>'
+      + teraRow
+      + '<p>To <b>' + escapeHtml(teamName(teamId)) + '</b> (' + escapeHtml(coachName(teamId)) + ')'
+      +   ' \u2014 pick #' + draft.current_pick_number + '. '
+      +   'Budget after: ' + v.budgetAfter + '/' + (season.point_limit ?? '\u2014') + '.</p>'
+      + v.warn
+      + '<div class="modal-actions">'
+      +   '<button class="btn" onclick="closeModal()">Cancel</button>'
+      +   '<button class="btn btn-accent" id="confirm-draft-btn">Draft</button>'
+      + '</div>'
+    );
+    // Restore toggle state and rewire after each (re)render.
+    const tog = document.getElementById('confirm-tera-toggle');
+    if (tog) { tog.checked = isTera; tog.onchange = () => renderModal(tog.checked); }
+    document.getElementById('confirm-draft-btn').onclick = () => {
+      const finalTera = canTera && document.getElementById('confirm-tera-toggle').checked;
+      closeModal();
+      draftPokemon(mon, teamId, draft.current_pick_number, finalTera);
+    };
+  }
+  renderModal(false);   // default Tera OFF
 }
 
 // Points a team has left to spend.
@@ -1204,7 +1254,8 @@ function minLegalCost() {
 // Commit a pick: insert the team_pokemon row, advance (or complete) the draft,
 // then update local state and re-render. No realtime yet (Stage 5) - we update
 // optimistically after the writes succeed.
-async function draftPokemon(mon, teamId, pickNumber) {
+async function draftPokemon(mon, teamId, pickNumber, isTera) {
+  isTera = !!isTera;
   const totalPicks = orderedTeams.length * (season.team_size || 0);
   const isLast = totalPicks && pickNumber >= totalPicks;
 
@@ -1215,6 +1266,7 @@ async function draftPokemon(mon, teamId, pickNumber) {
       acquired_week: 1,                 // draft picks join in week 1 per the schema
       acquired_via: 'draft',
       draft_pick_number: pickNumber,
+      is_tera: isTera,
     });
     if (insErr) throw insErr;
 
@@ -1232,6 +1284,7 @@ async function draftPokemon(mon, teamId, pickNumber) {
 
     // Local state.
     (picksByTeam[teamId] = picksByTeam[teamId] || []).push(mon.id);
+    teraByEntry[teamId + '|' + mon.id] = isTera;
     const scope = teamDivision[teamId] || '__none__';
     (takenByDivision[mon.id] = takenByDivision[mon.id] || new Set()).add(scope);
     draftedSet.add(mon.id);   // active scope === the picking team's scope here
@@ -1555,6 +1608,7 @@ async function performUndo(last) {
       if (!takenByDivision[last.pokemon_id].size) delete takenByDivision[last.pokemon_id];
     }
     draftedSet.delete(last.pokemon_id);
+    delete teraByEntry[last.team_id + '|' + last.pokemon_id];
     const arr = picksByTeam[last.team_id] || [];
     const at = arr.lastIndexOf(last.pokemon_id);
     if (at !== -1) arr.splice(at, 1);
@@ -1779,7 +1833,7 @@ async function refreshDraftState() {
     if (tradeRes.error) throw tradeRes.error;
     if (faRes.error) throw faRes.error;
     const picksRows = teamIds.length
-      ? await fetchAllIn('team_pokemon', 'team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week', 'team_id', teamIds)
+      ? await fetchAllIn('team_pokemon', 'team_id, pokemon_id, draft_pick_number, acquired_via, acquired_week, released_week, is_tera', 'team_id', teamIds)
       : [];
 
     // Re-index draft rows by scope.
@@ -1787,7 +1841,7 @@ async function refreshDraftState() {
     (draftRes.data || []).forEach(d => { draftByDivision[d.division_id || '__none__'] = d; });
 
     // Rebuild pick-derived state from scratch.
-    picksByTeam = {}; draftPicks = []; rosterByTeam = {}; takenByDivision = {};
+    picksByTeam = {}; draftPicks = []; rosterByTeam = {}; takenByDivision = {}; teraByEntry = {};
     picksRows
       .filter(p => p.acquired_via === 'draft')
       .sort((a, b) => (a.draft_pick_number || 0) - (b.draft_pick_number || 0))
@@ -1801,6 +1855,7 @@ async function refreshDraftState() {
         (rosterByTeam[p.team_id] = rosterByTeam[p.team_id] || []).push(p.pokemon_id);
         const scope = teamDivision[p.team_id] || '__none__';
         (takenByDivision[p.pokemon_id] = takenByDivision[p.pokemon_id] || new Set()).add(scope);
+        teraByEntry[p.team_id + '|' + p.pokemon_id] = !!p.is_tera;
       });
     picksByTeam = rosterByTeam;
 
