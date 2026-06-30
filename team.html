@@ -174,6 +174,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 3px #000;
 }
 .sprite-pts.illegal-pts { color: var(--red); }
+.sprite-pts.tera-pts { color: var(--yellow); }
 .sprite-name {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
   padding: 8px 6px 7px; text-align: center; color: #fff; font-weight: 800; line-height: 1.05;
@@ -489,6 +490,7 @@ let allOwners    = [];      // every team_owners row in the season
 let ownerHistory = [];      // this team's team_owners rows, sorted by started_week
 let coachByTeam  = {};      // team_id -> current coach display_name (any team)
 let tierCost     = {};      // pokemon_id -> point_cost (this season)
+let teraCost     = {};      // pokemon_id -> tera_point_cost (null unless season prices Tera, e.g. S9)
 let roster       = [];      // team_pokemon rows for this team (active + inactive)
 let matches      = [];      // matches involving this team (any stage), by week
 let gamesByMatch = {};      // match_id -> [game rows]
@@ -683,7 +685,7 @@ async function loadGlobalData() {
 
   const [teamsRes, tiersRes, regMatchRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
-    sb.from('season_pokemon_tiers').select('pokemon_id, point_cost').eq('season_id', season.id),
+    sb.from('season_pokemon_tiers').select('pokemon_id, point_cost, tera_point_cost').eq('season_id', season.id),
     sb.from('matches').select('team_a_id, team_b_id, winner_team_id').eq('season_id', season.id).eq('stage', 'regular'),
   ]);
   for (const r of [teamsRes, tiersRes, regMatchRes]) if (r.error) throw r.error;
@@ -693,8 +695,8 @@ async function loadGlobalData() {
   allTeams = teamsRes.data || [];
   const teamIds = allTeams.map(t => t.id);
 
-  tierCost = {};
-  (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; });
+  tierCost = {}; teraCost = {};
+  (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; teraCost[t.pokemon_id] = t.tera_point_cost; });
 
   // Keep every owner row (for per-team history) and derive each team's current coach.
   allOwners = ownersAll.filter(o => teamIds.includes(o.team_id));
@@ -728,7 +730,7 @@ async function loadTeamData() {
 
   const [rosterRes, matchRes, faRes, tradeRes] = await Promise.all([
     sb.from('team_pokemon')
-      .select('pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number')
+      .select('pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number, is_tera')
       .eq('team_id', team.id),
     sb.from('matches')
       .select('id, stage, week, team_a_id, team_b_id, team_a_score, team_b_score, winner_team_id, match_date')
@@ -1049,7 +1051,14 @@ function memberCard(row, opts) {
   opts = opts || {};
   const mon  = pokemonById[row.pokemon_id] || { id: row.pokemon_id, name: row.pokemon_id, stats: {} };
   const disp = getDisplayMon(mon);
-  const cost = (row.pokemon_id in tierCost) ? tierCost[row.pokemon_id] : (mon.points != null ? mon.points : '-');
+  // Cost shown is this entry's effective price: the Tera price when this entry took
+  // Tera and the season prices Tera for it, else the base price. isTeraEntry drives
+  // the gold styling. Both collapse to today's behavior for non-Tera seasons/entries.
+  const teraPrice = teraCost[row.pokemon_id];
+  const isTeraEntry = !!row.is_tera && teraPrice != null;
+  const cost = (row.pokemon_id in tierCost)
+    ? (isTeraEntry ? teraPrice : tierCost[row.pokemon_id])
+    : (mon.points != null ? mon.points : '-');
   const st   = memberStats(row);
   const kfDelta = st.kos - st.faints;
   const uid  = 'pop-' + (++_cardSeq);
@@ -1080,7 +1089,7 @@ function memberCard(row, opts) {
   const imgUrl = spriteUrl(disp);
   spriteBlock.innerHTML =
       '<img class="slot-sprite" src="' + imgUrl + '" alt="' + escapeHtml(disp.name) + '">'
-    + '<div class="sprite-pts">' + cost + '</div>'
+    + '<div class="sprite-pts' + (isTeraEntry ? ' tera-pts' : '') + '"' + (isTeraEntry ? ' title="Terastallized — Tera price ' + teraPrice + ' pts (base ' + tierCost[row.pokemon_id] + ')"' : '') + '>' + cost + '</div>'
     + '<div class="sprite-name ' + nameTier(disp.name) + '">' + escapeHtml(disp.name) + '</div>';
   const imgEl = spriteBlock.querySelector('.slot-sprite');
   attachSpriteFallback(imgEl, disp);
