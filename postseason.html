@@ -278,7 +278,7 @@ async function fetchAll(table, columns) {
 }
 
 // Carry the active ?season=<slug> onto internal links so navigating from a past
-// season keeps you in it. Absent (current season) → bare; external untouched;
+// season keeps you in it. Absent (current season) -> bare; external untouched;
 // preserves any existing query/hash on the href.
 const SEASON_SLUG = new URLSearchParams(location.search).get('season') || '';
 function withSeason(href) {
@@ -510,8 +510,9 @@ function expandedCardHtml(node) {
 }
 
 // Measure heights, stack round 0 (skipping hidden byes), center each parent on its
-// VISIBLE children (slide-to-child). A parent whose bye child is hidden aligns to its
-// one real child; a parent with no visible children falls back to the bracket midpoint.
+// VISIBLE children (slide-to-child), then resolve any sibling overlaps within a round
+// by nudging crowded nodes apart — so hidden byes float teams forward without piling
+// nodes on top of each other.
 function layoutBracket(rounds) {
   let cursor = 0;
   rounds[0].forEach(node => {
@@ -522,14 +523,23 @@ function layoutBracket(rounds) {
     cursor += node._h + V_GAP;
   });
   const midH = Math.max(cursor - V_GAP, 0) / 2;
+
   for (let r = 1; r < rounds.length; r++) {
-    rounds[r].forEach(node => {
-      if (node._hidden) return;
+    const visible = rounds[r].filter(n => !n._hidden);
+    // 1) Desired child-centered position for each visible node.
+    visible.forEach(node => {
       node._h = node.el.offsetHeight;
       const vis = [node.childA, node.childB].filter(c => c && !c._hidden && c._center != null);
       node._center = vis.length ? vis.reduce((s, c) => s + c._center, 0) / vis.length : midH;
-      node._top = node._center - node._h / 2;
     });
+    // 2) Resolve overlaps top-to-bottom: each node must start at least V_GAP below the
+    //    previous node's bottom. Only pushes down, preserving child-centering where there's room.
+    for (let i = 1; i < visible.length; i++) {
+      const prev = visible[i - 1], cur = visible[i];
+      const minCenter = (prev._center + prev._h / 2) + V_GAP + cur._h / 2;
+      if (cur._center < minCenter) cur._center = minCenter;
+    }
+    visible.forEach(node => { node._top = node._center - node._h / 2; });
   }
   rounds.forEach(round => round.forEach(node => { if (!node._hidden) node.el.style.top = node._top + 'px'; }));
 }
@@ -573,7 +583,7 @@ function drawConnectors(svg, rounds) {
       if (parent._hidden) return;
       const px = parent._left != null ? parent._left : parseFloat(parent.el.style.left);
       [parent.childA, parent.childB].forEach(child => {
-        if (!child || child._hidden || child._left == null) return;   // hidden bye → no connector
+        if (!child || child._hidden || child._left == null) return;   // hidden bye -> no connector
         const cx = child._left + child._w;   // child's right edge (column-width aware)
         const cy = child._center, py = parent._center;
         const midX = cx + COL_GAP / 2;
@@ -836,7 +846,7 @@ function deIsHiddenBye(pos, assignedByPos) {
   const skel = deNodeByPos()[pos];
   if (!skel || !skel.feedsTo) return false;
   const self = assignedByPos[pos];
-  if (self && (self.team_a_id || self.team_b_id)) return false;         // has teams → always show
+  if (self && (self.team_a_id || self.team_b_id)) return false;         // has teams -> always show
   const [destPos, destSlot] = skel.feedsTo;
   const dest = assignedByPos[destPos];
   if (!dest) return false;
@@ -981,8 +991,8 @@ function deNodeRowHtml(node, side) {
   return '<div class="bteam src"><span class="bn">' + escapeHtml(feed || 'TBD') + '</span><span class="bsc"></span></div>';
 }
 
-// Slide-to-child layout: round 0 stacks; each later node centers on its VISIBLE
-// children (falling back to grid share when it has none rendered).
+// Slide-to-child layout with overlap resolution: round 0 stacks; each later node
+// centers on its VISIBLE children, then siblings are nudged apart to prevent overlap.
 function deLayoutSection(rounds, gfNode) {
   let cursor = 0;
   const round0 = rounds[0].filter(n => !n._hidden);
@@ -995,16 +1005,23 @@ function deLayoutSection(rounds, gfNode) {
   const totalH0 = Math.max(cursor - V_GAP, 0);
 
   for (let r = 1; r < rounds.length; r++) {
-    rounds[r].forEach((node, i) => {
-      if (node._hidden) return;
+    const visible = rounds[r].filter(n => !n._hidden);
+    visible.forEach((node, vi) => {
       node._h = node.el.offsetHeight;
-      // Visible children feeding this node (spine-aligned).
       const prev = rounds[r - 1];
+      // Spine-aligned children by ORIGINAL index (not filtered), then keep the visible ones.
+      const i = rounds[r].indexOf(node);
       const kids = prev.length === rounds[r].length ? [prev[i]] : [prev[2 * i], prev[2 * i + 1]].filter(Boolean);
       const vis = kids.filter(k => !k._hidden && k._center != null);
       node._center = vis.length ? vis.reduce((s, k) => s + k._center, 0) / vis.length : totalH0 / 2;
-      node._top = node._center - node._h / 2;
     });
+    // Resolve overlaps top-to-bottom.
+    for (let vi = 1; vi < visible.length; vi++) {
+      const prevN = visible[vi - 1], cur = visible[vi];
+      const minCenter = (prevN._center + prevN._h / 2) + V_GAP + cur._h / 2;
+      if (cur._center < minCenter) cur._center = minCenter;
+    }
+    visible.forEach(node => { node._top = node._center - node._h / 2; });
   }
   // GF centers on the WB final (last winners round's single visible node).
   if (gfNode) {
@@ -1133,7 +1150,7 @@ function renderResolved(mount, rounds, stage) {
 
   // First pass: resolve open/expandable state and which columns contain an expanded card.
   // A bye node (auto-advanced, no real match) is hidden so its team appears to start at
-  // its parent node - consistent with the double-elim float-through behavior.
+  // its parent node — consistent with the double-elim float-through behavior.
   const expandedCols = new Set();
   rounds.forEach((round, ri) => round.forEach(node => {
     node._hidden = !!node.isBye;
