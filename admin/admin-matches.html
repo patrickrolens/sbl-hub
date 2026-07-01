@@ -275,6 +275,14 @@ select:focus, input:focus { border-color: var(--accent); }
 
     <div style="margin-top:16px">
       <div class="addrow">
+        <div class="field">
+          <label for="add-stage">Stage</label>
+          <select id="add-stage" onchange="onAddStageChange()">
+            <option value="regular">Regular</option>
+            <option value="playoffs">Playoffs</option>
+            <option value="cup">Cup</option>
+          </select>
+        </div>
         <div class="field week">
           <label for="add-week">Week</label>
           <input type="number" id="add-week" min="1" step="1" placeholder="1">
@@ -292,6 +300,19 @@ select:focus, input:focus { border-color: var(--accent); }
           <input type="number" id="add-series" min="1" step="2" value="3">
         </div>
         <button class="btn btn-accent" onclick="addMatch()">+ Add match</button>
+      </div>
+      <div class="addrow" id="add-postseason-row" style="display:none;margin-top:10px">
+        <div class="field grow">
+          <label for="add-ps-round">Postseason round</label>
+          <input type="text" id="add-ps-round" placeholder="Playoffs Round 1 / Winners Final / Grand Final">
+        </div>
+        <div class="field">
+          <label for="add-bracket-pos">Bracket position</label>
+          <input type="text" id="add-bracket-pos" placeholder="W-A, L-C, GF" style="width:120px">
+        </div>
+        <div class="fmt-hint" style="align-self:center;margin:0">
+          Node letter for the bracket display (double-elim seasons). Leave blank if not using a positioned bracket.
+        </div>
       </div>
     </div>
 
@@ -2128,12 +2149,29 @@ async function runImport(resolved, replacing) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ADD / REMOVE INDIVIDUAL MATCHES
 // ─────────────────────────────────────────────────────────────────────────────
+// Show the postseason round / bracket-position fields only when a postseason stage
+// is selected. Also nudges the default series length up for postseason (Bo5).
+function onAddStageChange() {
+  const stage = document.getElementById('add-stage').value;
+  const isPost = stage !== 'regular';
+  document.getElementById('add-postseason-row').style.display = isPost ? '' : 'none';
+  if (isPost && document.getElementById('add-series').value === '3') {
+    document.getElementById('add-series').value = '5';
+  } else if (!isPost && document.getElementById('add-series').value === '5') {
+    document.getElementById('add-series').value = '3';
+  }
+}
+
 async function addMatch() {
   if (!selectedSeasonId) { showToast('Pick a season first.', 'err'); return; }
   const week   = parseInt(document.getElementById('add-week').value, 10);
+  const stage  = document.getElementById('add-stage').value || 'regular';
   const aId    = document.getElementById('add-team-a').value;
   const bId    = document.getElementById('add-team-b').value;
   const series = parseInt(document.getElementById('add-series').value, 10);
+  const isPost = stage !== 'regular';
+  const psRound     = isPost ? document.getElementById('add-ps-round').value.trim() : '';
+  const bracketPos  = isPost ? document.getElementById('add-bracket-pos').value.trim() : '';
 
   if (!Number.isInteger(week) || week < 1) { showToast('Enter a valid week number.', 'err'); return; }
   if (!aId || !bId) { showToast('Pick both teams.', 'err'); return; }
@@ -2141,20 +2179,28 @@ async function addMatch() {
   if (!Number.isInteger(series) || series < 1) { showToast('Series length must be a positive number.', 'err'); return; }
 
   const row = {
-    season_id: selectedSeasonId, stage: 'regular', week,
+    season_id: selectedSeasonId, stage, week,
     team_a_id: aId, team_b_id: bId,
     series_length: series, team_a_score: 0, team_b_score: 0,
     match_date: null,
   };
+  if (isPost) {
+    row.postseason_round = psRound || null;
+    row.bracket_position = bracketPos || null;
+  }
   try {
     const { error } = await sb.from('matches').insert(row);
     if (error) throw error;
     await loadSeasonData(selectedSeasonId);
-    // Keep the just-entered week so the admin can add another match in the same week quickly.
+    // Keep the just-entered week and series so the admin can add another match quickly.
     document.getElementById('add-week').value = week;
     document.getElementById('add-team-a').value = '';
     document.getElementById('add-team-b').value = '';
-    document.getElementById('add-series').value = '3';
+    // Clear the per-match postseason fields but keep the stage selected for rapid entry.
+    if (isPost) {
+      document.getElementById('add-ps-round').value = '';
+      document.getElementById('add-bracket-pos').value = '';
+    }
     showToast('Match added.', 'ok');
   } catch (err) {
     console.error(err);

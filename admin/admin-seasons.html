@@ -155,6 +155,7 @@ select:disabled, input:disabled { opacity: .5; }
         <div class="fld"><label for="ns-name">Name</label><input type="text" id="ns-name" placeholder="Springfield Battle League Season 11"></div>
         <div class="fld"><label for="ns-slug">Slug</label><input type="text" id="ns-slug" placeholder="s11"><span class="hint">lowercase, used in URLs</span></div>
         <div class="fld"><label for="ns-format">VGC Format</label><input type="text" id="ns-format" placeholder="[Gen 9] VGC 2024 Reg G"></div>
+        <div class="fld"><label for="ns-playoff-format">Playoff Format</label><select id="ns-playoff-format"><option value="single_elim">Single elimination</option><option value="double_elim">Double elimination</option></select></div>
         <div class="fld"><label for="ns-budget">Point Budget</label><input type="number" id="ns-budget" min="0" step="1" placeholder="120"></div>
         <div class="fld"><label for="ns-teamsize">Team Size</label><input type="number" id="ns-teamsize" min="1" step="1" placeholder="10"></div>
         <div class="fld"><label for="ns-start">Started</label><input type="date" id="ns-start"></div>
@@ -301,7 +302,7 @@ function divisionLabel(id) { const d = divisionById(id); return d ? (d.abbr || d
 // ─────────────────────────────────────────────────────────────────────────────
 async function loadSeasons() {
   const { data, error } = await sb().from('seasons')
-    .select('id, slug, name, vgc_format, point_limit, team_size, started_at, ended_at, is_current')
+    .select('id, slug, name, vgc_format, playoff_format, point_limit, team_size, started_at, ended_at, is_current')
     .order('slug', { ascending: false });
   if (error) throw error;
   seasons = data || [];
@@ -387,6 +388,7 @@ async function createSeason() {
   const name = document.getElementById('ns-name').value.trim();
   const slug = slugify(document.getElementById('ns-slug').value || name);
   const format = document.getElementById('ns-format').value.trim();
+  const playoffFormat = document.getElementById('ns-playoff-format').value;
   const budget = document.getElementById('ns-budget').value;
   const teamsize = document.getElementById('ns-teamsize').value;
   const start = document.getElementById('ns-start').value || null;
@@ -400,6 +402,7 @@ async function createSeason() {
   const row = {
     name, slug,
     vgc_format: format || null,
+    playoff_format: playoffFormat || 'single_elim',
     point_limit: budget === '' ? 0 : parseInt(budget, 10),
     team_size: teamsize === '' ? 10 : parseInt(teamsize, 10),
     started_at: start, ended_at: end,
@@ -416,6 +419,7 @@ async function createSeason() {
     populateSeasonDropdowns();
     ['ns-name','ns-slug','ns-format','ns-budget','ns-teamsize','ns-start','ns-end'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('ns-current').value = 'no';
+    document.getElementById('ns-playoff-format').value = 'single_elim';
     showToast('Season created.', 'ok');
   } catch (err) { console.error(err); showToast('Could not create season: ' + (err.message || err), 'err'); }
   finally { btn.disabled = false; }
@@ -744,6 +748,10 @@ function editSeason(seasonId) {
     + '<div class="fld"><label for="es-name">Name</label><input type="text" id="es-name" value="' + esc(s.name) + '"></div>'
     + '<div class="fld"><label for="es-slug">Slug</label><input type="text" id="es-slug" value="' + esc(s.slug) + '"></div>'
     + '<div class="fld"><label for="es-format">VGC Format</label><input type="text" id="es-format" value="' + esc(s.vgc_format || '') + '"></div>'
+    + '<div class="fld"><label for="es-playoff-format">Playoff Format</label><select id="es-playoff-format">'
+    +   '<option value="single_elim"' + ((s.playoff_format || 'single_elim') === 'single_elim' ? ' selected' : '') + '>Single elimination</option>'
+    +   '<option value="double_elim"' + (s.playoff_format === 'double_elim' ? ' selected' : '') + '>Double elimination</option>'
+    + '</select></div>'
     + '<div class="form-grid">'
     +   '<div class="fld"><label for="es-budget">Point Budget</label><input type="number" id="es-budget" min="0" step="1" value="' + (s.point_limit ?? '') + '"></div>'
     +   '<div class="fld"><label for="es-teamsize">Team Size</label><input type="number" id="es-teamsize" min="1" step="1" value="' + (s.team_size ?? '') + '"></div>'
@@ -765,6 +773,7 @@ async function saveSeasonEdit(seasonId) {
   const upd = {
     name, slug,
     vgc_format: document.getElementById('es-format').value.trim() || null,
+    playoff_format: document.getElementById('es-playoff-format').value || 'single_elim',
     point_limit: budget === '' ? 0 : parseInt(budget, 10),
     team_size: teamsize === '' ? null : parseInt(teamsize, 10),
     started_at: document.getElementById('es-start').value || null,
