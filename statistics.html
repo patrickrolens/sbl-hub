@@ -405,7 +405,7 @@ async function fetchAllIn(table, columns, column, values) {
     const slice = values.slice(i, i + IN_CHUNK);
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await sb.from(table).select(columns)
-        .in(column, slice).range(from, from + PAGE - 1);
+        .in(column, slice).order('id').range(from, from + PAGE - 1);
       if (error) throw error;
       if (data && data.length) out.push(...data);
       if (!data || data.length < PAGE) break;
@@ -418,7 +418,7 @@ async function fetchAllIn(table, columns, column, values) {
 async function fetchAll(table, columns) {
   const PAGE = 1000, out = [];
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
+    const { data, error } = await sb.from(table).select(columns).order('id').range(from, from + PAGE - 1);
     if (error) throw error;
     if (data && data.length) out.push(...data);
     if (!data || data.length < PAGE) break;
