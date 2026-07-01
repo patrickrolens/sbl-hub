@@ -54,6 +54,12 @@ a { color: inherit; }
 .bteam.bye .bn { color: var(--text3); font-style: italic; }
 .bteam.tbd .bn { color: var(--text3); }
 .bteam.tbd .bsc { opacity: .5; }
+/* Double-elim: feed-source labels ("Loser of W-C") in an unfilled slot. */
+.bteam.src .bn { color: #c98adf; font-style: italic; font-size: 11px; }
+/* Double-elim: Grand Final node accent + its round note. */
+.bnode.gf { border-left: 3px solid var(--yellow); }
+.gf-note { font-size: 10px; color: var(--yellow); padding: 4px 10px 6px; border-top: 1px solid var(--border);
+  background: rgba(240,192,96,.05); }
 /* position-letter tab straddling the right edge, vertically centered */
 .bpos { position: absolute; right: -9px; top: 50%; transform: translateY(-50%); min-width: 18px; height: 18px;
   padding: 0 3px; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; font-size: 9px;
@@ -165,16 +171,34 @@ a { color: inherit; }
     </div>
   </div>
 
-  <div class="bracket-section">
-    <div class="bracket-section-title">Playoffs</div>
-    <div id="playoffs-mount"></div>
+  <!-- Single-elimination sections (Playoffs + Cup). Shown unless the season is double-elim. -->
+  <div id="single-elim-sections">
+    <div class="bracket-section">
+      <div class="bracket-section-title">Playoffs</div>
+      <div id="playoffs-mount"></div>
+    </div>
+
+    <div class="stage-divider"></div>
+
+    <div class="bracket-section">
+      <div class="bracket-section-title">Cup</div>
+      <div id="cup-mount"></div>
+    </div>
   </div>
 
-  <div class="stage-divider"></div>
+  <!-- Double-elimination sections. Shown only when the season's playoff_format is double_elim. -->
+  <div id="double-elim-sections" hidden>
+    <div class="bracket-section">
+      <div class="bracket-section-title">Winners Bracket &amp; Grand Final</div>
+      <div id="winners-mount"></div>
+    </div>
 
-  <div class="bracket-section">
-    <div class="bracket-section-title">Cup</div>
-    <div id="cup-mount"></div>
+    <div class="stage-divider"></div>
+
+    <div class="bracket-section">
+      <div class="bracket-section-title">Losers Bracket</div>
+      <div id="losers-mount"></div>
+    </div>
   </div>
 </div>
 
@@ -485,23 +509,29 @@ function expandedCardHtml(node) {
     + '<span class="bpos">' + node.posLetter + '</span>';
 }
 
-// Measure heights, stack round 0, center each parent between its children.
+// Measure heights, stack round 0 (skipping hidden byes), center each parent on its
+// VISIBLE children (slide-to-child). A parent whose bye child is hidden aligns to its
+// one real child; a parent with no visible children falls back to the bracket midpoint.
 function layoutBracket(rounds) {
   let cursor = 0;
   rounds[0].forEach(node => {
+    if (node._hidden) return;
     node._h = node.el.offsetHeight;
     node._top = cursor;
     node._center = cursor + node._h / 2;
     cursor += node._h + V_GAP;
   });
+  const midH = Math.max(cursor - V_GAP, 0) / 2;
   for (let r = 1; r < rounds.length; r++) {
     rounds[r].forEach(node => {
+      if (node._hidden) return;
       node._h = node.el.offsetHeight;
-      node._center = (node.childA._center + node.childB._center) / 2;
+      const vis = [node.childA, node.childB].filter(c => c && !c._hidden && c._center != null);
+      node._center = vis.length ? vis.reduce((s, c) => s + c._center, 0) / vis.length : midH;
       node._top = node._center - node._h / 2;
     });
   }
-  rounds.forEach(round => round.forEach(node => { node.el.style.top = node._top + 'px'; }));
+  rounds.forEach(round => round.forEach(node => { if (!node._hidden) node.el.style.top = node._top + 'px'; }));
 }
 
 // A champion callout to the right of the final once its winner is set.
@@ -519,7 +549,7 @@ function renderChampion(rounds, inner) {
 
 function sizeInner(rounds, inner, innerW, champ) {
   let maxBottom = 0;
-  rounds.forEach(round => round.forEach(node => { maxBottom = Math.max(maxBottom, node._top + node._h); }));
+  rounds.forEach(round => round.forEach(node => { if (!node._hidden) maxBottom = Math.max(maxBottom, node._top + node._h); }));
   if (champ) {
     maxBottom = Math.max(maxBottom, parseFloat(champ.style.top) + champ.offsetHeight);
     inner.style.width = (parseFloat(champ.style.left) + champ.offsetWidth) + 'px';
@@ -540,8 +570,10 @@ function drawConnectors(svg, rounds) {
   svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
   for (let r = 1; r < rounds.length; r++) {
     rounds[r].forEach(parent => {
+      if (parent._hidden) return;
       const px = parent._left != null ? parent._left : parseFloat(parent.el.style.left);
       [parent.childA, parent.childB].forEach(child => {
+        if (!child || child._hidden || child._left == null) return;   // hidden bye → no connector
         const cx = child._left + child._w;   // child's right edge (column-width aware)
         const cy = child._center, py = parent._center;
         const midX = cx + COL_GAP / 2;
@@ -672,10 +704,389 @@ function renderMatchDetail(body, m, d) {
 // ─────────────────────────────────────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// DOUBLE-ELIMINATION RENDERER
+// A season with playoff_format = 'double_elim' renders three structures — a winners
+// bracket (with the Grand Final appended), a losers bracket, and the GF — from a
+// hand-authored skeleton of lettered nodes. Matches attach to nodes by their
+// bracket_position letter (set in admin-matches); there is no seed-derived winner
+// advancement. A node with no teams of its own hides when the slot it feeds forward
+// already holds a real team (a bye/float-through), per the agreed model.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Build the winners-bracket skeleton for `size` slots (a power of two), lettered
+// W-A, W-B, … round by round, top to bottom, each node pointing at the node/slot it
+// feeds. Mirrors buildBracket's shape but as described nodes keyed by letter.
+function deWinnersSkeleton(size) {
+  const rounds = [];
+  let letterIdx = 0;
+  const nextLetter = () => 'W-' + String.fromCharCode(65 + (letterIdx++));
+  // Round 0.
+  const r0 = [];
+  for (let i = 0; i < size / 2; i++) r0.push({ pos: nextLetter(), feeds: ['Seed', 'Seed'], feedsTo: null });
+  rounds.push(r0);
+  const totalRounds = Math.log2(size);
+  for (let r = 1; r < totalRounds; r++) {
+    const cur = [];
+    for (let i = 0; i < rounds[r - 1].length / 2; i++) cur.push({ pos: nextLetter(), feeds: ['Winner', 'Winner'], feedsTo: null });
+    rounds.push(cur);
+  }
+  // Wire forward pointers: child i of round r feeds slot (i % 2) of parent ⌊i/2⌋ in r+1.
+  for (let r = 0; r < rounds.length - 1; r++) {
+    rounds[r].forEach((node, i) => {
+      const parent = rounds[r + 1][Math.floor(i / 2)];
+      node.feedsTo = [parent.pos, i % 2];
+      node.feeds = ['Winner of ' + (rounds[r][i].pos), '']; // refined below per-slot
+    });
+  }
+  // Refine feed labels: each parent slot names the child feeding it.
+  for (let r = 1; r < rounds.length; r++) {
+    rounds[r].forEach((parent, i) => {
+      const childTop = rounds[r - 1][2 * i], childBot = rounds[r - 1][2 * i + 1];
+      parent.feeds = ['Winner of ' + childTop.pos, childBot ? 'Winner of ' + childBot.pos : 'Winner'];
+    });
+  }
+  rounds[0].forEach(n => { n.feeds = ['Seed', 'Seed']; });
+  return rounds;
+}
+
+// Standard-rules losers bracket for a winners bracket of `size` slots. For a size-S
+// winners bracket the losers bracket has 2*(log2(S)-1) rounds alternating "minor"
+// (LB survivors play) and "major" (absorb the next WB round's losers). Lettered
+// L-A, L-B, … round by round. Forward pointers wired for bye-hiding.
+function deLosersSkeleton(size) {
+  const wbRounds = Math.log2(size);           // e.g. 8 -> 3
+  if (wbRounds < 2) return [];
+  const rounds = [];
+  let letterIdx = 0;
+  const nextLetter = () => 'L-' + String.fromCharCode(65 + (letterIdx++));
+
+  // LB round 0 (minor): pairs of WB round-0 losers. size/4 nodes.
+  let count = size / 4;
+  const r0 = [];
+  for (let i = 0; i < count; i++) r0.push({ pos: nextLetter(), feeds: ['Loser of W', 'Loser of W'], feedsTo: null });
+  rounds.push(r0);
+
+  // Alternate major/minor. A major round keeps the same node count and absorbs a WB
+  // dropdown into slot 1; a minor round halves the node count (LB survivors play).
+  let isMajor = true;
+  while (count > 1 || (count === 1 && isMajor && rounds.length < 2 * (wbRounds - 1))) {
+    const prev = rounds[rounds.length - 1];
+    const cur = [];
+    if (isMajor) {
+      // Same count: each node = winner of the aligned prev node vs a WB dropdown.
+      for (let i = 0; i < prev.length; i++) cur.push({ pos: nextLetter(), feeds: ['Winner of ' + prev[i].pos, 'Loser of W'], feedsTo: null });
+    } else {
+      count = Math.max(1, prev.length / 2);
+      for (let i = 0; i < count; i++) cur.push({ pos: nextLetter(), feeds: ['Winner of ' + prev[2 * i].pos, prev[2 * i + 1] ? 'Winner of ' + prev[2 * i + 1].pos : 'Winner'], feedsTo: null });
+    }
+    rounds.push(cur);
+    isMajor = !isMajor;
+    if (rounds.length >= 2 * (wbRounds - 1)) break;
+  }
+
+  // Wire forward pointers along the LB spine (each node feeds the aligned node next round).
+  for (let r = 0; r < rounds.length - 1; r++) {
+    const cur = rounds[r], nxt = rounds[r + 1];
+    cur.forEach((node, i) => {
+      if (nxt.length === cur.length) node.feedsTo = [nxt[i].pos, 0];          // major carry
+      else node.feedsTo = [nxt[Math.floor(i / 2)].pos, i % 2];               // minor merge
+    });
+  }
+  return rounds;
+}
+
+let deSkeleton = null;   // { W: rounds, L: rounds, GF: node }
+
+function buildDeSkeleton() {
+  const seeded = seededTeams('playoff_seed');
+  const N = Math.max(seeded.length, 2);
+  const size = 1 << Math.ceil(Math.log2(N));
+  const W = deWinnersSkeleton(size);
+  const L = deLosersSkeleton(size);
+  const wbFinal = W[W.length - 1][0];
+  const lbFinal = L.length ? L[L.length - 1][0] : null;
+  const GF = { pos: 'GF', feeds: ['Winner of ' + wbFinal.pos, lbFinal ? 'Winner of ' + lbFinal.pos : 'LB champion'], feedsTo: null, isGF: true };
+  // WB final and LB final feed the Grand Final.
+  wbFinal.feedsTo = ['GF', 0];
+  if (lbFinal) lbFinal.feedsTo = ['GF', 1];
+  deSkeleton = { W, L, GF };
+  return deSkeleton;
+}
+
+// Flat lookup of skeleton nodes by position letter.
+function deNodeByPos() {
+  const idx = {};
+  deSkeleton.W.forEach(r => r.forEach(n => idx[n.pos] = n));
+  deSkeleton.L.forEach(r => r.forEach(n => idx[n.pos] = n));
+  idx['GF'] = deSkeleton.GF;
+  return idx;
+}
+
+// Matches assigned to nodes by bracket_position, oriented so slot A/B are stable.
+function deAssignedByPos() {
+  const byPos = {};
+  matches.filter(m => m.stage === 'playoffs' && m.bracket_position).forEach(m => { byPos[m.bracket_position.trim()] = m; });
+  return byPos;
+}
+
+// A node hides when it has NO team of its own AND the slot it feeds forward already
+// holds a real team (agreed bye/float rule). Assignments are matches keyed by pos.
+function deIsHiddenBye(pos, assignedByPos) {
+  const skel = deNodeByPos()[pos];
+  if (!skel || !skel.feedsTo) return false;
+  const self = assignedByPos[pos];
+  if (self && (self.team_a_id || self.team_b_id)) return false;         // has teams → always show
+  const [destPos, destSlot] = skel.feedsTo;
+  const dest = assignedByPos[destPos];
+  if (!dest) return false;
+  const destTeam = destSlot === 0 ? dest.team_a_id : dest.team_b_id;
+  return !!destTeam;
+}
+
+// Turn a skeleton node + assigned match into a render node in the shape the existing
+// renderer machinery understands (aTeam/bTeam/scores/match/posLetter/etc.).
+function deResolveNode(skel, m) {
+  const node = { posLetter: skel.pos, feeds: skel.feeds, isGF: !!skel.isGF,
+                 aTeam: null, bTeam: null, aScore: 0, bScore: 0, aBye: false, bBye: false,
+                 match: null, winnerTeam: null, resolved: false };
+  if (m) {
+    node.match = m;
+    node.aTeam = teamById[m.team_a_id] || null;
+    node.bTeam = teamById[m.team_b_id] || null;
+    node.aScore = m.team_a_score || 0;
+    node.bScore = m.team_b_score || 0;
+    if (m.winner_team_id) { node.winnerTeam = teamById[m.winner_team_id] || null; node.resolved = true; }
+  }
+  return node;
+}
+
+function renderDoubleElim() {
+  buildDeSkeleton();
+  const assignedByPos = deAssignedByPos();
+
+  // Winners section = winners rounds + a trailing GF column.
+  const wRounds = deSkeleton.W.map(round =>
+    round.map(skel => {
+      const rn = deResolveNode(skel, assignedByPos[skel.pos]);
+      rn._skel = skel;
+      rn._hidden = deIsHiddenBye(skel.pos, assignedByPos);
+      return rn;
+    })
+  );
+  const gfNode = deResolveNode(deSkeleton.GF, assignedByPos['GF']);
+  gfNode._skel = deSkeleton.GF;
+  gfNode._hidden = false;
+
+  const lRounds = deSkeleton.L.map(round =>
+    round.map(skel => {
+      const rn = deResolveNode(skel, assignedByPos[skel.pos]);
+      rn._skel = skel;
+      rn._hidden = deIsHiddenBye(skel.pos, assignedByPos);
+      return rn;
+    })
+  );
+
+  deRenderSection(document.getElementById('winners-mount'), wRounds, 'playoffs', gfNode);
+  deRenderSection(document.getElementById('losers-mount'), lRounds, 'playoffs', null);
+}
+
+// Render one described section. Reuses nodeRowHtml / expandedCardHtml / the panel.
+// Positions use slide-to-child (a parent centers on its VISIBLE children); hidden
+// bye nodes are skipped entirely (no box, no connector).
+function deRenderSection(mount, rounds, stage, gfNode) {
+  mount.innerHTML = '';
+  const scroll = document.createElement('div'); scroll.className = 'bracket-scroll';
+  const headers = document.createElement('div'); headers.className = 'bracket-headers';
+  const inner = document.createElement('div'); inner.className = 'bracket-inner';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'connectors');
+  inner.appendChild(svg);
+
+  // Columns: one per round, plus a trailing GF column if provided.
+  const nCols = rounds.length + (gfNode ? 1 : 0);
+  const colLeft = []; let x = 0;
+  for (let r = 0; r < nCols; r++) { colLeft[r] = x; x += COL_W + COL_GAP; }
+
+  // Expandable state (reuse existing isExpandable + expand set).
+  const allNodes = rounds.flat().concat(gfNode ? [gfNode] : []);
+  allNodes.forEach(node => {
+    node._expandable = !node._hidden && isExpandable(node);
+    node._key = stage + ':' + node.posLetter;
+    node._open = node._expandable && expanded.has(node._key);
+    if (node._expandable) expandableKeys.push(node._key);
+  });
+
+  // Headers per round.
+  const roundLabels = deRoundLabels(rounds, !!gfNode);
+  rounds.forEach((round, ri) => {
+    const h = document.createElement('div'); h.className = 'rhead';
+    h.style.left = colLeft[ri] + 'px'; h.style.width = COL_W + 'px';
+    h.textContent = roundLabels[ri];
+    headers.appendChild(h);
+  });
+  if (gfNode) {
+    const h = document.createElement('div'); h.className = 'rhead';
+    h.style.left = colLeft[rounds.length] + 'px'; h.style.width = COL_W + 'px';
+    h.textContent = 'Grand Final';
+    headers.appendChild(h);
+  }
+
+  // Build node elements (skip hidden byes).
+  const drawNode = (node, ri) => {
+    if (node._hidden) return;
+    const el = document.createElement('div');
+    node._left = colLeft[ri]; node._w = COL_W;
+    el.style.left = node._left + 'px'; el.style.width = COL_W + 'px';
+    el.className = 'bnode' + (node._expandable ? ' clickable' : '') + (node._open ? ' expanded' : '') + (node.isGF ? ' gf' : '');
+    if (node._open) el.innerHTML = expandedCardHtml(node);
+    else {
+      el.innerHTML = deNodeRowHtml(node, 'a') + deNodeRowHtml(node, 'b') + '<span class="bpos">' + node.posLetter + '</span>';
+      if (node.isGF && node.match && node.match.postseason_round) {
+        el.innerHTML += '<div class="gf-note">' + escapeHtml(node.match.postseason_round) + '</div>';
+      }
+    }
+    if (node._expandable) el.onclick = () => toggleNode(node._key);
+    inner.appendChild(el);
+    node.el = el;
+  };
+  rounds.forEach((round, ri) => round.forEach(node => drawNode(node, ri)));
+  if (gfNode) drawNode(gfNode, rounds.length);
+
+  const innerW = colLeft[nCols - 1] + COL_W;
+  headers.style.width = innerW + 'px';
+  inner.style.width = innerW + 'px';
+  scroll.appendChild(headers); scroll.appendChild(inner);
+  mount.appendChild(scroll);
+
+  // Fallbacks + vs links (reuse existing behaviors).
+  mount.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
+  mount.querySelectorAll('img.bx-logo-img').forEach(img => {
+    img.onerror = () => { img.onerror = null; img.parentNode.innerHTML = '<span class="bx-logo-mono">' + monogram(teamById[img.dataset.team]) + '</span>'; };
+  });
+  mount.querySelectorAll('.vs-link').forEach(el => { el.onclick = e => { e.stopPropagation(); openPanel(el.dataset.match); }; });
+
+  deLayoutSection(rounds, gfNode);
+  deDrawConnectors(svg, rounds, gfNode, inner, innerW);
+}
+
+// Row HTML for a described node. Unassigned slots show the feed label ("Loser of W-C").
+function deNodeRowHtml(node, side) {
+  const team = side === 'a' ? node.aTeam : node.bTeam;
+  const score = side === 'a' ? node.aScore : node.bScore;
+  const feed = node.feeds ? (side === 'a' ? node.feeds[0] : node.feeds[1]) : '';
+  const isWinner = node.match && node.match.winner_team_id && team && node.match.winner_team_id === team.id;
+  if (team) {
+    return '<div class="bteam' + (isWinner ? ' win' : '') + '"><span class="bn">' + bracketTeamLabel(team) + '</span><span class="bsc">' + (score || 0) + '</span></div>';
+  }
+  return '<div class="bteam src"><span class="bn">' + escapeHtml(feed || 'TBD') + '</span><span class="bsc"></span></div>';
+}
+
+// Slide-to-child layout: round 0 stacks; each later node centers on its VISIBLE
+// children (falling back to grid share when it has none rendered).
+function deLayoutSection(rounds, gfNode) {
+  let cursor = 0;
+  const round0 = rounds[0].filter(n => !n._hidden);
+  round0.forEach(node => {
+    node._h = node.el.offsetHeight;
+    node._top = cursor;
+    node._center = cursor + node._h / 2;
+    cursor += node._h + V_GAP;
+  });
+  const totalH0 = Math.max(cursor - V_GAP, 0);
+
+  for (let r = 1; r < rounds.length; r++) {
+    rounds[r].forEach((node, i) => {
+      if (node._hidden) return;
+      node._h = node.el.offsetHeight;
+      // Visible children feeding this node (spine-aligned).
+      const prev = rounds[r - 1];
+      const kids = prev.length === rounds[r].length ? [prev[i]] : [prev[2 * i], prev[2 * i + 1]].filter(Boolean);
+      const vis = kids.filter(k => !k._hidden && k._center != null);
+      node._center = vis.length ? vis.reduce((s, k) => s + k._center, 0) / vis.length : totalH0 / 2;
+      node._top = node._center - node._h / 2;
+    });
+  }
+  // GF centers on the WB final (last winners round's single visible node).
+  if (gfNode) {
+    gfNode._h = gfNode.el.offsetHeight;
+    const wbFinal = rounds[rounds.length - 1].find(n => !n._hidden);
+    gfNode._center = wbFinal ? wbFinal._center : totalH0 / 2;
+    gfNode._top = gfNode._center - gfNode._h / 2;
+    gfNode._left = parseFloat(gfNode.el.style.left);
+    gfNode._w = COL_W;
+  }
+  rounds.forEach(round => round.forEach(node => { if (!node._hidden) node.el.style.top = node._top + 'px'; }));
+  if (gfNode) gfNode.el.style.top = gfNode._top + 'px';
+}
+
+// Connectors between visible nodes; hidden byes contribute no line.
+function deDrawConnectors(svg, rounds, gfNode, inner, innerW) {
+  const NS = 'http://www.w3.org/2000/svg';
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  let maxBottom = 0;
+  rounds.forEach(round => round.forEach(n => { if (!n._hidden) maxBottom = Math.max(maxBottom, n._top + n._h); }));
+  if (gfNode) maxBottom = Math.max(maxBottom, gfNode._top + gfNode._h);
+  inner.style.height = maxBottom + 'px';
+  const W = innerW, H = maxBottom;
+  svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+  for (let r = 1; r < rounds.length; r++) {
+    rounds[r].forEach((parent, i) => {
+      if (parent._hidden) return;
+      const prev = rounds[r - 1];
+      const kids = prev.length === rounds[r].length ? [prev[i]] : [prev[2 * i], prev[2 * i + 1]].filter(Boolean);
+      kids.forEach(child => {
+        if (!child || child._hidden || child._left == null) return;
+        const cx = child._left + child._w, cy = child._center, px = parent._left, py = parent._center, midX = cx + COL_GAP / 2;
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', 'M ' + cx + ' ' + cy + ' H ' + midX + ' V ' + py + ' H ' + px);
+        svg.appendChild(path);
+      });
+    });
+  }
+  // WB final -> GF connector.
+  if (gfNode) {
+    const wbFinal = rounds[rounds.length - 1].find(n => !n._hidden);
+    if (wbFinal && wbFinal._left != null) {
+      const cx = wbFinal._left + wbFinal._w, cy = wbFinal._center, px = gfNode._left, py = gfNode._center, midX = cx + COL_GAP / 2;
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', 'M ' + cx + ' ' + cy + ' H ' + midX + ' V ' + py + ' H ' + px);
+      svg.appendChild(path);
+    }
+  }
+}
+
+// Round headers for a described section: honor a consistent admin-entered
+// postseason_round label if present in the round, else a generic name.
+function deRoundLabels(rounds, isWinners) {
+  return rounds.map((round, ri) => {
+    const labels = new Set();
+    round.forEach(n => { if (n.match && n.match.postseason_round) labels.add(n.match.postseason_round); });
+    if (labels.size === 1) return [...labels][0];
+    if (isWinners) {
+      const fromEnd = rounds.length - 1 - ri;
+      if (fromEnd === 0) return 'Winners Final';
+      if (fromEnd === 1) return 'Winners Semifinals';
+      return 'W-Round ' + (ri + 1);
+    }
+    const fromEnd = rounds.length - 1 - ri;
+    if (fromEnd === 0) return 'Losers Final';
+    if (fromEnd === 1) return 'Losers Semifinals';
+    return 'L-Round ' + (ri + 1);
+  });
+}
+
 function renderAll() {
   expandableKeys = [];
-  drawSection(document.getElementById('playoffs-mount'), seededTeams('playoff_seed'), 'playoffs');
-  drawSection(document.getElementById('cup-mount'), seededTeams('cup_seed'), 'cup');
+  const isDouble = season && season.playoff_format === 'double_elim';
+  document.getElementById('single-elim-sections').hidden = isDouble;
+  document.getElementById('double-elim-sections').hidden = !isDouble;
+  if (isDouble) {
+    renderDoubleElim();
+  } else {
+    drawSection(document.getElementById('playoffs-mount'), seededTeams('playoff_seed'), 'playoffs');
+    drawSection(document.getElementById('cup-mount'), seededTeams('cup_seed'), 'cup');
+  }
   updateToggleAll();
 }
 
@@ -721,9 +1132,12 @@ function renderResolved(mount, rounds, stage) {
   const total = rounds.length;
 
   // First pass: resolve open/expandable state and which columns contain an expanded card.
+  // A bye node (auto-advanced, no real match) is hidden so its team appears to start at
+  // its parent node - consistent with the double-elim float-through behavior.
   const expandedCols = new Set();
   rounds.forEach((round, ri) => round.forEach(node => {
-    node._expandable = isExpandable(node);
+    node._hidden = !!node.isBye;
+    node._expandable = !node._hidden && isExpandable(node);
     node._key = stage + ':' + node.posLetter;
     node._open = node._expandable && expanded.has(node._key);
     if (node._expandable) expandableKeys.push(node._key);
@@ -746,8 +1160,9 @@ function renderResolved(mount, rounds, stage) {
 
   rounds.forEach((round, ri) => {
     round.forEach(node => {
-      const el = document.createElement('div');
       node._left = colLeft[ri]; node._w = colW[ri];
+      if (node._hidden) return;   // bye: no box drawn; team floats to its parent node
+      const el = document.createElement('div');
       el.style.left = node._left + 'px';
       el.style.width = node._w + 'px';
       el.className = 'bnode' + (node._expandable ? ' clickable' : '') + (node._open ? ' expanded' : '');
@@ -830,11 +1245,11 @@ async function init() {
 
     const [teamsRes, matchRes] = await Promise.all([
       sb.from('teams').select('id, name, slug, logo_url, playoff_seed, cup_seed').eq('season_id', season.id),
-      sb.from('matches').select('id, stage, week, postseason_round, series_length, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id')
+      sb.from('matches').select('id, stage, week, postseason_round, bracket_position, series_length, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id')
         .eq('season_id', season.id).in('stage', ['playoffs', 'cup']),
     ]);
     for (const r of [teamsRes, matchRes]) if (r.error) throw r.error;
-    // Unfiltered all-seasons table → paginate past the 1000-row cap.
+    // Unfiltered all-seasons table -> paginate past the 1000-row cap.
     const ownersAll = await fetchAll('team_owners', 'team_id, started_week, ended_week, players(display_name)');
 
     teams = teamsRes.data || [];
@@ -847,7 +1262,7 @@ async function init() {
     matches = matchRes.data || [];
     matches.forEach(m => { matchById[m.id] = m; });
 
-    // Rosters for bracket teams + brought-sets for postseason matches (small, scoped data → instant expand).
+    // Rosters for bracket teams + brought-sets for postseason matches (small, scoped data -> instant expand).
     const seededIds = teams.filter(t => t.playoff_seed != null || t.cup_seed != null).map(t => t.id);
     const matchIds = matches.map(m => m.id);
     const [tpRows, mpRes] = await Promise.all([
