@@ -371,7 +371,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 <body>
 
 <script src="/nav.js"></script>
-<script src="/db-utils.js"></script>
+<script src="/utils.js"></script>
 <script src="/tooltip.js?v=2"></script>
 
 <div id="boot-banner" class="banner">Loading team…</div>
@@ -512,33 +512,6 @@ let inactiveSortMode   = 'dropped';   // 'dropped' | 'most-used' | 'most-kos'
 let inactiveShowAll    = false;       // false = hide mons with zero battle appearances
 let inactiveExpanded   = true;        // false = grid + toolbar hidden (collapsed)
 
-// ─────────────────────────────────────────────────────────────────────────────
-// URL / ID HELPERS - mirror the Planner so sprite/icon paths resolve identically.
-//   Member cards lead with the larger SPRITE (sprite → icon → Pokéball); compact
-//   spots (inactive list, transactions) use the smaller ICON (icon → sprite → ball).
-// ─────────────────────────────────────────────────────────────────────────────
-function localId(id) {
-  const m = String(id).match(/^(\d+)(.*)$/);
-  if (!m) return id;
-  const num = parseInt(m[1]);
-  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
-}
-function iconUrl(mon)   { return mon && mon.id ? ASSET_BASE + 'icons/'   + localId(mon.id) + '.png' : ''; }
-function spriteUrl(mon) { return mon && mon.id ? ASSET_BASE + 'sprites/' + localId(mon.id) + '.png' : ''; }
-
-function attachSpriteFallback(img, mon) {
-  img.onerror = function () {
-    if (this.src.includes('/sprites/'))    { this.src = iconUrl(mon); }
-    else                                   { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
-  };
-}
-function attachIconFallback(img, mon) {
-  img.onerror = function () {
-    if (this.src.includes('/icons/'))      { this.src = spriteUrl(mon); }
-    else                                   { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
-  };
-}
-
 // ── FORMAT HELPERS ──
 function signed(n) { return (n > 0 ? '+' : '') + n; }
 function deltaClass(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
@@ -549,32 +522,6 @@ function kfRatio(kos, faints) {
 }
 function pct(part, whole) { return whole > 0 ? Math.round((part / whole) * 100) + '%' : '-'; }
 function fmtKpg(v) { return v == null ? '-' : v.toFixed(2); }
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-}
-
-// Carry the active ?season=<slug> onto internal links so navigating from a past
-// season keeps you in it. Absent (current season) → bare; external untouched;
-// preserves any existing query/hash on the href.
-const SEASON_SLUG = new URLSearchParams(location.search).get('season') || '';
-function withSeason(href) {
-  if (!SEASON_SLUG) return href;
-  if (/^https?:\/\//i.test(href)) return href;
-  const hashI = href.indexOf('#');
-  const hash = hashI === -1 ? '' : href.slice(hashI);
-  const base = hashI === -1 ? href : href.slice(0, hashI);
-  const sep = base.indexOf('?') === -1 ? '?' : '&';
-  return base + sep + 'season=' + encodeURIComponent(SEASON_SLUG) + hash;
-}
-function patchStaticSeasonLinks() {
-  if (!SEASON_SLUG) return;
-  document.querySelectorAll('a[href]').forEach(a => {
-    const raw = a.getAttribute('href');
-    if (!raw || raw.startsWith('#') || /^https?:\/\//i.test(raw) || raw.startsWith('mailto:')) return;
-    if (/[?&]season=/.test(raw)) return;
-    a.setAttribute('href', withSeason(raw));
-  });
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WHICH TEAM? - the hash can be the team's canonical slug or a coach name
