@@ -38,6 +38,8 @@ CREATE TABLE public.divisions(
     -- used this season" in JS before insert, but nothing stops a race/manual insert.
 );
 
+CREATE INDEX idx_divisions_season_id ON public.divisions(season_id);
+
 CREATE TABLE public.season_pokemon_tiers(
     id uuid PRIMARY KEY default gen_random_uuid(),
     season_id uuid not null references public.seasons(id) ON DELETE CASCADE,
@@ -65,6 +67,9 @@ CREATE TABLE public.drafts(
     -- "at most one draft per season+division" beyond app-side upsert-by-id logic.
 );
 
+CREATE INDEX idx_drafts_season_id ON public.drafts(season_id);
+CREATE INDEX idx_drafts_division_id ON public.drafts(division_id);
+
 CREATE TABLE public.players(
     id uuid PRIMARY KEY default gen_random_uuid(),
     display_name text not null,
@@ -84,6 +89,8 @@ CREATE UNIQUE INDEX showdown_accounts_unique_primary
     ON public.showdown_accounts (player_id)
     WHERE is_primary;
 
+CREATE INDEX idx_showdown_accounts_player_id ON public.showdown_accounts(player_id);
+
 CREATE TABLE public.teams(
     id uuid PRIMARY KEY default gen_random_uuid(),
     season_id uuid not null references public.seasons(id) ON DELETE CASCADE,
@@ -98,6 +105,8 @@ CREATE TABLE public.teams(
     constraint unique_season_team_slug unique(season_id, slug)
 );
 
+CREATE INDEX idx_teams_division_id ON public.teams(division_id);
+
 CREATE TABLE public.team_owners(
     id uuid PRIMARY KEY default gen_random_uuid(),
     team_id uuid not null references public.teams(id) ON DELETE CASCADE,
@@ -106,6 +115,9 @@ CREATE TABLE public.team_owners(
     ended_week integer,
     notes text
 );
+
+CREATE INDEX idx_team_owners_team_id ON public.team_owners(team_id);
+CREATE INDEX idx_team_owners_player_id ON public.team_owners(player_id);
 
 CREATE TABLE public.team_pokemon(
     id uuid PRIMARY KEY default gen_random_uuid(),
@@ -119,6 +131,8 @@ CREATE TABLE public.team_pokemon(
     notes text,
     is_tera boolean not null default false
 );
+
+CREATE INDEX idx_team_pokemon_team_id ON public.team_pokemon(team_id);
 
 CREATE TABLE public.matches(
     id uuid PRIMARY KEY default gen_random_uuid(),
@@ -150,6 +164,10 @@ CREATE TABLE public.matches(
     ) STORED
 );
 
+CREATE INDEX idx_matches_season_id ON public.matches(season_id);
+CREATE INDEX idx_matches_team_a_id ON public.matches(team_a_id);
+CREATE INDEX idx_matches_team_b_id ON public.matches(team_b_id);
+
 -- The roster a team actually brought to a match (as opposed to team_pokemon, which
 -- is a team's full season-long roster). Distinct from game_pokemon_stats: a mon can
 -- be brought without recording a kill/death (e.g. never sent out).
@@ -164,6 +182,8 @@ CREATE TABLE public.match_pokemon(
     constraint unique_match_pokemon unique(match_id, team_id, pokemon_id)
 );
 
+CREATE INDEX idx_match_pokemon_team_id ON public.match_pokemon(team_id);
+
 CREATE TABLE public.games(
     id uuid PRIMARY KEY default gen_random_uuid(),
     match_id uuid not null references public.matches(id) ON DELETE CASCADE,
@@ -173,6 +193,8 @@ CREATE TABLE public.games(
     winner_team_id uuid not null references public.teams(id) ON DELETE CASCADE,
     constraint unique_game_number unique(match_id, game_number)
 );
+
+CREATE INDEX idx_games_winner_team_id ON public.games(winner_team_id);
 
 CREATE TABLE public.game_pokemon_stats(
     id uuid PRIMARY KEY default gen_random_uuid(),
@@ -184,6 +206,8 @@ CREATE TABLE public.game_pokemon_stats(
     constraint unique_game_team_pokemon unique(game_id, team_id, pokemon_id)
 );
 
+CREATE INDEX idx_game_pokemon_stats_team_id ON public.game_pokemon_stats(team_id);
+
 CREATE TABLE public.free_agency_moves(
     id uuid PRIMARY KEY default gen_random_uuid(),
     season_id uuid not null references public.seasons(id) ON DELETE CASCADE,
@@ -194,6 +218,9 @@ CREATE TABLE public.free_agency_moves(
     occurred_at timestamptz not null default now(),
     notes text
 );
+
+CREATE INDEX idx_free_agency_moves_season_id ON public.free_agency_moves(season_id);
+CREATE INDEX idx_free_agency_moves_team_id ON public.free_agency_moves(team_id);
 
 CREATE TABLE public.trades(
     id uuid PRIMARY KEY default gen_random_uuid(),
@@ -207,6 +234,10 @@ CREATE TABLE public.trades(
     notes text
 );
 
+CREATE INDEX idx_trades_season_id ON public.trades(season_id);
+CREATE INDEX idx_trades_team_a_id ON public.trades(team_a_id);
+CREATE INDEX idx_trades_team_b_id ON public.trades(team_b_id);
+
 CREATE TABLE public.potw(
     id uuid PRIMARY KEY default gen_random_uuid(),
     season_id uuid not null references public.seasons(id) ON DELETE CASCADE,
@@ -218,9 +249,15 @@ CREATE TABLE public.potw(
     notes text
 );
 
+CREATE INDEX idx_potw_season_id ON public.potw(season_id);
+CREATE INDEX idx_potw_team_id ON public.potw(team_id);
+CREATE INDEX idx_potw_player_id ON public.potw(player_id);
+
 CREATE TABLE public.profiles(
     id uuid PRIMARY KEY references auth.users(id) ON DELETE CASCADE,
     display_name text,
     is_admin boolean not null default false,
     player_id uuid references public.players(id) ON DELETE SET NULL
 );
+
+CREATE INDEX idx_profiles_player_id ON public.profiles(player_id);
