@@ -176,7 +176,7 @@ select:disabled { opacity: .5; }
 <body>
 
 <script src="/nav.js"></script>
-<script src="/utils.js"></script>
+<script src="/db-utils.js"></script>
 
 <div id="boot-banner" class="banner">Loading…</div>
 
@@ -364,7 +364,23 @@ let addHighlight = -1;
 let addSelected = null;             // chosen pokemon_id to add
 
 // ── HELPERS ──
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
 function monName(id) { const p = pokemonById[id]; return p ? p.name : id; }
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/);
+  if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(id)   { return id ? ASSET_BASE + 'icons/'   + localId(id) + '.png' : ''; }
+function spriteUrl(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
+function attachIconFallback(img, id) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/')) { this.src = spriteUrl(id); }
+    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
 function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
 function teamLabelText(id) { const t = teamById[id]; if (!t) return 'TBD'; const c = coachByTeam[id]; return t.name + (c ? ' (' + c + ')' : ''); }
 function sortedTeams() { return [...teams].sort((a, b) => (a.initial_seed ?? 999) - (b.initial_seed ?? 999) || a.name.localeCompare(b.name)); }
