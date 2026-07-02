@@ -141,7 +141,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 <body>
 
 <script src="/nav.js"></script>
-<script src="/utils.js"></script>
+<script src="/db-utils.js"></script>
 
 <div id="boot-banner" class="banner">Loading standings…</div>
 
@@ -232,6 +232,38 @@ let broughtByMatch = {};   // match_id -> { team_id -> [pokemon_id, …] } from 
 let txns         = [];
 let pokemonById  = {};
 
+// ── ID / URL HELPERS (mirror the rest of the hub) ──
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/);
+  if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(mon)   { return mon && mon.id ? ASSET_BASE + 'icons/'   + localId(mon.id) + '.png' : ''; }
+function spriteUrl(mon) { return mon && mon.id ? ASSET_BASE + 'sprites/' + localId(mon.id) + '.png' : ''; }
+function attachIconFallback(img, mon) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/')) { this.src = spriteUrl(mon); }
+    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
+
+// ── FORMAT HELPERS ──
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// Carry the active ?season=<slug> onto internal links so navigating from a past
+// season keeps you in it. Absent (current season) → links stay bare. Preserves any
+// existing query/hash on the href.
+const SEASON_SLUG = new URLSearchParams(location.search).get('season') || '';
+function withSeason(href) {
+  if (!SEASON_SLUG) return href;
+  if (/^https?:\/\//i.test(href)) return href;            // external, leave alone
+  const hashI = href.indexOf('#');
+  const hash = hashI === -1 ? '' : href.slice(hashI);
+  const base = hashI === -1 ? href : href.slice(0, hashI);
+  const sep = base.indexOf('?') === -1 ? '?' : '&';
+  return base + sep + 'season=' + encodeURIComponent(SEASON_SLUG) + hash;
+}
 function signed(n) { return (n > 0 ? '+' : '') + n; }
 function deltaClass(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
 function kfRatio(kos, faints) { if (faints === 0) return kos === 0 ? '-' : '∞'; return (kos / faints).toFixed(2); }
