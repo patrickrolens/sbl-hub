@@ -233,6 +233,7 @@ select:focus, input:focus { border-color: var(--accent); }
 <body>
 
 <script src="/nav.js"></script>
+<script src="/db-utils.js"></script>
 
 <div id="boot-banner" class="banner">Loading…</div>
 
@@ -386,35 +387,6 @@ select:focus, input:focus { border-color: var(--accent); }
 const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
 const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// Fetch every row of `table` where `column` is in `values`, defeating Supabase's
-// default 1000-row response cap (chunks the IN-list, pages each chunk to the end).
-async function fetchAllIn(table, columns, column, values) {
-  const IN_CHUNK = 300, PAGE = 1000, out = [];
-  for (let i = 0; i < values.length; i += IN_CHUNK) {
-    const slice = values.slice(i, i + IN_CHUNK);
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await sb.from(table).select(columns)
-        .in(column, slice).range(from, from + PAGE - 1);
-      if (error) throw error;
-      if (data && data.length) out.push(...data);
-      if (!data || data.length < PAGE) break;
-    }
-  }
-  return out;
-}
-
-// Paginate an entire (unfiltered) table past the 1000-row response cap.
-async function fetchAll(table, columns) {
-  const PAGE = 1000, out = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await sb.from(table).select(columns).range(from, from + PAGE - 1);
-    if (error) throw error;
-    if (data && data.length) out.push(...data);
-    if (!data || data.length < PAGE) break;
-  }
-  return out;
-}
 
 // ── STATE ──
 let isAdmin          = false;
