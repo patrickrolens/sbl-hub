@@ -967,12 +967,29 @@ function openStartPostseason() {
     .map(t => teamLabelText(t.id)).sort((a, b) => a.localeCompare(b));
   const season = seasons.find(s => s.id === selectedSeasonId);
   const already = season && season.postseason_published;
+  const isDouble = season && season.playoff_format === 'double_elim';
+
+  // Double-elim: offer the "players starting in winners" field and skip the single-elim
+  // Cup/Playoffs "unplaced teams" warning (which doesn't apply to a hand-placed bracket).
+  const deField = isDouble
+    ? '<div style="margin:12px 0">'
+      + '<label for="ps-winners-entrants" style="display:block;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--text3);margin-bottom:5px">Players starting in the winners bracket</label>'
+      + '<input type="number" id="ps-winners-entrants" min="2" step="1" style="width:110px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:6px 8px" value="'
+      + (season.winners_entrants != null ? season.winners_entrants : '') + '" placeholder="e.g. 10">'
+      + '<div class="fmt-hint" style="margin-top:6px">Top seeds start in winners; the rest begin in losers. '
+      + 'The winners bracket (byes and advancement) is generated from this. Losers-bracket matches are entered by hand.</div>'
+      + '</div>'
+    : '';
 
   openModal(
     '<h3>' + (already ? 'Re-publish postseason?' : 'Start the postseason?') + '</h3>'
-    + (already ? '<p>The postseason is already published. This just re-confirms the seeding is live.</p>'
-               : '<p>This publishes both brackets to the public Postseason page. You can keep entering results afterward.</p>')
-    + (unplaced.length
+    + (already ? '<p>The postseason is already published. This just re-confirms it\u2019s live.</p>'
+               : '<p>This publishes the postseason to the public page. You can keep entering results afterward.</p>')
+    + (isDouble
+        ? '<p class="fmt-hint">Double-elimination: winners-bracket matches are entered by team pairing (no bracket position); losers-bracket matches are entered with a bracket position. No matches are auto-created.</p>'
+        : '')
+    + deField
+    + (!isDouble && unplaced.length
         ? '<p class="warn">\u26A0 ' + unplaced.length + ' team' + (unplaced.length === 1 ? '' : 's')
           + ' seeded in neither bracket: ' + escapeHtml(unplaced.join(', ')) + '. They won\u2019t appear in any bracket.</p>'
         : '')
@@ -984,12 +1001,26 @@ function openStartPostseason() {
 
 async function startPostseason() {
   try {
-    const { error } = await sb.from('seasons').update({ postseason_published: true }).eq('id', selectedSeasonId);
-    if (error) throw error;
     const season = seasons.find(s => s.id === selectedSeasonId);
-    if (season) season.postseason_published = true;
+    const isDouble = season && season.playoff_format === 'double_elim';
+
+    // For double-elim, capture the winners-bracket entrant count from the publish modal.
+    const update = { postseason_published: true };
+    if (isDouble) {
+      const el = document.getElementById('ps-winners-entrants');
+      const raw = el ? el.value.trim() : '';
+      if (raw !== '') {
+        const n = parseInt(raw, 10);
+        if (!Number.isInteger(n) || n < 2) { showToast('Winners-bracket entrants must be 2 or more.', 'err'); return; }
+        update.winners_entrants = n;
+      }
+    }
+
+    const { error } = await sb.from('seasons').update(update).eq('id', selectedSeasonId);
+    if (error) throw error;
+    if (season) { season.postseason_published = true; if (update.winners_entrants != null) season.winners_entrants = update.winners_entrants; }
     showToast('Postseason published.', 'ok');
-    // Bootstrap the opening round(s) from the saved seeds.
+    // Bootstrap the opening round(s) from the saved seeds. (No-op for double-elim.)
     try {
       const n = await createPendingPostseasonMatches();
       if (n) renderMatchData();
@@ -1142,7 +1173,16 @@ function pendingMatchRowsForStage(stage) {
 
 // Insert any newly-knowable postseason matches across both brackets; toast what was created.
 // Returns the number of rows inserted.
+//
+// This is SINGLE-ELIMINATION bootstrapping: it seeds every playoff/cup team into one
+// derived bracket and creates matches as pairings resolve. It must NOT run for
+// double-elimination seasons — those use hand-entered matches (winners by pair, losers
+// by bracket_position), and auto-deriving from a single-elim tree would fabricate
+// pairings that don't belong to the actual winners/losers structure.
 async function createPendingPostseasonMatches() {
+  const season = seasons.find(s => s.id === selectedSeasonId);
+  if (season && season.playoff_format === 'double_elim') return 0;
+
   const rows = [...pendingMatchRowsForStage('playoffs'), ...pendingMatchRowsForStage('cup')];
   if (!rows.length) return 0;
   const { data, error } = await sb.from('matches').insert(rows).select(
