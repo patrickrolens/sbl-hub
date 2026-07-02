@@ -96,6 +96,7 @@ select#season-select:focus { border-color: var(--accent); }
 <body>
 
 <script src="/nav.js"></script>
+<script src="/utils.js"></script>
 
 <div id="boot-banner" class="banner">Loading…</div>
 
@@ -159,21 +160,6 @@ let currentTiers = {};              // pokemon_id -> { point_cost, tera_point_co
 let collapsed = new Set();
 
 // ── HELPERS ──
-function localId(id) {
-  const m = String(id).match(/^(\d+)(.*)$/);
-  if (!m) return id;
-  const num = parseInt(m[1]);
-  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
-}
-function iconUrl(mon)   { return mon && mon.id ? ASSET_BASE + 'icons/'   + localId(mon.id) + '.png' : ''; }
-function spriteUrl(mon) { return mon && mon.id ? ASSET_BASE + 'sprites/' + localId(mon.id) + '.png' : ''; }
-function attachIconFallback(img, mon) {
-  img.onerror = function () {
-    if (this.src.includes('/icons/'))       { this.src = spriteUrl(mon); }
-    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
-  };
-}
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 function seasonName(id) { const s = seasons.find(x => x.id === id); return s ? s.name : '—'; }
 
 // ─────────────────────────────────────────────────────────────────────────────
