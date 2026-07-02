@@ -163,7 +163,7 @@ a { color: inherit; }
 <body>
 
 <script src="/nav.js"></script>
-<script src="/db-utils.js"></script>
+<script src="/utils.js"></script>
 <script src="/tooltip.js?v=2"></script>
 
 <div id="boot-banner" class="banner">Loading…</div>
@@ -213,30 +213,6 @@ let matchDetailCache = {};   // id -> { games, stats, mp }
 let detailLoading = {};
 
 // ── HELPERS ──
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
-
-// Carry the active ?season=<slug> onto internal links so navigating from a past
-// season keeps you in it. Absent (current season) → bare; external untouched;
-// preserves any existing query/hash on the href.
-const SEASON_SLUG = new URLSearchParams(location.search).get('season') || '';
-function withSeason(href) {
-  if (!SEASON_SLUG) return href;
-  if (/^https?:\/\//i.test(href)) return href;
-  const hashI = href.indexOf('#');
-  const hash = hashI === -1 ? '' : href.slice(hashI);
-  const base = hashI === -1 ? href : href.slice(0, hashI);
-  const sep = base.indexOf('?') === -1 ? '?' : '&';
-  return base + sep + 'season=' + encodeURIComponent(SEASON_SLUG) + hash;
-}
-function patchStaticSeasonLinks() {
-  if (!SEASON_SLUG) return;
-  document.querySelectorAll('a[href]').forEach(a => {
-    const raw = a.getAttribute('href');
-    if (!raw || raw.startsWith('#') || /^https?:\/\//i.test(raw) || raw.startsWith('mailto:')) return;
-    if (/[?&]season=/.test(raw)) return;
-    a.setAttribute('href', withSeason(raw));
-  });
-}
 function fmtDateTime(s) {
   if (!s) return 'Date TBD';
   const d = new Date(s); if (isNaN(d.getTime())) return 'Date TBD';
@@ -246,19 +222,6 @@ function fmtDateTime(s) {
 function stageLabel(s) { return ({ regular: 'Regular Season', playoffs: 'Playoffs', cup: 'Cup' })[s] || 'Regular Season'; }
 function stageRank(s) { return s === 'playoffs' ? 0 : s === 'cup' ? 1 : 2; }
 function monName(id) { const p = pokemonById[id]; return p ? p.name : id; }
-function localId(id) {
-  const m = String(id).match(/^(\d+)(.*)$/); if (!m) return id;
-  const num = parseInt(m[1]);
-  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
-}
-function iconUrl(id) { return id ? ASSET_BASE + 'icons/' + localId(id) + '.png' : ''; }
-function spriteUrl(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
-function attachIconFallback(img, id) {
-  img.onerror = function () {
-    if (this.src.includes('/icons/')) { this.src = spriteUrl(id); }
-    else { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
-  };
-}
 function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
 // Coach (owner) active for a team during a given week - falls back to the current owner, then the team name.
 function coachAtWeek(teamId, week) {

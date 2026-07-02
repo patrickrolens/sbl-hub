@@ -104,6 +104,7 @@ th{text-align:left;color:var(--text2);text-transform:uppercase;font-size:11px}
 <body>
 
 <script src="/nav.js"></script>
+<script src="/utils.js"></script>
 
 <div class="page-wrap">
 <div class="card">
@@ -156,7 +157,6 @@ const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.js
 const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
 
-function localId(id) { const m = String(id).match(/^(\d+)(.*)$/); if (!m) return id; const num = parseInt(m[1],10); return (num >= 1000 ? String(num) : String(num).padStart(3,'0')) + m[2]; }
 function spriteUrlById(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
 function pokemonNameById(id) { const s = String(id); const p = pokemonList.find(x => String(x.id) === s || String(x.id) === String(parseInt(s,10))); return p ? p.name : String(id); }
 function normalizeStage(stage) {
@@ -223,7 +223,6 @@ let pageOffset = 0, pageSize = 100, lastPokemonId = null, allRows = [];
 
 function $id(id) { return document.getElementById(id); }
 function showStatus(txt, kind) { const s = $id('status'); s.textContent = txt || ''; s.style.color = kind === 'err' ? 'var(--red)' : 'var(--text2)'; }
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }[c])); }
 
 async function boot() {
   $id('do-search').addEventListener('click', () => onSearchClick());
