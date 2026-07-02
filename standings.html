@@ -226,6 +226,7 @@ let matches      = [];     // all matches for the season (any stage)
 let gamesByMatch = {};     // match_id -> [game rows]
 let gameToMatch  = {};     // game_id -> match_id
 let statRows     = [];     // all game_pokemon_stats rows for the season
+let leaderRows   = [];     // pre-aggregated per (pokemon, team) KOs/faints/GP/MP — season_pokemon_leaders() RPC
 let broughtByMatch = {};   // match_id -> { team_id -> [pokemon_id, …] } from match_pokemon
 let txns         = [];
 let pokemonById  = {};
@@ -427,8 +428,8 @@ async function loadData() {
   draftRow = pickRepresentativeDraft(draftRows);
   matches  = matchRes.data || [];
 
-  // Games + per-Pokémon stats across the whole season (drives leaders, KD).
-  gamesByMatch = {}; gameToMatch = {}; statRows = []; broughtByMatch = {};
+  // Games + per-Pokémon stats across the whole season (drives KD + roster reconstruction).
+  gamesByMatch = {}; gameToMatch = {}; statRows = []; leaderRows = []; broughtByMatch = {};
   const matchIds = matches.map(m => m.id);
   if (matchIds.length) {
     const games = await fetchAllIn('games', 'id, match_id', 'match_id', matchIds);
@@ -444,6 +445,13 @@ async function loadData() {
       (byTeam[r.team_id] = byTeam[r.team_id] || []).push(r.pokemon_id);
     });
     console.log('[standings] loaded games:', games.length, '· stat rows:', statRows.length, '· brought rows:', mp.length);
+
+    // KO/KF Δ/K-F leaderboards: pre-aggregated server-side (season_pokemon_leaders
+    // RPC) instead of summed client-side from statRows — a season's stat rows can
+    // exceed the 1000-row pagination page size, this can't.
+    const { data: leaders, error: leadersErr } = await sb.rpc('season_pokemon_leaders', { p_season_id: season.id });
+    if (leadersErr) throw leadersErr;
+    leaderRows = leaders || [];
   }
 
   txns = buildTransactions(faRes.data || [], tradeRes.data || []);
@@ -468,20 +476,12 @@ let _matchIndex = null;
 function matchById(id) { if (!_matchIndex) { _matchIndex = {}; matches.forEach(m => { _matchIndex[m.id] = m; }); } return _matchIndex[id]; }
 
 // Per (pokemon, team) totals across all stages - drives the three leader boards.
+// Pre-aggregated by the season_pokemon_leaders() RPC; kfDelta is the only derived field.
 function buildLeaders() {
-  const map = {};
-  statRows.forEach(s => {
-    const key = s.pokemon_id + '|' + s.team_id;
-    let e = map[key];
-    if (!e) e = map[key] = { pokemon_id: s.pokemon_id, team_id: s.team_id, kos: 0, faints: 0, games: new Set(), matchesSet: new Set() };
-    e.kos += s.kills || 0; e.faints += s.deaths || 0;
-    e.games.add(s.game_id);
-    const mid = gameToMatch[s.game_id]; if (mid) e.matchesSet.add(mid);
-  });
-  return Object.values(map).map(e => ({
-    pokemon_id: e.pokemon_id, team_id: e.team_id,
-    kos: e.kos, faints: e.faints, kfDelta: e.kos - e.faints,
-    gp: e.games.size, mp: e.matchesSet.size,
+  return leaderRows.map(r => ({
+    pokemon_id: r.pokemon_id, team_id: r.team_id,
+    kos: r.kos, faints: r.faints, kfDelta: r.kos - r.faints,
+    gp: r.gp, mp: r.mp,
   }));
 }
 
