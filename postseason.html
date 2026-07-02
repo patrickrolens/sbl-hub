@@ -531,10 +531,24 @@ function drawConnectors(svg, rounds) {
   }
 }
 
-// Stable position letters (A, B, C…) assigned round-by-round, top-to-bottom across the whole bracket.
+// 0-indexed → spreadsheet-style letters: A..Z, then AA, AB, … AZ, BA, … So a bracket
+// with more than 26 nodes keeps producing unique, ordered labels instead of wrapping
+// (which would duplicate 'A') or running past 'Z' into punctuation.
+function bracketLetter(idx) {
+  let s = '';
+  idx += 1;
+  while (idx > 0) {
+    const rem = (idx - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    idx = Math.floor((idx - 1) / 26);
+  }
+  return s;
+}
+
+// Stable position letters (A, B, C…, then AA, AB…) assigned round-by-round, top-to-bottom.
 function assignLetters(rounds) {
   let i = 0;
-  rounds.forEach(round => round.forEach(node => { node.posLetter = String.fromCharCode(65 + (i++ % 26)); }));
+  rounds.forEach(round => round.forEach(node => { node.posLetter = bracketLetter(i++); }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -666,7 +680,7 @@ function renderMatchDetail(body, m, d) {
 function deWinnersSkeleton(size) {
   const rounds = [];
   let letterIdx = 0;
-  const nextLetter = () => 'W-' + String.fromCharCode(65 + (letterIdx++));
+  const nextLetter = () => 'W-' + bracketLetter(letterIdx++);
   // Round 0.
   const r0 = [];
   for (let i = 0; i < size / 2; i++) r0.push({ pos: nextLetter(), feeds: ['Seed', 'Seed'], feedsTo: null });
@@ -705,7 +719,7 @@ function deLosersSkeleton(size) {
   if (wbRounds < 2) return [];
   const rounds = [];
   let letterIdx = 0;
-  const nextLetter = () => 'L-' + String.fromCharCode(65 + (letterIdx++));
+  const nextLetter = () => 'L-' + bracketLetter(letterIdx++);
 
   // LB round 0 (minor): pairs of WB round-0 losers. size/4 nodes.
   let count = size / 4;
@@ -807,23 +821,58 @@ function deResolveNode(skel, m) {
   return node;
 }
 
+// Winners-bracket resolver: identical to single-elim resolveBracket, but attaches
+// matches by PAIR from only the playoffs matches that have NO bracket_position (those
+// are the WB matches; matches WITH a bracket_position belong to the losers bracket).
+function resolveWinnersBracket(rounds) {
+  const matchByPair = {};
+  matches.filter(m => m.stage === 'playoffs' && !m.bracket_position)
+    .forEach(m => { matchByPair[pairKey(m.team_a_id, m.team_b_id)] = m; });
+
+  for (let r = 0; r < rounds.length; r++) {
+    for (const node of rounds[r]) {
+      if (r === 0) {
+        node.aTeam = node.slotA; node.bTeam = node.slotB;
+        node.aBye = node.slotA == null; node.bBye = node.slotB == null;
+      } else {
+        node.aTeam = node.childA.winnerTeam || null; node.bTeam = node.childB.winnerTeam || null;
+        node.aBye = false; node.bBye = false;
+      }
+      node.aScore = 0; node.bScore = 0; node.match = null; node.winnerTeam = null; node.resolved = false;
+      if (node.aBye && node.bTeam) { node.winnerTeam = node.bTeam; node.resolved = true; node.isBye = true; }
+      else if (node.bBye && node.aTeam) { node.winnerTeam = node.aTeam; node.resolved = true; node.isBye = true; }
+      else if (node.aTeam && node.bTeam) {
+        const m = matchByPair[pairKey(node.aTeam.id, node.bTeam.id)] || null;
+        node.match = m;
+        if (m) {
+          if (m.team_a_id === node.aTeam.id) { node.aScore = m.team_a_score || 0; node.bScore = m.team_b_score || 0; }
+          else { node.aScore = m.team_b_score || 0; node.bScore = m.team_a_score || 0; }
+          if (m.winner_team_id) { node.winnerTeam = teamById[m.winner_team_id] || null; node.resolved = true; }
+        }
+      }
+    }
+  }
+}
+
 function renderDoubleElim() {
+  // ── Winners bracket: derived from winners_entrants + seeds, resolved by the
+  // single-elim engine (byes, bye-floats, and winner-advancement all come free). ──
+  const allSeeds = seededTeams('playoff_seed');
+  const wCount = (season.winners_entrants && season.winners_entrants > 0)
+    ? Math.min(season.winners_entrants, allSeeds.length)
+    : allSeeds.length;                       // fallback: everyone in winners
+  const wSeeds = allSeeds.slice(0, wCount);
+
+  const wRounds = buildBracket(wSeeds);      // same builder single-elim uses (byes included)
+  if (wRounds) {
+    resolveWinnersBracket(wRounds);
+    let wi = 0;
+    wRounds.forEach(round => round.forEach(node => { node.posLetter = 'W-' + bracketLetter(wi++); }));
+  }
+
+  // ── Losers bracket: generated skeleton, hand-filled by bracket_position. ──
   buildDeSkeleton();
   const assignedByPos = deAssignedByPos();
-
-  // Winners section = winners rounds + a trailing GF column.
-  const wRounds = deSkeleton.W.map(round =>
-    round.map(skel => {
-      const rn = deResolveNode(skel, assignedByPos[skel.pos]);
-      rn._skel = skel;
-      rn._hidden = deIsHiddenBye(skel.pos, assignedByPos);
-      return rn;
-    })
-  );
-  const gfNode = deResolveNode(deSkeleton.GF, assignedByPos['GF']);
-  gfNode._skel = deSkeleton.GF;
-  gfNode._hidden = false;
-
   const lRounds = deSkeleton.L.map(round =>
     round.map(skel => {
       const rn = deResolveNode(skel, assignedByPos[skel.pos]);
@@ -833,8 +882,18 @@ function renderDoubleElim() {
     })
   );
 
-  deRenderSection(document.getElementById('winners-mount'), wRounds, 'playoffs', gfNode);
-  deRenderSection(document.getElementById('losers-mount'), lRounds, 'playoffs', null);
+  // ── Grand Final: WB champion (derived) vs LB champion (hand-placed via 'GF'). ──
+  const gfMatch = assignedByPos['GF'];
+  const gfNode = deResolveNode(deSkeleton.GF, gfMatch);
+  gfNode._skel = deSkeleton.GF;
+  gfNode._hidden = false;
+  if (!gfMatch && wRounds) {
+    const wbChamp = wRounds[wRounds.length - 1][0];
+    if (wbChamp && wbChamp.winnerTeam) { gfNode.aTeam = wbChamp.winnerTeam; }
+  }
+
+  deRenderSection(document.getElementById('winners-mount'), wRounds || [], 'playoffs', gfNode);
+  deRenderSection(document.getElementById('losers-mount'), lRounds, 'losers', null);
 }
 
 // Render one described section. Reuses nodeRowHtml / expandedCardHtml / the panel.
@@ -853,9 +912,12 @@ function deRenderSection(mount, rounds, stage, gfNode) {
   const colLeft = []; let x = 0;
   for (let r = 0; r < nCols; r++) { colLeft[r] = x; x += COL_W + COL_GAP; }
 
-  // Expandable state (reuse existing isExpandable + expand set).
+  // Expandable state (reuse existing isExpandable + expand set). WB nodes flagged
+  // isBye by the single-elim resolver are hidden here (float-forward), mirroring the
+  // LB skeleton's _hidden byes.
   const allNodes = rounds.flat().concat(gfNode ? [gfNode] : []);
   allNodes.forEach(node => {
+    if (node._hidden == null) node._hidden = !!node.isBye;
     node._expandable = !node._hidden && isExpandable(node);
     node._key = stage + ':' + node.posLetter;
     node._open = node._expandable && expanded.has(node._key);
@@ -919,12 +981,17 @@ function deRenderSection(mount, rounds, stage, gfNode) {
 function deNodeRowHtml(node, side) {
   const team = side === 'a' ? node.aTeam : node.bTeam;
   const score = side === 'a' ? node.aScore : node.bScore;
-  const feed = node.feeds ? (side === 'a' ? node.feeds[0] : node.feeds[1]) : '';
+  const bye = side === 'a' ? node.aBye : node.bBye;
   const isWinner = node.match && node.match.winner_team_id && team && node.match.winner_team_id === team.id;
   if (team) {
     return '<div class="bteam' + (isWinner ? ' win' : '') + '"><span class="bn">' + bracketTeamLabel(team) + '</span><span class="bsc">' + (score || 0) + '</span></div>';
   }
-  return '<div class="bteam src"><span class="bn">' + escapeHtml(feed || 'TBD') + '</span><span class="bsc"></span></div>';
+  if (bye) return '<div class="bteam bye"><span class="bn">Bye</span><span class="bsc"></span></div>';
+  if (node.feeds) {
+    const feed = side === 'a' ? node.feeds[0] : node.feeds[1];
+    return '<div class="bteam src"><span class="bn">' + escapeHtml(feed || 'TBD') + '</span><span class="bsc"></span></div>';
+  }
+  return '<div class="bteam tbd"><span class="bn">TBD</span><span class="bsc"></span></div>';
 }
 
 // Slide-to-child layout with overlap resolution: round 0 stacks; each later node
@@ -942,13 +1009,18 @@ function deLayoutSection(rounds, gfNode) {
 
   for (let r = 1; r < rounds.length; r++) {
     const visible = rounds[r].filter(n => !n._hidden);
-    visible.forEach((node, vi) => {
+    visible.forEach((node) => {
       node._h = node.el.offsetHeight;
-      const prev = rounds[r - 1];
-      // Spine-aligned children by ORIGINAL index (not filtered), then keep the visible ones.
-      const i = rounds[r].indexOf(node);
-      const kids = prev.length === rounds[r].length ? [prev[i]] : [prev[2 * i], prev[2 * i + 1]].filter(Boolean);
-      const vis = kids.filter(k => !k._hidden && k._center != null);
+      // WB nodes carry explicit childA/childB; LB skeleton nodes pair by spine index.
+      let kids;
+      if (node.childA || node.childB) {
+        kids = [node.childA, node.childB].filter(Boolean);
+      } else {
+        const prev = rounds[r - 1];
+        const i = rounds[r].indexOf(node);
+        kids = prev.length === rounds[r].length ? [prev[i]] : [prev[2 * i], prev[2 * i + 1]].filter(Boolean);
+      }
+      const vis = kids.filter(k => k && !k._hidden && k._center != null);
       node._center = vis.length ? vis.reduce((s, k) => s + k._center, 0) / vis.length : totalH0 / 2;
     });
     // Resolve overlaps top-to-bottom.
@@ -986,8 +1058,13 @@ function deDrawConnectors(svg, rounds, gfNode, inner, innerW) {
   for (let r = 1; r < rounds.length; r++) {
     rounds[r].forEach((parent, i) => {
       if (parent._hidden) return;
-      const prev = rounds[r - 1];
-      const kids = prev.length === rounds[r].length ? [prev[i]] : [prev[2 * i], prev[2 * i + 1]].filter(Boolean);
+      let kids;
+      if (parent.childA || parent.childB) {
+        kids = [parent.childA, parent.childB].filter(Boolean);
+      } else {
+        const prev = rounds[r - 1];
+        kids = prev.length === rounds[r].length ? [prev[i]] : [prev[2 * i], prev[2 * i + 1]].filter(Boolean);
+      }
       kids.forEach(child => {
         if (!child || child._hidden || child._left == null) return;
         const cx = child._left + child._w, cy = child._center, px = parent._left, py = parent._center, midX = cx + COL_GAP / 2;
