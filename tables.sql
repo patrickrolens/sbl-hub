@@ -1,10 +1,8 @@
 -- Reconstructed 2026-07-01 to match production, which had drifted from this file
 -- (divisions/match_pokemon tables, several columns, and the drafts uniqueness
--- constraint existed live but weren't reflected here). Cross-checked against a
--- live `information_schema` dump provided by the admin: that dump doesn't capture
--- multi-column UNIQUE constraints or FK ON DELETE actions (single-column UNIQUE,
--- NOT NULL, and DEFAULT came through fine), so those two details are still
--- best-effort where noted below rather than confirmed against that dump.
+-- constraint existed live but weren't reflected here). Fully cross-checked against
+-- live `information_schema`/`pg_constraint` dumps, including every FK's ON DELETE
+-- action and every multi-column UNIQUE constraint.
 -- Regenerate this from `information_schema` / `pg_dump` periodically instead of
 -- hand-editing where possible.
 CREATE TABLE public.seasons(
@@ -158,12 +156,12 @@ CREATE TABLE public.matches(
 CREATE TABLE public.match_pokemon(
     id uuid PRIMARY KEY default gen_random_uuid(),
     match_id uuid references public.matches(id) ON DELETE CASCADE,
-    team_id uuid references public.teams(id) ON DELETE CASCADE,
-    pokemon_id text not null
-    -- match_id/team_id are nullable live (confirmed via schema dump) despite the
-    -- app always populating both on insert — likely an oversight when this table
-    -- was created rather than intentional. No DB-level unique(match_id, team_id,
-    -- pokemon_id) either, unlike the otherwise-identical game_pokemon_stats.
+    team_id uuid references public.teams(id),  -- no ON DELETE action, unlike match_id above (confirmed
+                                                 -- via pg_constraint; likely inconsistency, not intentional)
+    pokemon_id text not null,
+    -- match_id/team_id are nullable live despite the app always populating both on
+    -- insert — likely an oversight when this table was created rather than intentional.
+    constraint unique_match_pokemon unique(match_id, team_id, pokemon_id)
 );
 
 CREATE TABLE public.games(
