@@ -141,6 +141,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 <body>
 
 <script src="/nav.js"></script>
+<script src="/db-utils.js"></script>
 
 <div id="boot-banner" class="banner">Loading standings…</div>
 
@@ -328,38 +329,6 @@ function coachOnlyHtml(id, opts) {
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA LOAD
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Fetch every row of `table` where `column` is in `values`, defeating Supabase's
-// default 1000-row response cap. The IN-list is chunked (so a large id list can't
-// overrun the query), and each chunk is paged until a short page signals the end.
-async function fetchAllIn(table, columns, column, values) {
-  const IN_CHUNK = 300;     // max ids per IN() clause
-  const PAGE = 1000;        // Supabase max rows per response
-  const out = [];
-  for (let i = 0; i < values.length; i += IN_CHUNK) {
-    const slice = values.slice(i, i + IN_CHUNK);
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await sb.from(table).select(columns)
-        .in(column, slice).order('id').range(from, from + PAGE - 1);
-      if (error) throw error;
-      if (data && data.length) out.push(...data);
-      if (!data || data.length < PAGE) break;   // last page for this chunk
-    }
-  }
-  return out;
-}
-
-// Paginate an entire (unfiltered) table past the 1000-row response cap.
-async function fetchAll(table, columns) {
-  const PAGE = 1000, out = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await sb.from(table).select(columns).order('id').range(from, from + PAGE - 1);
-    if (error) throw error;
-    if (data && data.length) out.push(...data);
-    if (!data || data.length < PAGE) break;
-  }
-  return out;
-}
 
 // From all of a season's draft rows (one per division, or a single undivided row),
 // pick a representative for the draft-pending panel: the least-advanced one, so the
