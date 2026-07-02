@@ -1,3 +1,12 @@
+-- Reconstructed 2026-07-01 to match production, which had drifted from this file
+-- (divisions/match_pokemon tables, several columns, and the drafts uniqueness
+-- constraint existed live but weren't reflected here). Cross-checked against a
+-- live `information_schema` dump provided by the admin: that dump doesn't capture
+-- multi-column UNIQUE constraints or FK ON DELETE actions (single-column UNIQUE,
+-- NOT NULL, and DEFAULT came through fine), so those two details are still
+-- best-effort where noted below rather than confirmed against that dump.
+-- Regenerate this from `information_schema` / `pg_dump` periodically instead of
+-- hand-editing where possible.
 CREATE TABLE public.seasons(
     id uuid PRIMARY KEY default gen_random_uuid(),
     slug text unique not null,
@@ -7,30 +16,55 @@ CREATE TABLE public.seasons(
     team_size integer default 10,
     started_at date,
     ended_at date,
-    is_current boolean not null default false
+    is_current boolean not null default false,
+    postseason_published boolean not null default false,
+    playoff_format text not null default 'single_elim'
 );
 
 CREATE UNIQUE INDEX seasons_one_current_idx
     ON public.seasons (is_current)
     WHERE is_current;
 
+-- A season optionally splits into divisions (e.g. two conferences drafting/competing
+-- separately). Undivided seasons simply have zero rows here.
+CREATE TABLE public.divisions(
+    id uuid PRIMARY KEY default gen_random_uuid(),
+    season_id uuid not null references public.seasons(id) ON DELETE CASCADE,
+    name text not null,
+    abbr text not null,
+    color text,
+    logo_url text,
+    sort_order integer not null default 0,
+    created_at timestamptz not null default now()
+    -- No DB-level unique(season_id, abbr): admin-seasons.html checks "abbr already
+    -- used this season" in JS before insert, but nothing stops a race/manual insert.
+);
+
 CREATE TABLE public.season_pokemon_tiers(
     id uuid PRIMARY KEY default gen_random_uuid(),
     season_id uuid not null references public.seasons(id) ON DELETE CASCADE,
     pokemon_id text not null,
     point_cost integer,
+    tera_point_cost integer,
     constraint unique_season_pokemon unique(season_id, pokemon_id)
 );
 
+-- One draft per season normally, but a divisioned season runs one draft per division
+-- (division_id null = undivided season's single draft).
 CREATE TABLE public.drafts(
     id uuid PRIMARY KEY default gen_random_uuid(),
-    season_id uuid unique not null references public.seasons(id) ON DELETE CASCADE,
+    season_id uuid not null references public.seasons(id) ON DELETE CASCADE,
+    division_id uuid references public.divisions(id) ON DELETE CASCADE,
     draft_order uuid[],
     status text not null default 'pending'
         CHECK (status IN('pending', 'in_progress', 'complete')),
     current_pick_number integer,
+    draft_date date,
     started_at timestamptz,
     completed_at timestamptz
+    -- No DB-level unique(season_id, division_id): confirmed live that >1 row can
+    -- share a season_id (one per division), but nothing in the schema enforces
+    -- "at most one draft per season+division" beyond app-side upsert-by-id logic.
 );
 
 CREATE TABLE public.players(
@@ -55,6 +89,7 @@ CREATE UNIQUE INDEX showdown_accounts_unique_primary
 CREATE TABLE public.teams(
     id uuid PRIMARY KEY default gen_random_uuid(),
     season_id uuid not null references public.seasons(id) ON DELETE CASCADE,
+    division_id uuid references public.divisions(id) ON DELETE SET NULL,
     name text not null,
     slug text not null,
     logo_url text,
@@ -69,7 +104,7 @@ CREATE TABLE public.team_owners(
     id uuid PRIMARY KEY default gen_random_uuid(),
     team_id uuid not null references public.teams(id) ON DELETE CASCADE,
     player_id uuid not null references public.players(id) ON DELETE RESTRICT,
-    started_week integer not null,
+    started_week integer not null default 1,
     ended_week integer,
     notes text
 );
@@ -83,7 +118,8 @@ CREATE TABLE public.team_pokemon(
     acquired_via text not null default 'draft'
         CHECK(acquired_via IN('draft', 'free_agency', 'trade')),
     draft_pick_number integer,
-    notes text
+    notes text,
+    is_tera boolean not null default false
 );
 
 CREATE TABLE public.matches(
@@ -101,6 +137,12 @@ CREATE TABLE public.matches(
     team_a_score integer not null default 0,
     team_b_score integer not null default 0,
     match_date timestamptz,
+    -- The admin's schema dump rendered this as a plain DEFAULT (its export tool's
+    -- generic representation for computed columns), but GENERATED...STORED is very
+    -- likely still correct: admin-matches.html only ever writes team_a_score/
+    -- team_b_score on a result update and never touches winner_team_id directly,
+    -- and every match's winner_team_id observed live is consistent with the current
+    -- scores — a plain DEFAULT would only apply on INSERT and go stale on score edits.
     winner_team_id uuid GENERATED ALWAYS AS (
         CASE
             WHEN team_a_score > series_length / 2 THEN team_a_id
@@ -108,6 +150,20 @@ CREATE TABLE public.matches(
             ELSE NULL
         END
     ) STORED
+);
+
+-- The roster a team actually brought to a match (as opposed to team_pokemon, which
+-- is a team's full season-long roster). Distinct from game_pokemon_stats: a mon can
+-- be brought without recording a kill/death (e.g. never sent out).
+CREATE TABLE public.match_pokemon(
+    id uuid PRIMARY KEY default gen_random_uuid(),
+    match_id uuid references public.matches(id) ON DELETE CASCADE,
+    team_id uuid references public.teams(id) ON DELETE CASCADE,
+    pokemon_id text not null
+    -- match_id/team_id are nullable live (confirmed via schema dump) despite the
+    -- app always populating both on insert — likely an oversight when this table
+    -- was created rather than intentional. No DB-level unique(match_id, team_id,
+    -- pokemon_id) either, unlike the otherwise-identical game_pokemon_stats.
 );
 
 CREATE TABLE public.games(
