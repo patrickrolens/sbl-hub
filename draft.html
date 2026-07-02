@@ -481,7 +481,7 @@ body.overlay-open { overflow: hidden; }
 <body>
 
 <script src="/nav.js"></script>
-<script src="/utils.js"></script>
+<script src="/db-utils.js"></script>
 
 <div id="boot-banner" class="banner">Loading draft…</div>
 
@@ -581,6 +581,30 @@ const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
 const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Carry the active ?season=<slug> onto internal links so navigating from a past
+// season keeps you in it. Absent (current season) → bare; external links untouched;
+// preserves any existing query/hash on the href.
+const SEASON_SLUG = new URLSearchParams(location.search).get('season') || '';
+function withSeason(href) {
+  if (!SEASON_SLUG) return href;
+  if (/^https?:\/\//i.test(href)) return href;
+  const hashI = href.indexOf('#');
+  const hash = hashI === -1 ? '' : href.slice(hashI);
+  const base = hashI === -1 ? href : href.slice(0, hashI);
+  const sep = base.indexOf('?') === -1 ? '?' : '&';
+  return base + sep + 'season=' + encodeURIComponent(SEASON_SLUG) + hash;
+}
+// Rewrite static internal links on load (generated links use withSeason() inline).
+function patchStaticSeasonLinks() {
+  if (!SEASON_SLUG) return;
+  document.querySelectorAll('a[href]').forEach(a => {
+    const raw = a.getAttribute('href');
+    if (!raw || raw.startsWith('#') || /^https?:\/\//i.test(raw) || raw.startsWith('mailto:')) return;
+    if (/[?&]season=/.test(raw)) return;
+    a.setAttribute('href', withSeason(raw));
+  });
+}
+
 // Where pokemon.json lives. The icons/ and sprites/ folders live alongside it in
 // the same (planner) repo, so ASSET_BASE is derived by stripping the filename -
 // one URL drives the data and the art. To move everything into the hub repo later,
@@ -651,6 +675,28 @@ function loadPins() {
   } catch (e) { /* ignore corrupt/unavailable storage */ }
 }
 let isAdmin      = false;           // profiles.is_admin for the logged-in user
+
+// ─────────────────────────────────────────────────────────────────────────────
+// URL / ID HELPERS - mirror the Planner so sprite/icon paths resolve identically.
+//   Draft pool + sidebar use ICONS first, falling back to SPRITES, then Pokéball.
+// ─────────────────────────────────────────────────────────────────────────────
+function localId(id) {
+  const m = String(id).match(/^(\d+)(.*)$/);
+  if (!m) return id;
+  const num = parseInt(m[1]);
+  return (num >= 1000 ? String(num) : String(num).padStart(3, '0')) + m[2];
+}
+function iconUrl(mon)   { return mon && mon.id ? ASSET_BASE + 'icons/'   + localId(mon.id) + '.png' : ''; }
+function spriteUrl(mon) { return mon && mon.id ? ASSET_BASE + 'sprites/' + localId(mon.id) + '.png' : ''; }
+
+// icon → sprite → Pokéball, applied as an inline onerror chain on each <img>.
+function attachIconFallback(img, mon) {
+  img.onerror = function () {
+    if (this.src.includes('/icons/'))       { this.src = spriteUrl(mon); }
+    else if (this.src.includes('/sprites/')){ this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+    else                                    { this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SNAKE ORDER - for the read-only current/next display in Stage 1.
@@ -1569,6 +1615,11 @@ function showToast(msg, kind) {
   t.textContent = msg;
   document.getElementById('toast-container').appendChild(t);
   setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3200);
+}
+
+// ── MISC ──
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
