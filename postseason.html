@@ -796,20 +796,35 @@ function deAssignedByPos() {
 
 // A node hides when it has NO team of its own AND the slot it feeds forward already
 // holds a real team (agreed bye/float rule). Assignments are matches keyed by pos.
-function deIsHiddenBye(pos, assignedByPos) {
+// A losers-bracket node hides when it has no teams of its own AND the node it feeds
+// forward is either populated by a hand-placed match OR is itself a hidden phantom.
+// The second clause makes entire orphaned feed-chains collapse: if L-B → L-F → L-I and
+// only L-I holds a real match, L-F hides (feeds a filled node) and then L-B hides too
+// (feeds a hidden node) — so the whole phantom lead-in disappears instead of leaving
+// empty "Loser of W" boxes stranded in the first column. Memoized, with cycle guard.
+function deIsHiddenBye(pos, assignedByPos, memo, visiting) {
+  memo = memo || {};
+  visiting = visiting || {};
+  if (pos in memo) return memo[pos];
+  if (visiting[pos]) return false;                 // cycle guard (shouldn't happen)
+  visiting[pos] = true;
+
   const skel = deNodeByPos()[pos];
-  if (!skel || !skel.feedsTo) return false;
   const self = assignedByPos[pos];
-  if (self && (self.team_a_id || self.team_b_id)) return false;         // has teams -> always show
-  // Hide when the node this one feeds forward is already populated by a hand-placed
-  // match. We check for ANY real team in the destination (not the specific slot the
-  // generator wired), because a hand-placed losers bracket may seat teams in either
-  // slot — a vestigial feed-source node shouldn't linger just because its nominal
-  // slot happens to be the empty side of an otherwise-filled match.
-  const [destPos] = skel.feedsTo;
-  const dest = assignedByPos[destPos];
-  if (!dest) return false;
-  return !!(dest.team_a_id || dest.team_b_id);
+  const hasTeams = self && (self.team_a_id || self.team_b_id);
+
+  let hidden = false;
+  if (!hasTeams && skel && skel.feedsTo) {
+    const [destPos] = skel.feedsTo;
+    const dest = assignedByPos[destPos];
+    const destFilled = dest && (dest.team_a_id || dest.team_b_id);
+    // Hide if the target is filled, or if the target itself is a hidden phantom.
+    hidden = !!destFilled || deIsHiddenBye(destPos, assignedByPos, memo, visiting);
+  }
+
+  visiting[pos] = false;
+  memo[pos] = hidden;
+  return hidden;
 }
 
 // Turn a skeleton node + assigned match into a render node in the shape the existing
@@ -881,11 +896,12 @@ function renderDoubleElim() {
   // ── Losers bracket: generated skeleton, hand-filled by bracket_position. ──
   buildDeSkeleton();
   const assignedByPos = deAssignedByPos();
+  const hiddenMemo = {};   // shared across the cascade so chains resolve consistently
   const lRounds = deSkeleton.L.map(round =>
     round.map(skel => {
       const rn = deResolveNode(skel, assignedByPos[skel.pos]);
       rn._skel = skel;
-      rn._hidden = deIsHiddenBye(skel.pos, assignedByPos);
+      rn._hidden = deIsHiddenBye(skel.pos, assignedByPos, hiddenMemo);
       return rn;
     })
   );
@@ -1035,8 +1051,14 @@ function deLayoutSection(rounds, gfNode) {
       // Structural byes keep their reserved center, so a round-1 node centered between a
       // real child and a bye child lands at its true bracket height. Only vestigial
       // phantoms (no reserved center) are dropped from the average.
-      const vis = kids.filter(k => k && k._center != null && !(k._hidden && !k.isBye));
-      node._center = vis.length ? vis.reduce((s, k) => s + k._center, 0) / vis.length : totalH0 / 2;
+      const usable = kids.filter(k => k && k._center != null && !(k._hidden && !k.isBye));
+      // Prefer aligning to VISIBLE (non-bye) children: when a node feeds from one real
+      // match and one bye, sit it exactly on the real match rather than splitting the
+      // difference with the empty bye slot. Fall back to all usable children (incl. the
+      // bye's reserved center) only when there's no visible child.
+      const visibleKids = usable.filter(k => !k._hidden);
+      const centerOn = visibleKids.length ? visibleKids : usable;
+      node._center = centerOn.length ? centerOn.reduce((s, k) => s + k._center, 0) / centerOn.length : totalH0 / 2;
     });
     // Resolve overlaps top-to-bottom.
     for (let vi = 1; vi < visible.length; vi++) {
