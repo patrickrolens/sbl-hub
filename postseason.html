@@ -225,6 +225,10 @@ const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Bracket geometry (COL_W must match --col-w above). EXP_W is the widened column for expanded cards.
 const COL_W = 232, EXP_W = 450, COL_GAP = 60, V_GAP = 22;
+// Height reserved for a structural bye slot in round 0 (byes render no box, but their
+// vertical space is kept so the bracket grid stays aligned). Matches a standard
+// two-row collapsed node; exact value isn't critical since it only affects byes.
+const DEFAULT_NODE_H = 58;
 
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
@@ -1002,12 +1006,16 @@ function deNodeRowHtml(node, side) {
 // centers on its VISIBLE children, then siblings are nudged apart to prevent overlap.
 function deLayoutSection(rounds, gfNode) {
   let cursor = 0;
-  const round0 = rounds[0].filter(n => !n._hidden);
-  round0.forEach(node => {
-    node._h = node.el.offsetHeight;
+  // Round 0: structural byes (isBye, from the derived winners bracket) still RESERVE
+  // their vertical slot so the bracket grid is preserved and round-1 nodes align to
+  // their real feeders — they just don't render a box. Vestigial phantoms (_hidden but
+  // not isBye, e.g. collapsed losers-bracket feed nodes) are skipped entirely.
+  rounds[0].forEach(node => {
+    if (node._hidden && !node.isBye) return;          // vestigial phantom → collapse
+    node._h = node.el ? node.el.offsetHeight : 0;
     node._top = cursor;
-    node._center = cursor + node._h / 2;
-    cursor += node._h + V_GAP;
+    node._center = cursor + (node._h || DEFAULT_NODE_H) / 2;
+    cursor += (node._h || DEFAULT_NODE_H) + V_GAP;
   });
   const totalH0 = Math.max(cursor - V_GAP, 0);
 
@@ -1024,7 +1032,10 @@ function deLayoutSection(rounds, gfNode) {
         const i = rounds[r].indexOf(node);
         kids = prev.length === rounds[r].length ? [prev[i]] : [prev[2 * i], prev[2 * i + 1]].filter(Boolean);
       }
-      const vis = kids.filter(k => k && !k._hidden && k._center != null);
+      // Structural byes keep their reserved center, so a round-1 node centered between a
+      // real child and a bye child lands at its true bracket height. Only vestigial
+      // phantoms (no reserved center) are dropped from the average.
+      const vis = kids.filter(k => k && k._center != null && !(k._hidden && !k.isBye));
       node._center = vis.length ? vis.reduce((s, k) => s + k._center, 0) / vis.length : totalH0 / 2;
     });
     // Resolve overlaps top-to-bottom.
