@@ -797,11 +797,15 @@ function deIsHiddenBye(pos, assignedByPos) {
   if (!skel || !skel.feedsTo) return false;
   const self = assignedByPos[pos];
   if (self && (self.team_a_id || self.team_b_id)) return false;         // has teams -> always show
-  const [destPos, destSlot] = skel.feedsTo;
+  // Hide when the node this one feeds forward is already populated by a hand-placed
+  // match. We check for ANY real team in the destination (not the specific slot the
+  // generator wired), because a hand-placed losers bracket may seat teams in either
+  // slot — a vestigial feed-source node shouldn't linger just because its nominal
+  // slot happens to be the empty side of an otherwise-filled match.
+  const [destPos] = skel.feedsTo;
   const dest = assignedByPos[destPos];
   if (!dest) return false;
-  const destTeam = destSlot === 0 ? dest.team_a_id : dest.team_b_id;
-  return !!destTeam;
+  return !!(dest.team_a_id || dest.team_b_id);
 }
 
 // Turn a skeleton node + assigned match into a render node in the shape the existing
