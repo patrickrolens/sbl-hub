@@ -229,6 +229,9 @@ const COL_W = 232, EXP_W = 450, COL_GAP = 60, V_GAP = 22;
 // vertical space is kept so the bracket grid stays aligned). Matches a standard
 // two-row collapsed node; exact value isn't critical since it only affects byes.
 const DEFAULT_NODE_H = 58;
+// Vertical padding above the first bracket node, so nodes clear the round-label header
+// and expanded cards have room to grow upward without clipping into the section title.
+const TOP_PAD = 16;
 
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
@@ -931,10 +934,10 @@ function deRenderSection(mount, rounds, stage, gfNode) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'connectors');
   inner.appendChild(svg);
 
-  // Columns: one per round, plus a trailing GF column if provided.
+  // Columns: one per round, plus a trailing GF column if provided. Widths are computed
+  // below (a column widens to EXP_W when it holds an expanded card).
   const nCols = rounds.length + (gfNode ? 1 : 0);
-  const colLeft = []; let x = 0;
-  for (let r = 0; r < nCols; r++) { colLeft[r] = x; x += COL_W + COL_GAP; }
+  const colLeft = [];
 
   // Expandable state (reuse existing isExpandable + expand set). WB nodes flagged
   // isBye by the single-elim resolver are hidden here (float-forward), mirroring the
@@ -948,17 +951,36 @@ function deRenderSection(mount, rounds, stage, gfNode) {
     if (node._expandable) expandableKeys.push(node._key);
   });
 
-  // Headers per round.
+  // Per-column width: a column widens to EXP_W when it holds an expanded card, so the
+  // roster strips fit; other columns stay COL_W. Later columns shift right to follow.
+  const expandedCols = new Set();
+  rounds.forEach((round, ri) => { if (round.some(n => n._open && !n._hidden)) expandedCols.add(ri); });
+  if (gfNode && gfNode._open) expandedCols.add(rounds.length);
+  const colW = [];
+  const colLeft2 = []; let x2 = 0;
+  for (let r = 0; r < nCols; r++) {
+    colW[r] = expandedCols.has(r) ? EXP_W : COL_W;
+    colLeft2[r] = x2; x2 += colW[r] + COL_GAP;
+  }
+  // Overwrite the provisional colLeft with the width-aware one.
+  for (let r = 0; r < nCols; r++) colLeft[r] = colLeft2[r];
+
+  // Which rounds are entirely hidden (all nodes collapsed) — their header is suppressed
+  // so a defunct round like a fully-phantom losers Round 1 doesn't leave a stranded label.
+  const roundAllHidden = rounds.map(round => round.length > 0 && round.every(n => n._hidden));
+
+  // Headers per round (skip fully-hidden rounds).
   const roundLabels = deRoundLabels(rounds, !!gfNode);
   rounds.forEach((round, ri) => {
+    if (roundAllHidden[ri]) return;
     const h = document.createElement('div'); h.className = 'rhead';
-    h.style.left = colLeft[ri] + 'px'; h.style.width = COL_W + 'px';
+    h.style.left = colLeft[ri] + 'px'; h.style.width = colW[ri] + 'px';
     h.textContent = roundLabels[ri];
     headers.appendChild(h);
   });
   if (gfNode) {
     const h = document.createElement('div'); h.className = 'rhead';
-    h.style.left = colLeft[rounds.length] + 'px'; h.style.width = COL_W + 'px';
+    h.style.left = colLeft[rounds.length] + 'px'; h.style.width = colW[rounds.length] + 'px';
     h.textContent = 'Grand Final';
     headers.appendChild(h);
   }
@@ -967,8 +989,8 @@ function deRenderSection(mount, rounds, stage, gfNode) {
   const drawNode = (node, ri) => {
     if (node._hidden) return;
     const el = document.createElement('div');
-    node._left = colLeft[ri]; node._w = COL_W;
-    el.style.left = node._left + 'px'; el.style.width = COL_W + 'px';
+    node._left = colLeft[ri]; node._w = colW[ri];
+    el.style.left = node._left + 'px'; el.style.width = colW[ri] + 'px';
     el.className = 'bnode' + (node._expandable ? ' clickable' : '') + (node._open ? ' expanded' : '') + (node.isGF ? ' gf' : '');
     if (node._open) el.innerHTML = expandedCardHtml(node);
     else {
@@ -984,7 +1006,7 @@ function deRenderSection(mount, rounds, stage, gfNode) {
   rounds.forEach((round, ri) => round.forEach(node => drawNode(node, ri)));
   if (gfNode) drawNode(gfNode, rounds.length);
 
-  const innerW = colLeft[nCols - 1] + COL_W;
+  const innerW = colLeft[nCols - 1] + colW[nCols - 1];
   headers.style.width = innerW + 'px';
   inner.style.width = innerW + 'px';
   scroll.appendChild(headers); scroll.appendChild(inner);
@@ -1021,7 +1043,9 @@ function deNodeRowHtml(node, side) {
 // Slide-to-child layout with overlap resolution: round 0 stacks; each later node
 // centers on its VISIBLE children, then siblings are nudged apart to prevent overlap.
 function deLayoutSection(rounds, gfNode) {
-  let cursor = 0;
+  // Start below the round-label row so the first node (and any expanded card, which
+  // grows upward as roster strips are added) doesn't collide with the headers above.
+  let cursor = TOP_PAD;
   // Round 0: structural byes (isBye, from the derived winners bracket) still RESERVE
   // their vertical slot so the bracket grid is preserved and round-1 nodes align to
   // their real feeders — they just don't render a box. Vestigial phantoms (_hidden but
@@ -1077,6 +1101,19 @@ function deLayoutSection(rounds, gfNode) {
     gfNode._left = parseFloat(gfNode.el.style.left);
     gfNode._w = COL_W;
   }
+
+  // An expanded card grows from its center, so a top-row node can push its top edge
+  // above TOP_PAD (or negative), clipping into the header. If anything sits too high,
+  // shift the whole section down so the highest node clears TOP_PAD.
+  let minTop = Infinity;
+  rounds.forEach(round => round.forEach(node => { if (!node._hidden) minTop = Math.min(minTop, node._top); }));
+  if (gfNode) minTop = Math.min(minTop, gfNode._top);
+  if (minTop < TOP_PAD && minTop !== Infinity) {
+    const shift = TOP_PAD - minTop;
+    rounds.forEach(round => round.forEach(node => { if (!node._hidden) { node._top += shift; node._center += shift; } }));
+    if (gfNode) { gfNode._top += shift; gfNode._center += shift; }
+  }
+
   rounds.forEach(round => round.forEach(node => { if (!node._hidden) node.el.style.top = node._top + 'px'; }));
   if (gfNode) gfNode.el.style.top = gfNode._top + 'px';
 }
