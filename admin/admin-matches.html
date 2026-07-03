@@ -1590,6 +1590,30 @@ function buildMatchBody(body, m, model) {
     body.appendChild(sr);
   }
 
+  // Double-elim playoffs matches: an editable bracket position. Losers-bracket matches
+  // carry a position letter (L-A, L-C, GF…); winners-bracket matches must be blank ("–")
+  // so they attach by team pairing. Editing this here makes fixing a mis-entered
+  // position trivial (e.g. clearing a position accidentally set on a winners match).
+  const seasonRow = seasons.find(s => s.id === selectedSeasonId);
+  if (seasonRow && seasonRow.playoff_format === 'double_elim' && m.stage === 'playoffs') {
+    const br = document.createElement('div');
+    br.className = 'md-series-row';
+    br.innerHTML = '<label>Bracket position</label>';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.placeholder = '\u2013';
+    inp.value = m.bracket_position || '';
+    inp.style.cssText = 'width:90px;font-size:12px;padding:4px 7px;';
+    inp.title = 'Losers-bracket node (e.g. L-A, L-C, GF). Leave blank for winners-bracket matches, which attach by team pairing.';
+    inp.onchange = () => updateBracketPosition(m.id, inp.value);
+    br.appendChild(inp);
+    const hint = document.createElement('span');
+    hint.style.cssText = 'font-size:11px;color:var(--text3);margin-left:8px;';
+    hint.textContent = 'Blank = winners bracket (by pairing) · letter = losers bracket / GF';
+    br.appendChild(hint);
+    body.appendChild(br);
+  }
+
   // ── Paste fill section ──
   const pasteWrap = document.createElement('div');
   pasteWrap.style.cssText = 'margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;';
@@ -2229,6 +2253,27 @@ async function updateSeriesLength(matchId, n) {
   } catch (err) {
     console.error(err);
     showToast('Could not update series length: ' + (err.message || err), 'err');
+  }
+}
+
+// Persist an inline bracket-position edit for a double-elim playoffs match. A blank
+// value (or "-") clears it to null, which moves the match into the winners bracket
+// (attaches by team pairing); a letter like "L-C" or "GF" places it in the losers
+// bracket / grand final. Normalizes case and whitespace.
+async function updateBracketPosition(matchId, rawValue) {
+  let pos = (rawValue || '').trim();
+  if (pos === '-' || pos === '\u2013' || pos === '') pos = null;
+  else pos = pos.toUpperCase();
+  try {
+    const { error } = await sb.from('matches').update({ bracket_position: pos }).eq('id', matchId);
+    if (error) throw error;
+    const mm = matches.find(x => x.id === matchId);
+    if (mm) mm.bracket_position = pos;
+    showToast(pos ? ('Bracket position set to ' + pos + '.') : 'Bracket position cleared (winners bracket).', 'ok');
+    renderMatchData();
+  } catch (err) {
+    console.error(err);
+    showToast('Could not update bracket position: ' + (err.message || err), 'err');
   }
 }
 
