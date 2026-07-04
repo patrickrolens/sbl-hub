@@ -387,7 +387,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
     <div class="card sec-stats">
       <div class="card-title center">Team Stats</div>
-      <div id="team-stats"><!-- record + SoS/deltas + KOs/Faints --></div>
+      <div id="team-stats"><!-- record + OW%/OOW%/deltas + KOs/Faints --></div>
     </div>
 
     <div class="card sec-txns">
@@ -496,8 +496,8 @@ let roster       = [];      // team_pokemon rows for this team (active + inactiv
 let matches      = [];      // matches involving this team (any stage), by week
 let gamesByMatch = {};      // match_id -> [game rows]
 let statRows     = [];      // game_pokemon_stats rows for this team
-let regularRecords = {};    // team_id -> { w, l, winRate } over regular season (for SoS)
-let regularOpponents = {};  // team_id -> [opponent_id, …] over regular season (for SoSoS)
+let regularRecords = {};    // team_id -> { w, l, winRate } over regular season (for OW%)
+let regularOpponents = {};  // team_id -> [opponent_id, …] over regular season (for OOW%)
 let broughtByMatch = {};    // match_id -> Set(pokemon_id) brought by THIS team (from match_pokemon)
 let txns         = [];      // unified transaction feed (free agency + trades)
 let pokemonById  = {};      // id -> pokemon.json entry
@@ -626,7 +626,7 @@ async function loadGlobalData() {
     if (o.players) coachByTeam[o.team_id] = o.players.display_name;
   });
 
-  // Season-wide regular-season records + opponent map, used for SoS / SoSoS.
+  // Season-wide regular-season records + opponent map, used for OW% / OOW%.
   regularRecords = computeRegularRecords(regMatchRes.data || [], teamIds);
   regularOpponents = {};
   teamIds.forEach(id => { regularOpponents[id] = []; });
@@ -748,23 +748,23 @@ function teamKoFaint() {
   return { kos, faints };
 }
 
-// Strength of schedule: average regular-season win rate of opponents faced.
-// SoSoS: average win rate of those opponents' opponents (matches standings.html).
-function strengthOfSchedule() {
+// OW% (opponents' win percentage): average regular-season win rate of opponents faced.
+// OOW%: average win rate of those opponents' opponents (matches standings.html).
+function opponentsWinPct() {
   const myOpponents = regularOpponents[team.id] || [];
-  if (!myOpponents.length) return { sos: null, sosos: null };
+  if (!myOpponents.length) return { owp: null, oowp: null };
 
   const rateOf = id => (regularRecords[id] ? regularRecords[id].winRate : null);
   const avg = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 
-  const sos = avg(myOpponents.map(rateOf));
+  const owp = avg(myOpponents.map(rateOf));
 
   // Second degree: win rate of every opponent's opponents.
   const second = [];
   myOpponents.forEach(o => (regularOpponents[o] || []).forEach(oo => second.push(rateOf(oo))));
-  const sosos = avg(second);
+  const oowp = avg(second);
 
-  return { sos, sosos };
+  return { owp, oowp };
 }
 
 function fmtRate(r) { return r == null ? '-' : (r * 100).toFixed(0) + '%'; }
@@ -882,7 +882,7 @@ function renderTeamStats() {
   const el = document.getElementById('team-stats');
   const rec = teamMatchRecord();
   const kf  = teamKoFaint();
-  const sos = strengthOfSchedule();
+  const owp = opponentsWinPct();
   const matchDelta = rec.w - rec.l;
   const gameDelta  = rec.gw - rec.gl;
   const kfDelta    = kf.kos - kf.faints;
@@ -893,9 +893,9 @@ function renderTeamStats() {
     + '<div class="games">(' + rec.gw + '–' + rec.gl + ')</div>'
     + '</div>'
     + '<div class="stat-grid">'
-    +   statBox('OW%', fmtRate(sos.sos), '', 'Opponents\' Win Percentage — the combined win rate of all opponents this team has faced in the regular season. A higher value means a harder schedule.')
+    +   statBox('OW%', fmtRate(owp.owp), '', 'Opponents\' Win Percentage — the combined win rate of all opponents this team has faced in the regular season. A higher value means a harder schedule.')
     +   statBox('Match Δ', signed(matchDelta), deltaClass(matchDelta), 'Match Differential — match wins minus match losses')
-    +   statBox('OOW%', fmtRate(sos.sosos), '', 'Opponents\' Opponents\' Win Percentage — the combined win rate of all opponents\' opponents. Used as a second-degree strength of schedule tiebreaker.')
+    +   statBox('OOW%', fmtRate(owp.oowp), '', 'Opponents\' Opponents\' Win Percentage — the combined win rate of all opponents\' opponents. Used as a second-degree opponents\' win percentage tiebreaker.')
     +   statBox('Game Δ', signed(gameDelta), deltaClass(gameDelta), 'Game Differential — individual games won minus games lost across all matches')
     + '</div>'
     + '<div class="kf-row">'
