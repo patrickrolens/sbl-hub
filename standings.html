@@ -422,7 +422,7 @@ function buildLeaders() {
   }));
 }
 
-// Regular-season standings rows with SoS / SoSoS.
+// Regular-season standings rows with OW% / OOW%.
 function buildStandings() {
   const reg = matches.filter(m => m.stage === 'regular');
 
@@ -443,7 +443,7 @@ function buildStandings() {
     if (m && m.stage === 'regular' && kd[s.team_id] != null) kd[s.team_id] += (s.kills || 0) - (s.deaths || 0);
   });
 
-  // Win rates + opponent map for SoS / SoSoS.
+  // Win rates + opponent map for OW% / OOW%.
   const winRate = {};
   allTeams.forEach(t => { const r = rec[t.id]; const dec = r.wins + r.losses; winRate[t.id] = dec > 0 ? r.wins / dec : null; });
   const opps = {}; allTeams.forEach(t => { opps[t.id] = []; });
@@ -452,23 +452,52 @@ function buildStandings() {
     if (opps[m.team_b_id]) opps[m.team_b_id].push(m.team_a_id);
   });
   const avg = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  const sos = {}, sosos = {};
+  const owp = {}, oowp = {};
   allTeams.forEach(t => {
-    sos[t.id] = avg(opps[t.id].map(o => winRate[o]));
+    owp[t.id] = avg(opps[t.id].map(o => winRate[o]));
     const second = []; opps[t.id].forEach(o => opps[o].forEach(oo => second.push(winRate[oo])));
-    sosos[t.id] = avg(second);
+    oowp[t.id] = avg(second);
   });
 
-  return allTeams.map(t => ({
+  const rows = allTeams.map(t => ({
     id: t.id, name: t.name, seed: t.initial_seed,
     wins: rec[t.id].wins, losses: rec[t.id].losses, gameDiff: rec[t.id].gameDiff,
-    kd: kd[t.id], sos: sos[t.id], sosos: sosos[t.id],
-  })).sort((a, b) =>
+    kd: kd[t.id], owp: owp[t.id], oowp: oowp[t.id],
+  }));
+
+  // S1-S8 ranked ties by game differential before opponents' win percentage (legacy,
+  // fixed list - never grows). S9 was a one-off exception: OW% ranked ahead of
+  // game differential, but OOW% was never actually used that season. Starting
+  // with S10, OW% AND OOW% both rank ahead of game differential - the normal
+  // going forward, so new seasons need no change here; only the two lists above do.
+  const GAMEDIFF_FIRST_LEGACY_SEASONS = new Set(['s1', 's2', 's3', 's4', 's4-5', 's5', 's6', 's7', 's8']);
+  if (GAMEDIFF_FIRST_LEGACY_SEASONS.has(season.slug)) {
+    return rows.sort((a, b) =>
+      b.wins - a.wins
+      || b.gameDiff - a.gameDiff
+      || b.kd - a.kd
+      || (b.owp ?? -1) - (a.owp ?? -1)
+      || (b.oowp ?? -1) - (a.oowp ?? -1)
+      || (a.seed ?? 999) - (b.seed ?? 999)
+      || a.name.localeCompare(b.name)
+    );
+  }
+  if (season.slug === 's9') {
+    return rows.sort((a, b) =>
+      b.wins - a.wins
+      || (b.owp ?? -1) - (a.owp ?? -1)
+      || b.gameDiff - a.gameDiff
+      || b.kd - a.kd
+      || (a.seed ?? 999) - (b.seed ?? 999)
+      || a.name.localeCompare(b.name)
+    );
+  }
+  return rows.sort((a, b) =>
     b.wins - a.wins
+    || (b.owp ?? -1) - (a.owp ?? -1)
+    || (b.oowp ?? -1) - (a.oowp ?? -1)
     || b.gameDiff - a.gameDiff
     || b.kd - a.kd
-    || (b.sos ?? -1) - (a.sos ?? -1)
-    || (b.sosos ?? -1) - (a.sosos ?? -1)
     || (a.seed ?? 999) - (b.seed ?? 999)
     || a.name.localeCompare(b.name)
   );
@@ -576,8 +605,8 @@ function standingsTableHtml(rows) {
       + '<td class="team-cell">' + feedTeamHtml(r.id, { link: true }) + '</td>'
       + '<td class="num">' + r.wins + '</td>'
       + '<td class="num">' + r.losses + '</td>'
-      + '<td class="num">' + fmtRate(r.sos) + '</td>'
-      + '<td class="num">' + fmtRate(r.sosos) + '</td>'
+      + '<td class="num">' + fmtRate(r.owp) + '</td>'
+      + '<td class="num">' + fmtRate(r.oowp) + '</td>'
       + '<td class="num ' + deltaClass(r.gameDiff) + '">' + signed(r.gameDiff) + '</td>'
       + '<td class="num ' + deltaClass(r.kd) + '">' + signed(r.kd) + '</td>'
       + '</tr>';
