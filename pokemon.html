@@ -243,7 +243,7 @@ async function loadPage() {
     const from = pageOffset;
     const to = pageOffset + pageSize - 1;
     const sel = 'team_id, pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number';
-    const { data: rows, error } = await sb.from('team_pokemon').select(sel).eq('pokemon_id', lastPokemonId).order('acquired_week', { ascending: true }).range(from, to);
+    const { data: rows, error } = await sb.from('team_pokemon').select(sel).eq('pokemon_id', lastPokemonId).order('acquired_week', { ascending: true }).order('team_id', { ascending: true }).range(from, to);
     if (error) throw error;
     if (!rows || !rows.length) {
       if (!allRows.length) showStatus('No ownership records found.');
