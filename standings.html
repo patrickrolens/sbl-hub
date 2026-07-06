@@ -413,7 +413,8 @@ function buildTransactions(faMoves, trades) {
   const feed = [];
   faMoves.forEach(m => feed.push({ kind: 'fa', week: m.effective_week, when: m.occurred_at, added: m.pokemon_added_id, dropped: m.pokemon_dropped_id, teams: [m.team_id] }));
   trades.forEach(t => feed.push({ kind: 'trade', week: t.effective_week, when: t.occurred_at, aTeam: t.team_a_id, aMon: t.pokemon_a_id, bTeam: t.team_b_id, bMon: t.pokemon_b_id, teams: [t.team_a_id, t.team_b_id] }));
-  return feed.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
+  const capped = weekCap == null ? feed : feed.filter(x => (x.week || 0) <= weekCap);
+  return capped.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
