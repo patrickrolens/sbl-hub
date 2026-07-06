@@ -596,6 +596,7 @@ let season       = null;            // current seasons row
 let teams        = [];              // teams rows for the season
 let coachByTeam  = {};              // team_id -> current coach display_name
 let ownersByTeam = {};              // team_id -> [{started_week, ended_week, name}] stints
+let coachAtWeek  = () => null;      // bound to ownersByTeam once loaded (see utils.js makeCoachAtWeek)
 let txns         = [];              // unified transaction feed for the activity log
 let tierCost     = {};              // pokemon_id -> point_cost (this season's legal set)
 let teraCost     = {};              // pokemon_id -> tera_point_cost (null unless season prices Tera, e.g. S9)
@@ -781,6 +782,7 @@ async function loadData() {
     if (o.ended_week == null) coachByTeam[o.team_id] = o.players.display_name;
   });
   Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
+  coachAtWeek = makeCoachAtWeek(ownersByTeam);
 
   tierCost = {}; teraCost = {};
   (tiersRes.data || []).forEach(t => { tierCost[t.pokemon_id] = t.point_cost; teraCost[t.pokemon_id] = t.tera_point_cost; });
@@ -1577,13 +1579,6 @@ function buildTxns(tradeRows, faRows) {
     kind: 'fa', week: f.effective_week, when: f.occurred_at, notes: f.notes,
     team: f.team_id, added: f.pokemon_added_id, dropped: f.pokemon_dropped_id,
   }));
-}
-
-function coachAtWeek(teamId, week) {
-  const stints = ownersByTeam[teamId] || [];
-  let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
-  if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
-  return s ? s.name : (coachByTeam[teamId] || null);
 }
 
 function monNm(id) { const m = pokemonById[id]; return m ? m.name : id; }

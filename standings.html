@@ -220,6 +220,7 @@ let allTeams     = [];
 let teamById     = {};
 let allOwners    = [];
 let ownersByTeam = {};     // team_id -> [{started_week, ended_week, name}] stints, sorted by started_week
+let coachAtWeek  = () => null;   // bound to ownersByTeam once loaded (see utils.js makeCoachAtWeek)
 let coachByTeam  = {};     // team_id -> coach at weekCap (or live, if uncapped) - derived from ownersByTeam
 let draftRow     = null;
 let divisions    = [];     // [{id, name, abbr, sort_order}] — empty when undivided
@@ -271,17 +272,6 @@ function fmtDate(s) {
 }
 function monName(id) { const m = pokemonById[id]; return m ? m.name : id; }
 function monFor(id)  { return pokemonById[id] || { id: id, name: id }; }
-
-// Coach (owner) active for a team at a given week - null week means "live" (today's
-// owner). Falls back to the most recent stint if none is active at that week, so a
-// dropped/pre-draft team still shows a name instead of going blank.
-function coachAtWeek(teamId, week) {
-  const stints = ownersByTeam[teamId] || [];
-  if (week == null) return (stints.find(x => x.ended_week == null) || stints[stints.length - 1] || {}).name || null;
-  let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
-  if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
-  return s ? s.name : null;
-}
 
 // Coach for a team, suppressed when it's identical to the team name (note: "if Coach = Team, show once").
 function coachFor(id) {
@@ -364,6 +354,7 @@ async function loadData() {
     (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
   });
   Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
+  coachAtWeek = makeCoachAtWeek(ownersByTeam);
 
   // A divisioned season has one draft row per division; an undivided season has at
   // most one. The draft-pending panel only needs a representative status/date, so

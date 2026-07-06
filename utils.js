@@ -129,6 +129,22 @@ async function resolveSeason() {
   return current.data;
 }
 
+// Returns a coachAtWeek(teamId, week) function bound to `ownersByTeam` (a
+// team_id -> [{started_week, ended_week, name}] map, stints sorted by started_week).
+// week == null means "live" (today's owner, i.e. whichever stint has no ended_week);
+// otherwise the stint active at that week, falling back to the most recent stint if
+// none is active there. Five pages (draft, matches, postseason, standings, statistics)
+// each hand-rolled this identically before it was pulled out here.
+function makeCoachAtWeek(ownersByTeam) {
+  return function coachAtWeek(teamId, week) {
+    const stints = ownersByTeam[teamId] || [];
+    if (week == null) return (stints.find(x => x.ended_week == null) || stints[stints.length - 1] || {}).name || null;
+    let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
+    if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
+    return s ? s.name : null;
+  };
+}
+
 // ── Week cap (nav's Week Selector: ?week=N caps a page's data at week N) ────────
 // Used by standings.html/statistics.html/matches.html/team.html. Kept as small,
 // composable pieces rather than one do-everything function: resolveWeekCap() is
