@@ -103,6 +103,7 @@ function withSeason(href) {
 function patchStaticSeasonLinks() {
   if (!SEASON_SLUG) return;
   document.querySelectorAll('a[href]').forEach(a => {
+    if (a.closest('#sbl-nav') || a.closest('.sbln-menu')) return; // nav.js owns these hrefs already
     const raw = a.getAttribute('href');
     if (!raw || raw.startsWith('#') || /^https?:\/\//i.test(raw) || raw.startsWith('mailto:')) return;
     if (/[?&]season=/.test(raw)) return;
