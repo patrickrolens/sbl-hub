@@ -68,7 +68,7 @@ a { color: inherit; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(252px, 1fr)); gap: 14px; }
 .scard { position: relative; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg2); text-decoration: none; color: inherit; display: flex; flex-direction: column; transition: border-color .12s, transform .12s; }
 .scard:hover { border-color: var(--accent); transform: translateY(-2px); }
-.scard .art { position: relative; aspect-ratio: 2.04 / 1; overflow: hidden; background: var(--bg3); }
+.scard .art { position: relative; aspect-ratio: 1920 / 641; overflow: hidden; background: var(--bg3); }
 .scard .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .scard .art .fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 800; letter-spacing: 2px; color: var(--accent); opacity: .4; }
 .scard .body { padding: 13px 14px 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
@@ -128,6 +128,14 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&am
 // ── Link builder: current season → bare URL; past season → ?season=slug ──
 function link(page, season) {
   return season.is_current ? page : page + "?season=" + encodeURIComponent(season.slug);
+}
+
+// "s9" -> "hall_of_fame_art_9.png", "s4-5" -> "hall_of_fame_art_4.5.png". Returns
+// null for slugs that don't match the sN[-M] convention (e.g. a "test" season) -
+// the caller's <img onerror> fallback (season initials) covers those.
+function hallOfFameArt(slug) {
+  const m = /^s(\d+(?:-\d+)?)$/.exec(slug || "");
+  return m ? ASSET_BASE + "Hall%20of%20Fame/hall_of_fame_art_" + m[1].replace("-", ".") + ".png" : null;
 }
 
 // ── Date formatting (full date, e.g. "Jan 14, 2025") ──
@@ -267,7 +275,7 @@ async function load() {
       html += '<div class="grid">';
       past.forEach(s => {
         const { champ, runner } = deriveResult(playoffsBy[s.id], teamName);
-        const cover = ASSET_BASE + esc(s.slug) + ".png";
+        const cover = hallOfFameArt(s.slug) || (ASSET_BASE + esc(s.slug) + ".png");
         const slugUp = esc((s.slug || "S").toUpperCase());
         html += '<a class="scard" href="' + esc(link("standings.html", s)) + '">'
               +   '<div class="art">'
