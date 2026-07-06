@@ -362,7 +362,7 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 const TYPES = ["Normal","Fire","Water","Grass","Electric","Ice","Fighting","Poison","Ground","Flying","Psychic","Bug","Rock","Ghost","Dragon","Dark","Steel","Fairy"];
 
 // ── STATE ──
-let season = null, allTeams = [], teamById = {}, allOwners = [], coachByTeam = {};
+let season = null, allTeams = [], teamById = {}, allOwners = [], ownersByTeam = {}, coachByTeam = {};
 let matches = [], gamesByMatch = {}, gameToMatch = {}, statRows = [], broughtRows = [];
 let weekCap = null, trueMaxWeek = 0;   // ?week=N from the nav's Week Selector, and the season's actual latest week
 let teamPokemon = [], pokemonById = {}, instances = [], filtered = [];
@@ -374,6 +374,16 @@ function deltaClass(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
 function kfRatio(kos, faints) { if (faints === 0) return kos === 0 ? '—' : '∞'; return (kos / faints).toFixed(2); }
 function kfSortValue(kos, faints) { return faints > 0 ? kos / faints : (kos > 0 ? 1e9 : 0); }
 function monFor(id) { return pokemonById[id] || { id: id, name: id }; }
+
+// Coach (owner) active for a team at a given week - null week means "live" (today's
+// owner). Falls back to the most recent stint if none is active at that week.
+function coachAtWeek(teamId, week) {
+  const stints = ownersByTeam[teamId] || [];
+  if (week == null) return (stints.find(x => x.ended_week == null) || stints[stints.length - 1] || {}).name || null;
+  let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
+  if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
+  return s ? s.name : null;
+}
 function teamLabelHtml(id) { const t = teamById[id]; if (!t) return '—'; const c = coachByTeam[id]; return escapeHtml(t.name) + (c ? ' <span class="pl">(' + escapeHtml(c) + ')</span>' : ''); }
 function teamLabelText(id) { const t = teamById[id]; if (!t) return ''; const c = coachByTeam[id]; return t.name + (c ? ' (' + c + ')' : ''); }
 
@@ -409,7 +419,7 @@ async function loadData() {
   ]);
   for (const r of [teamsRes, matchRes]) if (r.error) throw r.error;
   // Unfiltered, all-seasons table → paginate past the 1000-row cap.
-  const ownersAll = await fetchAll('team_owners', 'team_id, ended_week, players(display_name)');
+  const ownersAll = await fetchAll('team_owners', 'team_id, started_week, ended_week, players(display_name)');
 
   allTeams = teamsRes.data || [];
   teamById = {}; allTeams.forEach(t => { teamById[t.id] = t; });
@@ -418,8 +428,11 @@ async function loadData() {
   // team always gets the same color regardless of filtering or render order.
   buildTeamColors();
   allOwners = ownersAll.filter(o => teamIds.includes(o.team_id));
-  coachByTeam = {};
-  allOwners.filter(o => o.ended_week == null).forEach(o => { if (o.players) coachByTeam[o.team_id] = o.players.display_name; });
+  ownersByTeam = {};
+  allOwners.filter(o => o.players).forEach(o => {
+    (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
+  });
+  Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
   matches = matchRes.data || [];
 
   // Week cap (?week=N): the nav's Week Selector caps every query on this page at a
@@ -427,6 +440,11 @@ async function loadData() {
   weekCap = resolveWeekCap();
   ({ filtered: matches, trueMaxWeek } = applyWeekCap(matches, weekCap));
   updateWeekBanner(weekCap, trueMaxWeek);
+
+  // Coach attribution "as of" the week cap (or live, if uncapped) - a team's stats
+  // for a capped week should be credited to whoever coached it then (see coachAtWeek).
+  coachByTeam = {};
+  teamIds.forEach(tid => { const name = coachAtWeek(tid, weekCap); if (name) coachByTeam[tid] = name; });
 
   // Rosters for every team (each row is an ownership instance). Paginated: a full
   // season's team_pokemon can approach the cap once trades/FA accumulate.
