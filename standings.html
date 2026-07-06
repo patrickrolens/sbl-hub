@@ -143,6 +143,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 <script src="/nav.js"></script>
 <script src="/utils.js"></script>
 
+<div id="week-banner" class="sbln-week-banner" hidden></div>
 <div id="boot-banner" class="banner">Loading standings…</div>
 
 <div class="layout" id="layout" hidden>
@@ -223,7 +224,9 @@ let draftRow     = null;
 let divisions    = [];     // [{id, name, abbr, sort_order}] — empty when undivided
 let hasDivisions = false;
 let teamDivision = {};     // team_id -> division_id | '__none__'
-let matches      = [];     // all matches for the season (any stage)
+let matches      = [];     // all matches for the season (any stage), filtered to ?week= if capped
+let weekCap      = null;   // ?week=N from the nav's Week Selector, or null (live/uncapped)
+let trueMaxWeek  = 0;      // season's actual latest regular-season week, for the week-banner check
 let gamesByMatch = {};     // match_id -> [game rows]
 let gameToMatch  = {};     // game_id -> match_id
 let statRows     = [];     // all game_pokemon_stats rows for the season
@@ -365,6 +368,12 @@ async function loadData() {
   draftRow = pickRepresentativeDraft(draftRows);
   matches  = matchRes.data || [];
 
+  // Week cap (?week=N): the nav's Week Selector caps every query on this page at a
+  // chosen week, showing standings "as of" that point (see utils.js).
+  weekCap = resolveWeekCap();
+  ({ filtered: matches, trueMaxWeek } = applyWeekCap(matches, weekCap));
+  updateWeekBanner(weekCap, trueMaxWeek);
+
   // Games + per-Pokémon stats across the whole season (drives KD + roster reconstruction).
   gamesByMatch = {}; gameToMatch = {}; statRows = []; leaderRows = []; broughtByMatch = {};
   const matchIds = matches.map(m => m.id);
@@ -386,7 +395,8 @@ async function loadData() {
     // KO/KF Δ/K-F leaderboards: pre-aggregated server-side (season_pokemon_leaders
     // RPC) instead of summed client-side from statRows — a season's stat rows can
     // exceed the 1000-row pagination page size, this can't.
-    const { data: leaders, error: leadersErr } = await sb.rpc('season_pokemon_leaders', { p_season_id: season.id });
+    const rpcArgs = weekCap != null ? { p_season_id: season.id, p_week: weekCap } : { p_season_id: season.id };
+    const { data: leaders, error: leadersErr } = await sb.rpc('season_pokemon_leaders', rpcArgs);
     if (leadersErr) throw leadersErr;
     leaderRows = leaders || [];
   }

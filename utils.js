@@ -109,3 +109,53 @@ function patchStaticSeasonLinks() {
     a.setAttribute('href', withSeason(raw));
   });
 }
+
+// ── Week cap (nav's Week Selector: ?week=N caps a page's data at week N) ────────
+// Used by standings.html/statistics.html/matches.html/team.html. Kept as small,
+// composable pieces rather than one do-everything function: resolveWeekCap() is
+// pure and cheap to call repeatedly; applyWeekCap() is pure (just filters + measures,
+// no DOM); updateWeekBanner() is the only one that touches the DOM, so a page with
+// multiple data-load call sites (team.html) can filter every time but only manage
+// the banner/recompute the season's true max week once.
+
+// Reads ?week=N from the current URL. Returns an integer, or null (live/uncapped).
+function resolveWeekCap() {
+  const p = new URLSearchParams(location.search).get('week');
+  return p && /^\d+$/.test(p) ? parseInt(p, 10) : null;
+}
+
+// Filters `matches` to weekCap by week number alone, postseason included - postseason
+// happens chronologically after the regular season, so "view as of week N" should
+// hide it too rather than showing bracket results that haven't happened yet from
+// that vantage point. This is safe/complete for any weekCap the nav's Week Selector
+// can actually produce: its dropdown only offers 1..maxRegularWeek (nav.js), and
+// postseason weeks are always assigned strictly after the regular season ends
+// (postseasonWeekBase() = maxRegWeek + 1), so weekCap < every postseason week always.
+// trueMaxWeek stays scoped to regular season only (computed from the ORIGINAL,
+// unfiltered array) - it's "how many weeks has the season had," which postseason
+// isn't part of. Pure - takes no `weekCap == null` shortcut internally so
+// trueMaxWeek is always accurate even when the caller isn't capping anything.
+function applyWeekCap(matches, weekCap) {
+  const trueMaxWeek = matches.reduce((m, x) => x.stage === 'regular' ? Math.max(m, x.week || 0) : m, 0);
+  const filtered = weekCap == null ? matches : matches.filter(m => m.week <= weekCap);
+  return { filtered, trueMaxWeek };
+}
+
+// Toggles the page's own #week-banner element (each page defines the div; this
+// just owns the show/hide + text, matching nav.js's season-banner pattern - same
+// sticky positioning, same "get back to the live view" link). Also asks nav.js to
+// re-measure --nav-h, since this banner's height/visibility affects it too (see
+// nav.js's setNavHeight - it finds this element generically by class).
+function updateWeekBanner(weekCap, trueMaxWeek) {
+  const wb = document.getElementById('week-banner');
+  if (!wb) return;
+  const show = weekCap != null && weekCap < trueMaxWeek;
+  wb.hidden = !show;
+  if (show) {
+    const u = new URL(location.href);
+    u.searchParams.delete('week');
+    wb.innerHTML = 'Viewing Week ' + weekCap + ' of ' + trueMaxWeek
+      + ' — <a href="' + escapeHtml(u.pathname + u.search + u.hash) + '">Back to live view</a>';
+  }
+  if (window.SBLNav && window.SBLNav.refreshLayout) window.SBLNav.refreshLayout();
+}

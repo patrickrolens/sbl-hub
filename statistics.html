@@ -209,6 +209,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 <script src="/nav.js"></script>
 <script src="/utils.js"></script>
 
+<div id="week-banner" class="sbln-week-banner" hidden></div>
 <div id="boot-banner" class="banner">Loading statistics…</div>
 
 <div class="wrap" id="wrap" hidden>
@@ -363,6 +364,7 @@ const TYPES = ["Normal","Fire","Water","Grass","Electric","Ice","Fighting","Pois
 // ── STATE ──
 let season = null, allTeams = [], teamById = {}, allOwners = [], coachByTeam = {};
 let matches = [], gamesByMatch = {}, gameToMatch = {}, statRows = [], broughtRows = [];
+let weekCap = null, trueMaxWeek = 0;   // ?week=N from the nav's Week Selector, and the season's actual latest week
 let teamPokemon = [], pokemonById = {}, instances = [], filtered = [];
 let sortState = { col: 'kos', dir: 'desc' };
 
@@ -430,6 +432,12 @@ async function loadData() {
   coachByTeam = {};
   allOwners.filter(o => o.ended_week == null).forEach(o => { if (o.players) coachByTeam[o.team_id] = o.players.display_name; });
   matches = matchRes.data || [];
+
+  // Week cap (?week=N): the nav's Week Selector caps every query on this page at a
+  // chosen week (see utils.js).
+  weekCap = resolveWeekCap();
+  ({ filtered: matches, trueMaxWeek } = applyWeekCap(matches, weekCap));
+  updateWeekBanner(weekCap, trueMaxWeek);
 
   // Rosters for every team (each row is an ownership instance). Paginated: a full
   // season's team_pokemon can approach the cap once trades/FA accumulate.

@@ -166,6 +166,7 @@ a { color: inherit; }
 <script src="/utils.js"></script>
 <script src="/tooltip.js?v=2"></script>
 
+<div id="week-banner" class="sbln-week-banner" hidden></div>
 <div id="boot-banner" class="banner">Loading…</div>
 
 <div class="layout" id="layout" hidden>
@@ -206,6 +207,7 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 let season = null;
 let teams = [], teamById = {}, ownersByTeam = {};
 let matches = [], matchById = {};
+let weekCap = null, trueMaxWeek = 0;   // ?week=N from the nav's Week Selector, and the season's actual latest week
 let pokemonById = {};
 let panelOpen = false;
 let selectedMatchId = null;
@@ -298,6 +300,14 @@ async function init() {
     });
     Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
     matches = matchRes.data || [];
+
+    // Week cap (?week=N): the nav's Week Selector caps every query on this page at a
+    // chosen week - dropped matches are also unreachable via the detail panel below,
+    // not just hidden from the schedule grid (see utils.js).
+    weekCap = resolveWeekCap();
+    ({ filtered: matches, trueMaxWeek } = applyWeekCap(matches, weekCap));
+    updateWeekBanner(weekCap, trueMaxWeek);
+
     matches.forEach(m => { matchById[m.id] = m; });
 
     try {
