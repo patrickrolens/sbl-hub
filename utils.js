@@ -19,35 +19,38 @@ function dbClient() {
   return supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
+// Runs `queryFactory()` (a fresh Supabase query builder each call, already
+// .select()ed/.filter()ed/.order()ed) page by page past Supabase's 1000-row
+// response cap, until a short page signals the end. Shared by fetchAllIn/fetchAll
+// below - both need identical "page until short" logic, just over a different
+// base query.
+async function paginate(queryFactory) {
+  const PAGE = 1000, out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await queryFactory().range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (data && data.length) out.push(...data);
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
 // Fetch every row of `table` where `column` is in `values`, defeating Supabase's
 // default 1000-row response cap. The IN-list is chunked, each chunk paged until a
 // short page signals the end. .order('id') is required: without a deterministic
 // order, .range() pagination over an unordered result set can skip/duplicate rows.
 async function fetchAllIn(table, columns, column, values) {
-  const IN_CHUNK = 300, PAGE = 1000, out = [];
+  const IN_CHUNK = 300, out = [];
   for (let i = 0; i < values.length; i += IN_CHUNK) {
     const slice = values.slice(i, i + IN_CHUNK);
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await dbClient().from(table).select(columns)
-        .in(column, slice).order('id').range(from, from + PAGE - 1);
-      if (error) throw error;
-      if (data && data.length) out.push(...data);
-      if (!data || data.length < PAGE) break;
-    }
+    out.push(...await paginate(() => dbClient().from(table).select(columns).in(column, slice).order('id')));
   }
   return out;
 }
 
 // Paginate an entire (unfiltered) table past the 1000-row response cap.
 async function fetchAll(table, columns) {
-  const PAGE = 1000, out = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await dbClient().from(table).select(columns).order('id').range(from, from + PAGE - 1);
-    if (error) throw error;
-    if (data && data.length) out.push(...data);
-    if (!data || data.length < PAGE) break;
-  }
-  return out;
+  return paginate(() => dbClient().from(table).select(columns).order('id'));
 }
 
 // ── DOM / rendering helpers ──────────────────────────────────────────────────
@@ -133,8 +136,8 @@ async function resolveSeason() {
 // team_id -> [{started_week, ended_week, name}] map, stints sorted by started_week).
 // week == null means "live" (today's owner, i.e. whichever stint has no ended_week);
 // otherwise the stint active at that week, falling back to the most recent stint if
-// none is active there. Five pages (draft, matches, postseason, standings, statistics)
-// each hand-rolled this identically before it was pulled out here.
+// none is active there. Six pages (draft, matches, postseason, standings, statistics,
+// team) each hand-rolled this identically before it was pulled out here.
 function makeCoachAtWeek(ownersByTeam) {
   return function coachAtWeek(teamId, week) {
     const stints = ownersByTeam[teamId] || [];
