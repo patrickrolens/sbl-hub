@@ -752,18 +752,7 @@ async function loadData() {
     return res.json();
   });
 
-  const { data: seasonRow, error: seasonErr } = await (async () => {
-    const slug = new URLSearchParams(location.search).get('season');
-    if (slug) {
-      const bySlug = await sb.from('seasons').select('*').eq('slug', slug).maybeSingle();
-      if (bySlug.error) return bySlug;
-      if (bySlug.data) return bySlug;
-    }
-    return await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
-  })();
-  if (seasonErr) throw seasonErr;
-  if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
-  season = seasonRow;
+  season = await resolveSeason();
 
   const [teamsRes, tiersRes, draftRes, tradeRes, faRes, divRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed,division_id').eq('season_id', season.id),

@@ -1322,18 +1322,7 @@ async function detectAdmin() {
 async function init() {
   const banner = document.getElementById('boot-banner');
   try {
-    const { data: seasonRow, error: seasonErr } = await (async () => {
-      const slug = new URLSearchParams(location.search).get('season');
-      if (slug) {
-        const bySlug = await sb.from('seasons').select('*').eq('slug', slug).maybeSingle();
-        if (bySlug.error) return bySlug;
-        if (bySlug.data) return bySlug;
-      }
-      return await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
-    })();
-    if (seasonErr) throw seasonErr;
-    if (!seasonRow) throw new Error('No current season found.');
-    season = seasonRow;
+    season = await resolveSeason();
 
     // Visibility gate: hidden from the public until published; admins can always preview.
     const published = !!season.postseason_published;

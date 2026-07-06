@@ -111,6 +111,24 @@ function patchStaticSeasonLinks() {
   });
 }
 
+// Resolves the season a page should load: ?season=<slug> if present and valid,
+// else whichever season has is_current = true. Every season-scoped page (draft,
+// matches, postseason, standings, statistics, team) had its own copy of this;
+// centralized here since a change to the fallback rule would otherwise mean
+// editing six files identically.
+async function resolveSeason() {
+  const slug = new URLSearchParams(location.search).get('season');
+  if (slug) {
+    const bySlug = await dbClient().from('seasons').select('*').eq('slug', slug).maybeSingle();
+    if (bySlug.error) throw bySlug.error;
+    if (bySlug.data) return bySlug.data;
+  }
+  const current = await dbClient().from('seasons').select('*').eq('is_current', true).maybeSingle();
+  if (current.error) throw current.error;
+  if (!current.data) throw new Error('No current season found (seasons.is_current = true).');
+  return current.data;
+}
+
 // ── Week cap (nav's Week Selector: ?week=N caps a page's data at week N) ────────
 // Used by standings.html/statistics.html/matches.html/team.html. Kept as small,
 // composable pieces rather than one do-everything function: resolveWeekCap() is
