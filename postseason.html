@@ -241,7 +241,7 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 // STATE
 // ─────────────────────────────────────────────────────────────────────────────
 let season = null;
-let teams = [], teamById = {}, ownersByTeam = {};
+let teams = [], teamById = {}, ownersByTeam = {}, coachAtWeek = () => null;
 let matches = [];                  // postseason matches only (playoffs + cup)
 let pokemonById = {};
 let rosterByTeam = {};             // team_id -> [team_pokemon rows]
@@ -257,13 +257,6 @@ let isAdmin = false;               // logged-in admin (for previewing before pub
 // HELPERS (mirror the rest of the hub)
 // ─────────────────────────────────────────────────────────────────────────────
 function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
-// Coach active for a team during a given week - falls back to current owner, then team name.
-function coachAtWeek(teamId, week) {
-  const stints = ownersByTeam[teamId] || [];
-  let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
-  if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
-  return s ? s.name : null;
-}
 // No transactions happen after the regular season, so postseason labels use the current owner.
 function coachNow(teamId) { return coachAtWeek(teamId, 1e9); }
 // "Team Name (Coach)"; collapses to one when coach == team name.
@@ -1322,18 +1315,7 @@ async function detectAdmin() {
 async function init() {
   const banner = document.getElementById('boot-banner');
   try {
-    const { data: seasonRow, error: seasonErr } = await (async () => {
-      const slug = new URLSearchParams(location.search).get('season');
-      if (slug) {
-        const bySlug = await sb.from('seasons').select('*').eq('slug', slug).maybeSingle();
-        if (bySlug.error) return bySlug;
-        if (bySlug.data) return bySlug;
-      }
-      return await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
-    })();
-    if (seasonErr) throw seasonErr;
-    if (!seasonRow) throw new Error('No current season found.');
-    season = seasonRow;
+    season = await resolveSeason();
 
     // Visibility gate: hidden from the public until published; admins can always preview.
     const published = !!season.postseason_published;
@@ -1363,6 +1345,7 @@ async function init() {
       (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
     });
     Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
+    coachAtWeek = makeCoachAtWeek(ownersByTeam);
     matches = matchRes.data || [];
     matches.forEach(m => { matchById[m.id] = m; });
 

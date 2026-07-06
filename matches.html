@@ -166,6 +166,7 @@ a { color: inherit; }
 <script src="/utils.js"></script>
 <script src="/tooltip.js?v=2"></script>
 
+<div id="week-banner" class="sbln-week-banner" hidden></div>
 <div id="boot-banner" class="banner">Loading…</div>
 
 <div class="layout" id="layout" hidden>
@@ -204,8 +205,9 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 
 // ── STATE ──
 let season = null;
-let teams = [], teamById = {}, ownersByTeam = {};
+let teams = [], teamById = {}, ownersByTeam = {}, coachAtWeek = () => null;
 let matches = [], matchById = {};
+let weekCap = null, trueMaxWeek = 0;   // ?week=N from the nav's Week Selector, and the season's actual latest week
 let pokemonById = {};
 let panelOpen = false;
 let selectedMatchId = null;
@@ -223,13 +225,6 @@ function stageLabel(s) { return ({ regular: 'Regular Season', playoffs: 'Playoff
 function stageRank(s) { return s === 'playoffs' ? 0 : s === 'cup' ? 1 : 2; }
 function monName(id) { const p = pokemonById[id]; return p ? p.name : id; }
 function teamName(id) { const t = teamById[id]; return t ? t.name : 'TBD'; }
-// Coach (owner) active for a team during a given week - falls back to the current owner, then the team name.
-function coachAtWeek(teamId, week) {
-  const stints = ownersByTeam[teamId] || [];
-  let s = stints.find(x => x.started_week <= week && (x.ended_week == null || x.ended_week > week));
-  if (!s) s = stints.find(x => x.ended_week == null) || stints[0];
-  return s ? s.name : null;
-}
 function coachLabelText(teamId, week) { return coachAtWeek(teamId, week) || teamName(teamId); }
 function matchupCoachHtml(m) {
   return escapeHtml(coachLabelText(m.team_a_id, m.week)) + '<span class="vs">vs</span>' + escapeHtml(coachLabelText(m.team_b_id, m.week));
@@ -269,18 +264,7 @@ async function init() {
   try {
     const pjPromise = fetch(POKEMON_JSON_URL).then(r => r.ok ? r.json() : Promise.reject(new Error('pokemon.json ' + r.status)));
 
-    const { data: seasonRow, error: seasonErr } = await (async () => {
-      const slug = new URLSearchParams(location.search).get('season');
-      if (slug) {
-        const bySlug = await sb.from('seasons').select('*').eq('slug', slug).maybeSingle();
-        if (bySlug.error) return bySlug;
-        if (bySlug.data) return bySlug;
-      }
-      return await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
-  })();
-    if (seasonErr) throw seasonErr;
-    if (!seasonRow) throw new Error('No current season found.');
-    season = seasonRow;
+    season = await resolveSeason();
 
     const [teamsRes, matchRes] = await Promise.all([
       sb.from('teams').select('id, name, slug, initial_seed').eq('season_id', season.id),
@@ -297,7 +281,16 @@ async function init() {
       (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
     });
     Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
+    coachAtWeek = makeCoachAtWeek(ownersByTeam);
     matches = matchRes.data || [];
+
+    // Week cap (?week=N): the nav's Week Selector caps every query on this page at a
+    // chosen week - dropped matches are also unreachable via the detail panel below,
+    // not just hidden from the schedule grid (see utils.js).
+    weekCap = resolveWeekCap();
+    ({ filtered: matches, trueMaxWeek } = applyWeekCap(matches, weekCap));
+    updateWeekBanner(weekCap, trueMaxWeek);
+
     matches.forEach(m => { matchById[m.id] = m; });
 
     try {

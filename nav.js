@@ -31,7 +31,7 @@
 
   // Primary tabs, in order. Postseason is gated (shown when published, or to admins).
   // Root-absolute hrefs so the shared nav works from subfolders (e.g. /admin/) too.
-  const TABS = [
+  const TABS_SEASON = [
     { key: "standings",  label: "Standings",   href: "/standings.html" },
     { key: "draft",      label: "Draft Board", href: "/draft.html" },
     { key: "teams",      label: "Teams",       href: "/team.html", dropdown: true },
@@ -41,19 +41,37 @@
     { key: "rules",      label: "Rules",      href: "/rules.html" },
     { key: "planner",    label: "Planner",     href: PLANNER_URL, external: true },
   ];
+  // League-wide (cross-season) tabs, shown on pages that aren't scoped to one season.
+  const TABS_LEAGUE = [
+    { key: "alltime",  label: "All-Time Stats", href: "/all-time.html" },
+    { key: "players",  label: "Players",        href: "/players.html" },
+    { key: "pokemon",  label: "Pokemon",        href: "/pokemon.html" },
+    { key: "planner",  label: "Planner",        href: PLANNER_URL, external: true },
+  ];
+  // Pages that show the league-wide tab bar instead of the season-scoped one.
+  const LEAGUE_WIDE_PAGES = new Set(["index.html", "all-time.html", "players.html", "pokemon.html"]);
+  // Season-scoped pages that additionally show the Week Selector (cap data at week N).
+  // Postseason (bracket-based) and Draft (transaction-based) aren't week-indexed the
+  // same way regular-season standings/stats are, so they're deliberately excluded.
+  const WEEK_SELECTOR_PAGES = new Set(["standings.html", "statistics.html", "team.html", "matches.html"]);
 
-  //  current page → active tab key (admin checked by path, since /admin/ files vary) 
+  //  current page → active tab key (admin checked by path, since /admin/ files vary)
   const path = location.pathname.toLowerCase();
+  const FILE = path.split("/").pop() || "index.html";
+  const VARIANT = LEAGUE_WIDE_PAGES.has(FILE) ? "league" : "season";
+  const TABS = VARIANT === "league" ? TABS_LEAGUE : TABS_SEASON;
   function activeKey() {
     if (path.indexOf("/admin/") !== -1) return "admin";
-    const file = path.split("/").pop();
-    if (file === "standings.html") return "standings";
-    if (file === "draft.html") return "draft";
-    if (file === "team.html") return "teams";
-    if (file === "matches.html") return "matches";
-    if (file === "postseason.html") return "postseason";
-    if (file === "statistics.html") return "statistics";
-    if (file === "rules.html") return "rules";
+    if (FILE === "standings.html") return "standings";
+    if (FILE === "draft.html") return "draft";
+    if (FILE === "team.html") return "teams";
+    if (FILE === "matches.html") return "matches";
+    if (FILE === "postseason.html") return "postseason";
+    if (FILE === "statistics.html") return "statistics";
+    if (FILE === "rules.html") return "rules";
+    if (FILE === "all-time.html") return "alltime";
+    if (FILE === "players.html") return "players";
+    if (FILE === "pokemon.html") return "pokemon";
     return "";
   }
   const ACTIVE = activeKey();
@@ -73,13 +91,34 @@
     return href + (href.indexOf("?") === -1 ? "?" : "&") + "season=" + encodeURIComponent(seasonSlug);
   }
 
-  //  state 
+  //  state
   let season = null, allTeams = [], coachByTeam = {};
+  let allSeasons = [], maxWeek = 0;
   let currentUser = null, isAdmin = false;
   let postseasonVisible = false;
   let teamKbdIndex = -1;
   let resolveReady;
   const ready = new Promise(r => { resolveReady = r; });
+
+  // Where selecting a season/week from the nav should navigate to.
+  // Season switch drops any ?week= — a week cap is season-relative (a season's
+  // regular-season week numbers don't line up with another season's), so it stops
+  // meaning anything once the season changes.
+  function seasonTargetHref(s) {
+    const base = VARIANT === "season" ? FILE : "standings.html";
+    return s.is_current ? "/" + base : "/" + base + "?season=" + encodeURIComponent(s.slug);
+  }
+  function weekTargetHref(n) {
+    const u = new URL(location.href);
+    if (n == null) u.searchParams.delete("week"); else u.searchParams.set("week", String(n));
+    return u.pathname + u.search + u.hash;
+  }
+  // "s9" -> "Season 9", "s4-5" -> "Season 4.5". Falls back to the full name for
+  // anything that doesn't match the sN[-M] slug convention (e.g. the "test" season).
+  function seasonShortLabel(s) {
+    const m = /^s(\d+(?:-\d+)?)$/.exec(s.slug);
+    return m ? "Season " + m[1].replace("-", ".") : (s.name || s.slug);
+  }
 
   function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -105,13 +144,20 @@
 .sbln-btn:disabled { opacity: .5; cursor: default; }
 .sbln-btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
 .sbln-btn-accent:hover { filter: brightness(1.08); }
+.sbln-btn-noncurrent { background: rgba(240,192,96,.14); border-color: rgba(240,192,96,.6); }
+.sbln-btn-noncurrent:hover { border-color: rgba(240,192,96,.85); }
 .sbln-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); vertical-align: middle; margin-right: 7px; box-shadow: 0 0 5px rgba(76,175,125,.7); }
 .sbln-admin-wrap { position: relative; display: flex; align-items: center; }
 .sbln-menu-foot { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; align-items: center; gap: 8px; }
 .sbln-foot-email { flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sbln-logout-btn { flex: 0 0 auto; }
 
-/* dropdown menus (Teams + Admin) */
+/* "viewing capped data" banner (per-page week-capped) */
+.sbln-week-banner { background: rgba(240,192,96,.12); border-bottom: 1px solid rgba(240,192,96,.35); color: var(--text); font-size: 12px; font-weight: 600; text-align: center; padding: 7px 12px; position: sticky; z-index: 98; }
+.sbln-week-banner[hidden] { display: none; }
+.sbln-week-banner a { color: var(--accent); text-decoration: underline; }
+
+/* dropdown menus (Teams + Admin + Season + Week) */
 .sbln-menu { position: fixed; z-index: 150; width: 260px; max-width: calc(100vw - 16px); max-height: min(60vh, 460px); display: flex; flex-direction: column; overflow: hidden; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 14px 34px rgba(0,0,0,.5); }
 .sbln-menu[hidden] { display: none; }
 .sbln-menu-search { padding: 8px; border-bottom: 1px solid var(--border); }
@@ -162,6 +208,7 @@
   }
 
   function buildNav() {
+    const showWeek = WEEK_SELECTOR_PAGES.has(FILE);
     const nav = document.createElement("nav");
     nav.id = "sbl-nav";
     nav.innerHTML =
@@ -169,6 +216,8 @@
       + `<div class="sbln-tabs">${TABS.map(tabHtml).join("")}</div>`
       + `<div class="sbln-right">`
       +   `<span class="sbln-extra" id="nav-extra"></span>`
+      +   `<button class="sbln-btn" id="sbln-season-btn">Season <span class="sbln-caret">▾</span></button>`
+      +   (showWeek ? `<button class="sbln-btn" id="sbln-week-btn" hidden>Week <span class="sbln-caret">▾</span></button>` : "")
       +   `<div class="sbln-admin-wrap" id="sbln-admin-wrap">`
       +     `<button class="sbln-btn${ACTIVE === "admin" ? " sbln-btn-accent" : ""}" id="sbln-admin-btn">Admin</button>`
       +   `</div>`
@@ -192,6 +241,21 @@
       + `<div class="sbln-menu-foot"><span class="sbln-foot-email" id="sbln-email"></span><button class="sbln-btn sbln-logout-btn" id="sbln-logout">Log out</button></div>`;
     document.body.appendChild(adminMenu);
 
+    // Season dropdown (both variants) + Week dropdown (season-scoped, gated pages only).
+    const seasonMenu = document.createElement("div");
+    seasonMenu.className = "sbln-menu"; seasonMenu.id = "sbln-season-menu"; seasonMenu.hidden = true;
+    seasonMenu.style.width = "220px";
+    seasonMenu.innerHTML = `<div class="sbln-menu-list" id="sbln-season-list"></div>`;
+    document.body.appendChild(seasonMenu);
+
+    if (showWeek) {
+      const weekMenu = document.createElement("div");
+      weekMenu.className = "sbln-menu"; weekMenu.id = "sbln-week-menu"; weekMenu.hidden = true;
+      weekMenu.style.width = "160px";
+      weekMenu.innerHTML = `<div class="sbln-menu-list" id="sbln-week-list"></div>`;
+      document.body.appendChild(weekMenu);
+    }
+
     // login modal + toast container
     const modal = document.createElement("div");
     modal.className = "sbln-modal-overlay"; modal.id = "sbln-modal-overlay"; modal.hidden = true;
@@ -207,9 +271,22 @@
     setNavHeight();
   }
 
+  // --nav-h is what every page's own sticky elements (filter bars, detail panels)
+  // offset below - it needs to include the week banner's height too when shown,
+  // stacked directly under the nav (banner.top = navHeight), or page content would
+  // slide under the fixed nav bar once the banner scrolls out from a plain-flow
+  // spot. The week banner lives in each page's own HTML (not nav.js's DOM - only
+  // 4 pages have one), found generically by class rather than owned here.
   function setNavHeight() {
     const nav = document.getElementById("sbl-nav");
-    if (nav) document.documentElement.style.setProperty("--nav-h", nav.offsetHeight + "px");
+    if (!nav) return;
+    let total = nav.offsetHeight;
+    const weekBanner = document.querySelector(".sbln-week-banner");
+    if (weekBanner) {
+      weekBanner.style.top = total + "px";
+      if (!weekBanner.hidden) total += weekBanner.offsetHeight;
+    }
+    document.documentElement.style.setProperty("--nav-h", total + "px");
   }
 
   //  dropdown plumbing 
@@ -221,13 +298,12 @@
     menu.style.top = r.bottom + "px";
   }
   function closeMenus() {
-    const tm = document.getElementById("sbln-team-menu"), am = document.getElementById("sbln-admin-menu");
-    if (tm) tm.hidden = true;
-    if (am) am.hidden = true;
-    const tt = document.getElementById("sbln-teams-trigger");
-    const ab = document.getElementById("sbln-admin-btn");
-    if (tt) tt.setAttribute("aria-expanded", "false");
-    if (ab) ab.removeAttribute("aria-expanded");
+    [["sbln-team-menu", "sbln-teams-trigger"], ["sbln-admin-menu", "sbln-admin-btn"],
+     ["sbln-season-menu", "sbln-season-btn"], ["sbln-week-menu", "sbln-week-btn"]].forEach(([menuId, triggerId]) => {
+      const m = document.getElementById(menuId); if (m) m.hidden = true;
+      const t = document.getElementById(triggerId);
+      if (t) { if (triggerId === "sbln-teams-trigger") t.setAttribute("aria-expanded", "false"); else t.removeAttribute("aria-expanded"); }
+    });
   }
 
   function wire() {
@@ -245,17 +321,74 @@
     document.getElementById("sbln-logout").addEventListener("click", doLogout);
     document.getElementById("sbln-admin-btn").addEventListener("click", onAdminClick);
 
+    const seasonBtn = document.getElementById("sbln-season-btn");
+    seasonBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      const menu = document.getElementById("sbln-season-menu");
+      if (menu.hidden) openSimpleMenu(menu, seasonBtn); else closeMenus();
+    });
+    const weekBtn = document.getElementById("sbln-week-btn");
+    if (weekBtn) {
+      weekBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        const menu = document.getElementById("sbln-week-menu");
+        if (menu.hidden) openSimpleMenu(menu, weekBtn); else closeMenus();
+      });
+    }
+
     document.addEventListener("click", e => {
       if (!e.target.closest("#sbln-teams-trigger") && !e.target.closest("#sbln-team-menu")
-          && !e.target.closest("#sbln-admin-wrap") && !e.target.closest("#sbln-admin-menu")) closeMenus();
+          && !e.target.closest("#sbln-admin-wrap") && !e.target.closest("#sbln-admin-menu")
+          && !e.target.closest("#sbln-season-btn") && !e.target.closest("#sbln-season-menu")
+          && !e.target.closest("#sbln-week-btn") && !e.target.closest("#sbln-week-menu")) closeMenus();
     });
     window.addEventListener("resize", () => {
       setNavHeight();
-      const tm = document.getElementById("sbln-team-menu"), am = document.getElementById("sbln-admin-menu");
-      if (tm && !tm.hidden) positionMenu(tm, teamsTrigger);
-      if (am && !am.hidden) positionMenu(am, document.getElementById("sbln-admin-btn"));
+      [["sbln-team-menu", teamsTrigger], ["sbln-admin-menu", document.getElementById("sbln-admin-btn")],
+       ["sbln-season-menu", seasonBtn], ["sbln-week-menu", weekBtn]].forEach(([menuId, trigger]) => {
+        const m = document.getElementById(menuId);
+        if (m && !m.hidden && trigger) positionMenu(m, trigger);
+      });
     });
     document.addEventListener("keydown", e => { if (e.key === "Escape") { closeMenus(); closeModal(); } });
+  }
+
+  // Shared open/position logic for the Season and Week menus (no search/keyboard
+  // nav needed - both have a small, fixed item count unlike the Teams dropdown).
+  function openSimpleMenu(menu, trigger) {
+    menu.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    positionMenu(menu, trigger);
+  }
+
+  // Season menu: one row per season (newest first), current one flagged. Populated
+  // once loadData() resolves allSeasons; re-render is cheap so just call after fetch.
+  function renderSeasonMenu() {
+    const list = document.getElementById("sbln-season-list");
+    if (!list) return;
+    if (!allSeasons.length) { list.innerHTML = `<div class="sbln-menu-empty">No seasons found.</div>`; return; }
+    list.innerHTML = allSeasons.map(s =>
+      `<a class="sbln-menu-item" href="${esc(seasonTargetHref(s))}">${esc(s.name)}${s.is_current ? ' <span class="pl">(current)</span>' : ""}</a>`
+    ).join("");
+    const btn = document.getElementById("sbln-season-btn");
+    if (btn) {
+      btn.innerHTML = esc(season ? seasonShortLabel(season) : "Season") + ' <span class="sbln-caret">▾</span>';
+      btn.classList.toggle("sbln-btn-noncurrent", !!(season && !season.is_current));
+    }
+  }
+
+  // Week menu: 1..maxWeek plus a "Live (all weeks)" row that clears ?week=.
+  function renderWeekMenu() {
+    const list = document.getElementById("sbln-week-list");
+    if (!list) return;
+    const rows = [`<a class="sbln-menu-item" href="${esc(weekTargetHref(null))}">Live (all weeks)</a>`];
+    for (let w = maxWeek; w >= 1; w--) rows.push(`<a class="sbln-menu-item" href="${esc(weekTargetHref(w))}">Week ${w}</a>`);
+    list.innerHTML = rows.join("");
+    const btn = document.getElementById("sbln-week-btn");
+    if (!btn) return;
+    const current = new URLSearchParams(location.search).get("week");
+    btn.innerHTML = esc(current ? "Week " + current : "Live") + ' <span class="sbln-caret">▾</span>';
+    btn.hidden = maxWeek < 1;
   }
 
   function teamEntries() {
@@ -378,33 +511,47 @@
     tab.hidden = !(postseasonVisible || isAdmin);
   }
 
-  //  data load (season + teams for the dropdown) 
+  //  data load (season + teams for the dropdown)
   async function loadData() {
     try {
+      // All seasons, for the Season Selector menu - independent of which one resolves
+      // below, needed on both nav variants.
+      const seasonsListRes = await sb.from("seasons").select("id, name, slug, is_current").order("slug", { ascending: false });
+      allSeasons = seasonsListRes.data || [];
+
       // Resolve the active season: by slug if the URL carried one, else current.
       let s = null;
       if (seasonSlug) {
-        const r = await sb.from("seasons").select("id, name, slug, postseason_published").eq("slug", seasonSlug).maybeSingle();
+        const r = await sb.from("seasons").select("id, name, slug, postseason_published, is_current").eq("slug", seasonSlug).maybeSingle();
         s = r.data || null;
       }
       if (!s) {
         // No slug, or the slug didn't match a season → fall back to current and
         // drop the (absent/invalid) param from the nav links already rendered.
         if (seasonSlug) { seasonSlug = ""; stripSeasonFromLinks(); }
-        const r = await sb.from("seasons").select("id, name, slug, postseason_published").eq("is_current", true).maybeSingle();
+        const r = await sb.from("seasons").select("id, name, slug, postseason_published, is_current").eq("is_current", true).maybeSingle();
         s = r.data || null;
       }
       season = s || null;
       postseasonVisible = !!(season && season.postseason_published);
       applyPostseasonVisibility();
+      renderSeasonMenu();
       if (!season) return;
-      const [teamsRes, ownersRes] = await Promise.all([
+      const needsWeek = WEEK_SELECTOR_PAGES.has(FILE);
+      const [teamsRes, ownersRes, weekRes] = await Promise.all([
         sb.from("teams").select("id, name, slug, initial_seed").eq("season_id", season.id),
         sb.from("team_owners").select("team_id, ended_week, players(display_name)"),
+        needsWeek
+          ? sb.from("matches").select("week").eq("season_id", season.id).eq("stage", "regular")
+          : Promise.resolve({ data: [] }),
       ]);
       allTeams = teamsRes.data || [];
       const ids = new Set(allTeams.map(t => t.id));
       (ownersRes.data || []).filter(o => ids.has(o.team_id) && o.ended_week == null && o.players).forEach(o => { coachByTeam[o.team_id] = o.players.display_name; });
+      if (needsWeek) {
+        maxWeek = (weekRes.data || []).reduce((m, r) => Math.max(m, r.week || 0), 0);
+        renderWeekMenu();
+      }
     } catch (e) { console.error("nav.js loadData:", e); /* nav still works without the team list */ }
   }
 
@@ -431,7 +578,7 @@
     sb.auth.onAuthStateChange((_e, s) => { setTimeout(() => applySession(s), 0); });
   }
 
-  window.SBLNav = { ready, get isAdmin() { return isAdmin; }, get user() { return currentUser; }, get seasonSlug() { return seasonSlug; }, get season() { return season; } };
+  window.SBLNav = { ready, refreshLayout: setNavHeight, get isAdmin() { return isAdmin; }, get user() { return currentUser; }, get seasonSlug() { return seasonSlug; }, get season() { return season; } };
 
   if (document.body) start();
   else document.addEventListener("DOMContentLoaded", start);

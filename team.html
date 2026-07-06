@@ -374,6 +374,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 <script src="/utils.js"></script>
 <script src="/tooltip.js?v=2"></script>
 
+<div id="week-banner" class="sbln-week-banner" hidden></div>
 <div id="boot-banner" class="banner">Loading team…</div>
 
 <div class="layout" id="layout" hidden>
@@ -489,11 +490,15 @@ let allTeams     = [];      // every team in the season (for opponents + transac
 let team         = null;    // the team being rendered
 let allOwners    = [];      // every team_owners row in the season
 let ownerHistory = [];      // this team's team_owners rows, sorted by started_week
+let ownersByTeam = {};      // team_id -> [{started_week, ended_week, name}] stints, sorted by started_week
+let coachAtWeek  = () => null;   // bound to ownersByTeam once loaded (see utils.js makeCoachAtWeek)
 let coachByTeam  = {};      // team_id -> current coach display_name (any team)
 let tierCost     = {};      // pokemon_id -> point_cost (this season)
 let teraCost     = {};      // pokemon_id -> tera_point_cost (null unless season prices Tera, e.g. S9)
 let roster       = [];      // team_pokemon rows for this team (active + inactive)
-let matches      = [];      // matches involving this team (any stage), by week
+let matches      = [];      // matches involving this team (any stage), by week, filtered to ?week= if capped
+let weekCap      = null;    // ?week=N from the nav's Week Selector, or null (live/uncapped)
+let trueMaxWeek  = 0;       // season's actual latest regular-season week, for the week-banner check
 let gamesByMatch = {};      // match_id -> [game rows]
 let statRows     = [];      // game_pokemon_stats rows for this team
 let regularRecords = {};    // team_id -> { w, l, winRate } over regular season (for OW%)
@@ -591,23 +596,12 @@ async function loadGlobalData() {
     return res.json();
   });
 
-  const { data: seasonRow, error: seasonErr } = await (async () => {
-    const slug = new URLSearchParams(location.search).get('season');
-    if (slug) {
-      const bySlug = await sb.from('seasons').select('*').eq('slug', slug).maybeSingle();
-      if (bySlug.error) return bySlug;
-      if (bySlug.data) return bySlug;
-    }
-    return await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
-  })();
-  if (seasonErr) throw seasonErr;
-  if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
-  season = seasonRow;
+  season = await resolveSeason();
 
   const [teamsRes, tiersRes, regMatchRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed').eq('season_id', season.id),
     sb.from('season_pokemon_tiers').select('pokemon_id, point_cost, tera_point_cost').eq('season_id', season.id),
-    sb.from('matches').select('team_a_id, team_b_id, winner_team_id').eq('season_id', season.id).eq('stage', 'regular'),
+    sb.from('matches').select('team_a_id, team_b_id, winner_team_id, week, stage').eq('season_id', season.id).eq('stage', 'regular'),
   ]);
   for (const r of [teamsRes, tiersRes, regMatchRes]) if (r.error) throw r.error;
   // Unfiltered all-seasons table → paginate past the 1000-row cap.
@@ -626,11 +620,26 @@ async function loadGlobalData() {
     if (o.players) coachByTeam[o.team_id] = o.players.display_name;
   });
 
+  // Owner stints (for coach-as-of-week labels on the schedule/transaction feed).
+  ownersByTeam = {};
+  allOwners.filter(o => o.players).forEach(o => {
+    (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
+  });
+  Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
+  coachAtWeek = makeCoachAtWeek(ownersByTeam);
+
+  // Week cap (?week=N): the nav's Week Selector caps every query on this page at a
+  // chosen week (see utils.js).
+  weekCap = resolveWeekCap();
+  let regMatches;
+  ({ filtered: regMatches, trueMaxWeek } = applyWeekCap(regMatchRes.data || [], weekCap));
+  updateWeekBanner(weekCap, trueMaxWeek);
+
   // Season-wide regular-season records + opponent map, used for OW% / OOW%.
-  regularRecords = computeRegularRecords(regMatchRes.data || [], teamIds);
+  regularRecords = computeRegularRecords(regMatches, teamIds);
   regularOpponents = {};
   teamIds.forEach(id => { regularOpponents[id] = []; });
-  (regMatchRes.data || []).forEach(m => {
+  regMatches.forEach(m => {
     if (regularOpponents[m.team_a_id]) regularOpponents[m.team_a_id].push(m.team_b_id);
     if (regularOpponents[m.team_b_id]) regularOpponents[m.team_b_id].push(m.team_a_id);
   });
@@ -668,6 +677,10 @@ async function loadTeamData() {
 
   roster  = rosterRes.data || [];
   matches = (matchRes.data || []).sort((a, b) => (a.week || 0) - (b.week || 0));
+  // Same week cap as loadGlobalData() (weekCap is season-wide, already resolved there,
+  // not re-toggling the banner here) - this team's games/stats fetches below then
+  // don't see any dropped matches either.
+  matches = applyWeekCap(matches, weekCap).filtered;
 
   // Games + per-Pokémon stats for this team's matches (only if any matches exist).
   gamesByMatch = {}; statRows = []; broughtByMatch = {};
@@ -718,11 +731,13 @@ function buildTransactions(faMoves, trades) {
     const weGiveUp = t.team_a_id === team.id ? t.pokemon_a_id : t.pokemon_b_id;
     const weGet    = t.team_a_id === team.id ? t.pokemon_b_id : t.pokemon_a_id;
     const otherId  = t.team_a_id === team.id ? t.team_b_id : t.team_a_id;
-    const other    = allTeams.find(x => x.id === otherId);
-    const withName = other ? other.name + (coachByTeam[otherId] ? ' (' + coachByTeam[otherId] + ')' : '') : 'another team';
+    const other      = allTeams.find(x => x.id === otherId);
+    const otherCoach = other ? coachAtWeek(otherId, t.effective_week) : null;
+    const withName   = other ? other.name + (otherCoach ? ' (' + otherCoach + ')' : '') : 'another team';
     feed.push({ kind: 'trade', week: t.effective_week, when: t.occurred_at, added: weGet, dropped: weGiveUp, withLabel: withName });
   });
-  return feed.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
+  const capped = weekCap == null ? feed : feed.filter(x => (x.week || 0) <= weekCap);
+  return capped.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1098,11 +1113,21 @@ function buildDetailPopover(uid, row, mon, disp) {
   return pop;
 }
 
+// Roster status "as of" the capped week - a mon dropped AFTER the capped week was
+// still active at that point in time, and one acquired after it wasn't on the
+// roster yet at all (excluded from both active/inactive, not just miscategorized).
+// weekCap == null (live view) keeps today's exact behavior: released_week alone decides.
+function rosterStatusAtWeek(row, weekCap) {
+  if (weekCap == null) return row.released_week == null ? 'active' : 'inactive';
+  if ((row.acquired_week || 1) > weekCap) return 'not-yet';
+  return (row.released_week != null && row.released_week <= weekCap) ? 'inactive' : 'active';
+}
+
 function renderRoster() {
   const el = document.getElementById('roster');
   el.innerHTML = '';
   const active = roster
-    .filter(r => r.released_week == null)
+    .filter(r => rosterStatusAtWeek(r, weekCap) === 'active')
     .sort((a, b) => (a.draft_pick_number || 999) - (b.draft_pick_number || 999) || (a.acquired_week || 0) - (b.acquired_week || 0));
 
   if (!active.length) { el.innerHTML = '<div class="empty">No active Pokémon on this roster yet.</div>'; return; }
@@ -1126,7 +1151,7 @@ function renderInactive() {
   el.innerHTML   = '';
 
   const allInactive = roster
-    .filter(r => r.released_week != null && r.released_week !== 1);
+    .filter(r => rosterStatusAtWeek(r, weekCap) === 'inactive' && r.released_week !== 1);
 
   if (!allInactive.length) {
     el.innerHTML = '<div class="empty">No inactive Pokémon.</div>';
@@ -1279,8 +1304,10 @@ function renderSchedule() {
     else if (m.winner_team_id)        cls = 'loss';
     else if (m.id === nextId)         cls = 'next';
 
-    const myCoach  = coachByTeam[team.id]  ? ' <span class="pl">(' + escapeHtml(coachByTeam[team.id]) + ')</span>' : '';
-    const oppCoach = (opp && coachByTeam[oppId]) ? ' <span class="pl">(' + escapeHtml(coachByTeam[oppId]) + ')</span>' : '';
+    const myCoachName  = coachAtWeek(team.id, m.week);
+    const oppCoachName = opp ? coachAtWeek(oppId, m.week) : null;
+    const myCoach  = myCoachName  ? ' <span class="pl">(' + escapeHtml(myCoachName) + ')</span>'  : '';
+    const oppCoach = oppCoachName ? ' <span class="pl">(' + escapeHtml(oppCoachName) + ')</span>' : '';
     const oppName  = opp ? escapeHtml(opp.name) : 'TBD';
 
     // Right side of the header row: final score, or the "Next" tag.

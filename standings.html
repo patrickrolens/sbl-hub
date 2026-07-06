@@ -143,6 +143,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 <script src="/nav.js"></script>
 <script src="/utils.js"></script>
 
+<div id="week-banner" class="sbln-week-banner" hidden></div>
 <div id="boot-banner" class="banner">Loading standings…</div>
 
 <div class="layout" id="layout" hidden>
@@ -218,12 +219,16 @@ let season       = null;
 let allTeams     = [];
 let teamById     = {};
 let allOwners    = [];
-let coachByTeam  = {};
+let ownersByTeam = {};     // team_id -> [{started_week, ended_week, name}] stints, sorted by started_week
+let coachAtWeek  = () => null;   // bound to ownersByTeam once loaded (see utils.js makeCoachAtWeek)
+let coachByTeam  = {};     // team_id -> coach at weekCap (or live, if uncapped) - derived from ownersByTeam
 let draftRow     = null;
 let divisions    = [];     // [{id, name, abbr, sort_order}] — empty when undivided
 let hasDivisions = false;
 let teamDivision = {};     // team_id -> division_id | '__none__'
-let matches      = [];     // all matches for the season (any stage)
+let matches      = [];     // all matches for the season (any stage), filtered to ?week= if capped
+let weekCap      = null;   // ?week=N from the nav's Week Selector, or null (live/uncapped)
+let trueMaxWeek  = 0;      // season's actual latest regular-season week, for the week-banner check
 let gamesByMatch = {};     // match_id -> [game rows]
 let gameToMatch  = {};     // game_id -> match_id
 let statRows     = [];     // all game_pokemon_stats rows for the season
@@ -317,18 +322,7 @@ async function loadData() {
     return res.json();
   });
 
-  const { data: seasonRow, error: seasonErr } = await (async () => {
-    const slug = new URLSearchParams(location.search).get('season');
-    if (slug) {
-      const bySlug = await sb.from('seasons').select('*').eq('slug', slug).maybeSingle();
-      if (bySlug.error) return bySlug;
-      if (bySlug.data) return bySlug;
-    }
-    return await sb.from('seasons').select('*').eq('is_current', true).maybeSingle();
-  })();
-  if (seasonErr) throw seasonErr;
-  if (!seasonRow) throw new Error('No current season found (seasons.is_current = true).');
-  season = seasonRow;
+  season = await resolveSeason();
 
   const [teamsRes, draftRes, matchRes, faRes, tradeRes, divRes] = await Promise.all([
     sb.from('teams').select('id,name,slug,logo_url,initial_seed,division_id').eq('season_id', season.id),
@@ -355,8 +349,12 @@ async function loadData() {
   allTeams.forEach(t => { teamDivision[t.id] = (hasDivisions && t.division_id) ? t.division_id : '__none__'; });
 
   allOwners = ownersAll.filter(o => teamIds.includes(o.team_id));
-  coachByTeam = {};
-  allOwners.filter(o => o.ended_week == null).forEach(o => { if (o.players) coachByTeam[o.team_id] = o.players.display_name; });
+  ownersByTeam = {};
+  allOwners.filter(o => o.players).forEach(o => {
+    (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
+  });
+  Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
+  coachAtWeek = makeCoachAtWeek(ownersByTeam);
 
   // A divisioned season has one draft row per division; an undivided season has at
   // most one. The draft-pending panel only needs a representative status/date, so
@@ -364,6 +362,18 @@ async function loadData() {
   const draftRows = draftRes.data || [];
   draftRow = pickRepresentativeDraft(draftRows);
   matches  = matchRes.data || [];
+
+  // Week cap (?week=N): the nav's Week Selector caps every query on this page at a
+  // chosen week, showing standings "as of" that point (see utils.js).
+  weekCap = resolveWeekCap();
+  ({ filtered: matches, trueMaxWeek } = applyWeekCap(matches, weekCap));
+
+  // Coach attribution "as of" the week cap (or live, if uncapped) - a team's stats
+  // for a capped week should be credited to whoever coached it then, not whoever
+  // coaches it today (see coachAtWeek).
+  coachByTeam = {};
+  teamIds.forEach(tid => { const name = coachAtWeek(tid, weekCap); if (name) coachByTeam[tid] = name; });
+  updateWeekBanner(weekCap, trueMaxWeek);
 
   // Games + per-Pokémon stats across the whole season (drives KD + roster reconstruction).
   gamesByMatch = {}; gameToMatch = {}; statRows = []; leaderRows = []; broughtByMatch = {};
@@ -386,7 +396,8 @@ async function loadData() {
     // KO/KF Δ/K-F leaderboards: pre-aggregated server-side (season_pokemon_leaders
     // RPC) instead of summed client-side from statRows — a season's stat rows can
     // exceed the 1000-row pagination page size, this can't.
-    const { data: leaders, error: leadersErr } = await sb.rpc('season_pokemon_leaders', { p_season_id: season.id });
+    const rpcArgs = weekCap != null ? { p_season_id: season.id, p_week: weekCap } : { p_season_id: season.id };
+    const { data: leaders, error: leadersErr } = await sb.rpc('season_pokemon_leaders', rpcArgs);
     if (leadersErr) throw leadersErr;
     leaderRows = leaders || [];
   }
@@ -403,7 +414,8 @@ function buildTransactions(faMoves, trades) {
   const feed = [];
   faMoves.forEach(m => feed.push({ kind: 'fa', week: m.effective_week, when: m.occurred_at, added: m.pokemon_added_id, dropped: m.pokemon_dropped_id, teams: [m.team_id] }));
   trades.forEach(t => feed.push({ kind: 'trade', week: t.effective_week, when: t.occurred_at, aTeam: t.team_a_id, aMon: t.pokemon_a_id, bTeam: t.team_b_id, bMon: t.pokemon_b_id, teams: [t.team_a_id, t.team_b_id] }));
-  return feed.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
+  const capped = weekCap == null ? feed : feed.filter(x => (x.week || 0) <= weekCap);
+  return capped.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
