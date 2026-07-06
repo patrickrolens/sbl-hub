@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SBL Hub — Pokémon History</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root{--bg:#0f1117;--bg2:#1a1d27;--bg3:#22263a;--border:#2e3248;--text:#e8eaf6;--text2:#9095b8;--accent:#7c6ff7;--nav-h:49px}
+*{box-sizing:border-box;margin:0;padding:0}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:24px;margin:12px 14px}
+body{font-family:Segoe UI,system-ui,-apple-system,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);padding:0 0 14px}
+.page-wrap{margin:0 auto}
+.search-row{display:flex;gap:8px;align-items:center;position:sticky;top:var(--nav-h);z-index:10;background:var(--bg2);border-radius:8px}
+.form-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.form-row-inner{position:relative}
+.form-input{background:var(--bg3);border:1px solid var(--border);padding:8px;border-radius:6px;color:var(--text);min-height:28px}
+.form-input.wide{min-width:260px}
+.spinner-text{margin-left:8px;color:var(--text2);font:inherit}
+.status-text{margin-left:12px;color:var(--text2);font:inherit}
+.card-body{margin-top:12px;color:var(--text)}
+.card-footer{margin-top:10px}
+.card-heading{font-weight:800;margin-bottom:6px;font-size:1.05rem}
+.card-copy{color:var(--text2);font-size:13px;margin-bottom:18px}
+.suggestions{position:absolute;background:var(--bg2);border:1px solid var(--border);margin-top:6px;border-radius:6px;overflow:auto;max-height:220px;width:320px}
+.suggestions button{display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:none;color:var(--text);cursor:pointer}
+.suggestions button:hover{background:var(--bg3)}
+.empty{color:var(--text2);font-style:italic;padding:10px}
+.link{color:var(--accent);text-decoration:none;font-weight:600}
+.team-sprites{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;overflow:hidden}
+.team-sprites img.sprite{width:36px;height:36px;border-radius:6px;background:rgba(255,255,255,0.02);padding:4px;object-fit:contain;border:1px solid var(--border)}
+.sprite-more{display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;border-radius:6px;background:rgba(124,111,247,0.10);color:var(--accent);font-size:12px;padding:4px;border:1px solid rgba(124,111,247,0.12)}
+.history-card-header{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.history-sprite{width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px;object-fit:contain}
+.history-heading-text{font-size:1.35rem;font-weight:800}
+.history-subtitle{color:var(--text2);font-size:13px;margin-top:4px}
+.history-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
+.history-item{padding:16px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);border-radius:12px}
+.history-team-name{color:var(--accent);font-weight:700}
+.team-link{color:var(--accent);font-weight:700;text-decoration:none}.team-link:hover{text-decoration:underline}
+.history-item-copy{color:var(--text2);line-height:1.5}
+</style>
+</head>
+<body>
+
+<script src="/nav.js"></script>
+<script src="/utils.js"></script>
+
+<div class="page-wrap">
+<div class="card">
+  <div class="card-heading">Pokémon History</div>
+  <div class="card-copy">Search for a Pokémon to see which teams owned it (across seasons).</div>
+
+  <div class="search-row form-row">
+    <div class="form-row-inner">
+      <input id="search" class="form-input wide" placeholder="Search Pokémon name…" autocomplete="off">
+      <div id="suggestions" class="suggestions" hidden></div>
+    </div>
+    <button id="do-search" class="sbln-btn">Search</button>
+    <span id="spinner" hidden class="spinner-text">Searching…</span>
+    <div id="status" class="status-text"></div>
+  </div>
+
+  <div id="results" class="card-body"></div>
+  <div class="card-footer"><button id="load-more" class="sbln-btn" hidden>Load more</button></div>
+</div>
+</div><!-- /.page-wrap -->
+
+<script>
+const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
+const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
+const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
+
+function spriteUrlById(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
+function pokemonNameById(id) { const s = String(id); const p = pokemonList.find(x => String(x.id) === s || String(x.id) === String(parseInt(s,10))); return p ? p.name : String(id); }
+
+function getAcquisitionInfo(via) {
+  const key = String(via || '').toLowerCase();
+  if (key.includes('draft')) return { label: 'drafted', priority: 0 };
+  if (key.includes('trade')) return { label: 'traded for', priority: 1 };
+  if (key.includes('waiver')) return { label: 'claimed', priority: 2 };
+  if (key.includes('drop')) return { label: 'picked up', priority: 2 };
+  if (key.includes('pick')) return { label: 'added', priority: 2 };
+  return { label: 'acquired', priority: 3 };
+}
+
+function formatSeasonWeek(team, week) {
+  const seasonLabel = (team && team.season && (team.season.name || team.season.slug)) ? (team.season.name || team.season.slug) : 'Season';
+  return seasonLabel + (week == null ? '' : ' Week ' + week);
+}
+
+function getOwnerDisplayName(team, week) {
+  if (!team || !team.owners || !team.owners.length) return '';
+  if (week != null) {
+    const owner = team.owners.slice().reverse().find(o => {
+      const started = o.started_week == null ? -Infinity : o.started_week;
+      const ended = o.ended_week == null ? Infinity : o.ended_week;
+      return started <= week && ended >= week;
+    });
+    if (owner && owner.display_name) return owner.display_name;
+  }
+  return team.owners[team.owners.length - 1].display_name || '';
+}
+
+function getTeamLabel(team, week) {
+  if (!team) return 'Unknown team';
+  const name = team.name || 'Unknown team';
+  const ownerName = getOwnerDisplayName(team, week);
+  if (!ownerName) return name;
+  const normalizedTeam = String(name).trim().toLowerCase();
+  const normalizedOwner = String(ownerName).trim().toLowerCase();
+  if (!normalizedTeam || normalizedTeam === normalizedOwner) return name;
+  return name + ' (' + ownerName + ')';
+}
+
+function createHistoryItem(row, pokemonName) {
+  const teamName = getTeamLabel(row.team, row.acquired_week);
+  const action = getAcquisitionInfo(row.acquired_via).label;
+  const when = formatSeasonWeek(row.team, row.acquired_week);
+  const releaseNote = row.released_week == null ? '' : ' It was dropped Week ' + row.released_week + '.';
+  const teamSlug = row.team && row.team.slug;
+  const teamSeasonSlug = row.team && row.team.season && row.team.season.slug;
+  const teamHtml = teamSlug && teamSeasonSlug
+    ? '<a class="history-team-name team-link" href="team.html?season=' + teamSeasonSlug + '#' + encodeURIComponent(teamSlug) + '">' + escapeHtml(teamName) + '</a>'
+    : '<span class="history-team-name">' + escapeHtml(teamName) + '</span>';
+  return '<li class="history-item">'
+    + '<div class="history-item-copy">' + teamHtml + ' ' + escapeHtml(action) + ' ' + escapeHtml(pokemonName) + ' in ' + escapeHtml(when) + '.' + escapeHtml(releaseNote) + '</div>'
+    + '</li>';
+}
+
+function attachImageFallback(container) {
+  const imgs = container.querySelectorAll('img');
+  imgs.forEach(img => { img.onerror = function(){ this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }; });
+}
+
+let pokemonList = [];
+let suggestIndex = -1;
+let debounceTimer = null;
+let pageOffset = 0, pageSize = 100, lastPokemonId = null, allRows = [];
+
+function $id(id) { return document.getElementById(id); }
+function showStatus(txt, kind) { const s = $id('status'); s.textContent = txt || ''; s.style.color = kind === 'err' ? 'var(--red)' : 'var(--text2)'; }
+
+async function boot() {
+  $id('do-search').addEventListener('click', () => onSearchClick());
+  const input = $id('search');
+  input.addEventListener('input', e => { onSearchInput(e); });
+  input.addEventListener('keydown', onInputKeyDown);
+  input.addEventListener('blur', () => setTimeout(() => { $id('suggestions').hidden = true; suggestIndex = -1; }, 150));
+  $id('load-more').addEventListener('click', loadMore);
+
+  // Try to prefetch pokemon.json but tolerate failures.
+  try {
+    const res = await fetch(POKEMON_JSON_URL);
+    if (!res.ok) throw new Error('Not found');
+    const pj = await res.json();
+    pokemonList = Array.isArray(pj) ? pj : (pj.pokemon || []);
+  } catch (e) {
+    console.warn('pokemon.json load failed', e);
+    showStatus('Pokémon names unavailable (offline). You can still search by id.', 'err');
+  }
+
+  // deep-link support: ?q=Charizard
+  const q = new URLSearchParams(location.search).get('q');
+  if (q) { $id('search').value = q; debounce(() => onSearchClick(), 60); }
+}
+
+function debounce(fn, ms) {
+  clearTimeout(debounceTimer); debounceTimer = setTimeout(fn, ms);
+}
+
+function onSearchInput(e) {
+  const q = (e.target.value || '').trim().toLowerCase();
+  if (!q) { $id('suggestions').hidden = true; return; }
+  // local suggest immediately
+  const matches = pokemonList.filter(p => (p.name || '').toLowerCase().includes(q)).slice(0,10);
+  const box = $id('suggestions');
+  if (!matches.length) { box.hidden = true; return; }
+  box.innerHTML = '';
+  matches.forEach((m, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sugg-btn';
+    b.dataset.idx = i;
+    b.textContent = m.name;
+    b.addEventListener('click', () => { $id('search').value = m.name; box.hidden = true; doSearchById(m.id); });
+    box.appendChild(b);
+  });
+  suggestIndex = -1; box.hidden = false;
+}
+
+function onInputKeyDown(e) {
+  const box = $id('suggestions');
+  const items = box.hidden ? [] : [...box.querySelectorAll('.sugg-btn')];
+  if (e.key === 'ArrowDown' && items.length) { e.preventDefault(); suggestIndex = Math.min(items.length - 1, suggestIndex + 1); updateSuggestFocus(items); }
+  else if (e.key === 'ArrowUp' && items.length) { e.preventDefault(); suggestIndex = Math.max(0, suggestIndex - 1); updateSuggestFocus(items); }
+  else if (e.key === 'Enter') {
+    if (!box.hidden && suggestIndex >= 0 && items[suggestIndex]) { e.preventDefault(); items[suggestIndex].click(); return; }
+    // otherwise run search
+  }
+}
+
+function updateSuggestFocus(items) {
+  items.forEach((it, i) => it.style.background = i === suggestIndex ? 'var(--bg3)' : '');
+  if (items[suggestIndex]) items[suggestIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function setLoading(loading) {
+  $id('do-search').disabled = loading;
+  $id('search').disabled = loading;
+  $id('spinner').hidden = !loading;
+}
+
+async function onSearchClick() {
+  const q = ($id('search').value || '').trim().toLowerCase();
+  if (!q) return;
+  // prefer exact name match if we have the data
+  let hit = pokemonList.find(p => (p.name || '').toLowerCase() === q);
+  if (!hit) hit = pokemonList.find(p => (p.name || '').toLowerCase().includes(q));
+  if (!hit) {
+    showStatus('No Pokémon found.');
+    return;
+  }
+  doSearchById(hit.id);
+}
+
+async function doSearchById(pokemonId) {
+  // reset paging
+  pageOffset = 0; lastPokemonId = pokemonId; allRows = [];
+  $id('results').innerHTML = '';
+  await loadPage();
+}
+
+async function loadPage() {
+  if (!lastPokemonId) return;
+  setLoading(true);
+  try {
+    const from = pageOffset;
+    const to = pageOffset + pageSize - 1;
+    const sel = 'team_id, pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number';
+    const { data: rows, error } = await sb.from('team_pokemon').select(sel).eq('pokemon_id', lastPokemonId).order('acquired_week', { ascending: true }).range(from, to);
+    if (error) throw error;
+    if (!rows || !rows.length) {
+      if (!allRows.length) showStatus('No ownership records found.');
+      else showStatus('No more records.');
+      setLoading(false);
+      $id('load-more').hidden = true;
+      renderResults(allRows);
+      return;
+    }
+    allRows.push(...rows);
+    const teamIds = [...new Set(allRows.map(r => r.team_id).filter(Boolean))];
+    let teams = [], owners = [], playerById = {};
+    if (teamIds.length) {
+      const [teamsRes, ownersRes] = await Promise.all([
+        sb.from('teams').select('id,name,slug,logo_url,season_id').in('id', teamIds),
+        sb.from('team_owners').select('team_id,player_id,started_week,ended_week').in('team_id', teamIds)
+      ]);
+      if (teamsRes.error) throw teamsRes.error;
+      if (ownersRes.error) throw ownersRes.error;
+      teams = teamsRes.data || [];
+      owners = ownersRes.data || [];
+      const seasonIds = [...new Set(teams.map(x => x.season_id).filter(Boolean))];
+      const playerIds = [...new Set(owners.map(o => o.player_id).filter(Boolean))];
+      const [seasonsRes, playersRes] = await Promise.all([
+        seasonIds.length ? sb.from('seasons').select('id,name,slug').in('id', seasonIds) : Promise.resolve({ data: [], error: null }),
+        playerIds.length ? sb.from('players').select('id,display_name').in('id', playerIds) : Promise.resolve({ data: [], error: null })
+      ]);
+      if (seasonsRes.error) throw seasonsRes.error;
+      if (playersRes.error) throw playersRes.error;
+      const seasonById = {};
+      (seasonsRes.data || []).forEach(ss => seasonById[ss.id] = ss);
+      teams.forEach(ti => ti.season = seasonById[ti.season_id] || null);
+      (playersRes.data || []).forEach(p => { playerById[p.id] = p; });
+    }
+    const teamById = {};
+    teams.forEach(t => teamById[t.id] = t);
+    owners.forEach(o => {
+      const team = teamById[o.team_id];
+      if (!team) return;
+      team.owners = team.owners || [];
+      team.owners.push({
+        player_id: o.player_id,
+        started_week: o.started_week,
+        ended_week: o.ended_week,
+        display_name: playerById[o.player_id] ? playerById[o.player_id].display_name : ''
+      });
+    });
+    Object.values(teamById).forEach(team => {
+      if (team.owners) team.owners.sort((a,b) => (a.started_week || 0) - (b.started_week || 0));
+    });
+    // attach team info
+    const out = allRows.map(r => Object.assign({}, r, { team: teamById[r.team_id] || null }));
+    renderResults(out);
+    // show load-more if this page was full
+    pageOffset += rows.length;
+    $id('load-more').hidden = rows.length < pageSize;
+    showStatus('Found ' + allRows.length + ' records.');
+  } catch (e) {
+    console.error(e);
+    showStatus('Could not query records — check network or database permissions.', 'err');
+  } finally { setLoading(false); }
+}
+
+async function loadMore() { await loadPage(); }
+
+function renderResults(rows) {
+  const el = $id('results'); el.innerHTML = '';
+  if (!rows || !rows.length) { el.innerHTML = '<div class="empty">No results.</div>'; return; }
+  const pokemonName = pokemonNameById(lastPokemonId) || 'Pokémon';
+  const heading = '<div class="history-card-header">'
+    + renderPokemonSprite(lastPokemonId, pokemonName)
+    + '<div><div class="history-heading-text">' + escapeHtml(pokemonName) + '</div></div>'
+    + '</div>';
+  let html = heading + '<ul class="history-list">';
+  const sortedRows = rows.slice().sort((a,b) => {
+    const aSeason = getSeasonNumber(a.team);
+    const bSeason = getSeasonNumber(b.team);
+    if (aSeason !== bSeason) return aSeason - bSeason;
+    const aWeek = a.acquired_week == null ? Infinity : a.acquired_week;
+    const bWeek = b.acquired_week == null ? Infinity : b.acquired_week;
+    if (aWeek !== bWeek) return aWeek - bWeek;
+    const aAction = getAcquisitionInfo(a.acquired_via).priority;
+    const bAction = getAcquisitionInfo(b.acquired_via).priority;
+    return aAction - bAction;
+  });
+  sortedRows.forEach(r => {
+    html += createHistoryItem(r, pokemonName);
+  });
+  html += '</ul>';
+  el.innerHTML = html;
+  attachImageFallback(el);
+}
+
+function getSeasonNumber(team) {
+  if (!team || !team.season) return 0;
+  const label = String(team.season.name || team.season.slug || '');
+  const match = label.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+function renderPokemonSprite(id, name) {
+  const src = spriteUrlById(id) || POKEBALL_FALLBACK;
+  return '<img class="history-sprite" src="' + escapeHtml(src) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '">';
+}
+
+function exportCSV() {
+  if (!allRows.length) return;
+  const cols = ['team','team_slug','season','acquired_week','released_week'];
+  const lines = [cols.join(',')];
+  allRows.forEach(r => {
+    const teamName = r.team ? '"' + (r.team.name || '').replace(/"/g,'""') + '"' : '';
+    const teamSlug = r.team ? (r.team.slug || '') : '';
+    const seasonName = r.team && r.team.season ? (r.team.season.name || r.team.season.slug || '') : '';
+    lines.push([teamName,teamSlug,seasonName,r.acquired_week||'',r.released_week||''].join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'pokemon-history-' + (lastPokemonId || 'data') + '.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+// initialize
+boot();
+</script>
+
+</body>
+</html>
