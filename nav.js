@@ -113,6 +113,12 @@
     if (n == null) u.searchParams.delete("week"); else u.searchParams.set("week", String(n));
     return u.pathname + u.search + u.hash;
   }
+  // "s9" -> "Season 9", "s4-5" -> "Season 4.5". Falls back to the full name for
+  // anything that doesn't match the sN[-M] slug convention (e.g. the "test" season).
+  function seasonShortLabel(s) {
+    const m = /^s(\d+(?:-\d+)?)$/.exec(s.slug);
+    return m ? "Season " + m[1].replace("-", ".") : (s.name || s.slug);
+  }
 
   function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -138,18 +144,18 @@
 .sbln-btn:disabled { opacity: .5; cursor: default; }
 .sbln-btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
 .sbln-btn-accent:hover { filter: brightness(1.08); }
+.sbln-btn-noncurrent { background: rgba(240,192,96,.14); border-color: rgba(240,192,96,.6); }
+.sbln-btn-noncurrent:hover { border-color: rgba(240,192,96,.85); }
 .sbln-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); vertical-align: middle; margin-right: 7px; box-shadow: 0 0 5px rgba(76,175,125,.7); }
 .sbln-admin-wrap { position: relative; display: flex; align-items: center; }
 .sbln-menu-foot { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; align-items: center; gap: 8px; }
 .sbln-foot-email { flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sbln-logout-btn { flex: 0 0 auto; }
 
-/* "viewing non-current data" banners (season-non-current, per-page week-capped) */
-#sbln-season-banner, .sbln-week-banner { background: rgba(240,192,96,.12); border-bottom: 1px solid rgba(240,192,96,.35); color: var(--text); font-size: 12px; font-weight: 600; text-align: center; padding: 7px 12px; position: sticky; }
-#sbln-season-banner { z-index: 99; }
-.sbln-week-banner { z-index: 98; }
-#sbln-season-banner[hidden], .sbln-week-banner[hidden] { display: none; }
-#sbln-season-banner a, .sbln-week-banner a { color: var(--accent); text-decoration: underline; }
+/* "viewing capped data" banner (per-page week-capped) */
+.sbln-week-banner { background: rgba(240,192,96,.12); border-bottom: 1px solid rgba(240,192,96,.35); color: var(--text); font-size: 12px; font-weight: 600; text-align: center; padding: 7px 12px; position: sticky; z-index: 98; }
+.sbln-week-banner[hidden] { display: none; }
+.sbln-week-banner a { color: var(--accent); text-decoration: underline; }
 
 /* dropdown menus (Teams + Admin + Season + Week) */
 .sbln-menu { position: fixed; z-index: 150; width: 260px; max-width: calc(100vw - 16px); max-height: min(60vh, 460px); display: flex; flex-direction: column; overflow: hidden; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 14px 34px rgba(0,0,0,.5); }
@@ -218,13 +224,6 @@
       + `</div>`;
     document.body.insertBefore(nav, document.body.firstChild);
 
-    // Season-non-current banner, shown/populated once loadData() resolves the season
-    // (season-scoped pages only — league-wide pages aren't scoped to any one season).
-    const seasonBanner = document.createElement("div");
-    seasonBanner.id = "sbln-season-banner"; seasonBanner.hidden = true;
-    seasonBanner.innerHTML = 'Viewing <strong id="sbln-season-banner-name"></strong> — <a id="sbln-season-banner-link">Back to current season</a>';
-    document.body.insertBefore(seasonBanner, nav.nextSibling);
-
     // logo fallback to wordmark if the image is missing
     const logoImg = nav.querySelector(".sbln-logo img");
     logoImg.onerror = function () { this.style.display = "none"; nav.querySelector(".sbln-word").hidden = false; };
@@ -273,20 +272,15 @@
   }
 
   // --nav-h is what every page's own sticky elements (filter bars, detail panels)
-  // offset below - it needs to include both banners' height when shown, each
-  // stacked directly under whatever's above it (own .top = combined height so far),
-  // or page content would slide under a fixed bar once a banner scrolls out from a
-  // plain-flow spot. The week banner lives in each page's own HTML (not nav.js's
-  // DOM - only 4 pages have one), found generically by class rather than owned here.
+  // offset below - it needs to include the week banner's height too when shown,
+  // stacked directly under the nav (banner.top = navHeight), or page content would
+  // slide under the fixed nav bar once the banner scrolls out from a plain-flow
+  // spot. The week banner lives in each page's own HTML (not nav.js's DOM - only
+  // 4 pages have one), found generically by class rather than owned here.
   function setNavHeight() {
     const nav = document.getElementById("sbl-nav");
     if (!nav) return;
     let total = nav.offsetHeight;
-    const seasonBanner = document.getElementById("sbln-season-banner");
-    if (seasonBanner) {
-      seasonBanner.style.top = total + "px";
-      if (!seasonBanner.hidden) total += seasonBanner.offsetHeight;
-    }
     const weekBanner = document.querySelector(".sbln-week-banner");
     if (weekBanner) {
       weekBanner.style.top = total + "px";
@@ -377,7 +371,10 @@
       `<a class="sbln-menu-item" href="${esc(seasonTargetHref(s))}">${esc(s.name)}${s.is_current ? ' <span class="pl">(current)</span>' : ""}</a>`
     ).join("");
     const btn = document.getElementById("sbln-season-btn");
-    if (btn) btn.innerHTML = esc(season ? season.slug : "season") + ' <span class="sbln-caret">▾</span>';
+    if (btn) {
+      btn.innerHTML = esc(season ? seasonShortLabel(season) : "Season") + ' <span class="sbln-caret">▾</span>';
+      btn.classList.toggle("sbln-btn-noncurrent", !!(season && !season.is_current));
+    }
   }
 
   // Week menu: 1..maxWeek plus a "Live (all weeks)" row that clears ?week=.
@@ -539,7 +536,6 @@
       postseasonVisible = !!(season && season.postseason_published);
       applyPostseasonVisibility();
       renderSeasonMenu();
-      updateSeasonBanner();
       if (!season) return;
       const needsWeek = WEEK_SELECTOR_PAGES.has(FILE);
       const [teamsRes, ownersRes, weekRes] = await Promise.all([
@@ -557,23 +553,6 @@
         renderWeekMenu();
       }
     } catch (e) { console.error("nav.js loadData:", e); /* nav still works without the team list */ }
-  }
-
-  // Season-non-current banner: season-scoped pages only (league-wide pages aren't
-  // scoped to any one season, even though the selector can jump you to one).
-  function updateSeasonBanner() {
-    const banner = document.getElementById("sbln-season-banner");
-    if (!banner) return;
-    const show = VARIANT === "season" && season && !season.is_current;
-    banner.hidden = !show;
-    if (show) {
-      document.getElementById("sbln-season-banner-name").textContent = season.name;
-      const link = document.getElementById("sbln-season-banner-link");
-      const u = new URL(location.href);
-      u.searchParams.delete("season"); u.searchParams.delete("week");
-      link.href = u.pathname + u.search + u.hash;
-    }
-    setNavHeight();
   }
 
   // Remove ?season=… from the rendered tab links (used when the URL slug was
