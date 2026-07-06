@@ -490,6 +490,8 @@ let allTeams     = [];      // every team in the season (for opponents + transac
 let team         = null;    // the team being rendered
 let allOwners    = [];      // every team_owners row in the season
 let ownerHistory = [];      // this team's team_owners rows, sorted by started_week
+let ownersByTeam = {};      // team_id -> [{started_week, ended_week, name}] stints, sorted by started_week
+let coachAtWeek  = () => null;   // bound to ownersByTeam once loaded (see utils.js makeCoachAtWeek)
 let coachByTeam  = {};      // team_id -> current coach display_name (any team)
 let tierCost     = {};      // pokemon_id -> point_cost (this season)
 let teraCost     = {};      // pokemon_id -> tera_point_cost (null unless season prices Tera, e.g. S9)
@@ -618,6 +620,14 @@ async function loadGlobalData() {
     if (o.players) coachByTeam[o.team_id] = o.players.display_name;
   });
 
+  // Owner stints (for coach-as-of-week labels on the schedule/transaction feed).
+  ownersByTeam = {};
+  allOwners.filter(o => o.players).forEach(o => {
+    (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push({ started_week: o.started_week || 1, ended_week: o.ended_week, name: o.players.display_name });
+  });
+  Object.values(ownersByTeam).forEach(list => list.sort((a, b) => a.started_week - b.started_week));
+  coachAtWeek = makeCoachAtWeek(ownersByTeam);
+
   // Week cap (?week=N): the nav's Week Selector caps every query on this page at a
   // chosen week (see utils.js).
   weekCap = resolveWeekCap();
@@ -721,11 +731,13 @@ function buildTransactions(faMoves, trades) {
     const weGiveUp = t.team_a_id === team.id ? t.pokemon_a_id : t.pokemon_b_id;
     const weGet    = t.team_a_id === team.id ? t.pokemon_b_id : t.pokemon_a_id;
     const otherId  = t.team_a_id === team.id ? t.team_b_id : t.team_a_id;
-    const other    = allTeams.find(x => x.id === otherId);
-    const withName = other ? other.name + (coachByTeam[otherId] ? ' (' + coachByTeam[otherId] + ')' : '') : 'another team';
+    const other      = allTeams.find(x => x.id === otherId);
+    const otherCoach = other ? coachAtWeek(otherId, t.effective_week) : null;
+    const withName   = other ? other.name + (otherCoach ? ' (' + otherCoach + ')' : '') : 'another team';
     feed.push({ kind: 'trade', week: t.effective_week, when: t.occurred_at, added: weGet, dropped: weGiveUp, withLabel: withName });
   });
-  return feed.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
+  const capped = weekCap == null ? feed : feed.filter(x => (x.week || 0) <= weekCap);
+  return capped.sort((a, b) => (b.week || 0) - (a.week || 0) || String(b.when).localeCompare(String(a.when)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1292,8 +1304,10 @@ function renderSchedule() {
     else if (m.winner_team_id)        cls = 'loss';
     else if (m.id === nextId)         cls = 'next';
 
-    const myCoach  = coachByTeam[team.id]  ? ' <span class="pl">(' + escapeHtml(coachByTeam[team.id]) + ')</span>' : '';
-    const oppCoach = (opp && coachByTeam[oppId]) ? ' <span class="pl">(' + escapeHtml(coachByTeam[oppId]) + ')</span>' : '';
+    const myCoachName  = coachAtWeek(team.id, m.week);
+    const oppCoachName = opp ? coachAtWeek(oppId, m.week) : null;
+    const myCoach  = myCoachName  ? ' <span class="pl">(' + escapeHtml(myCoachName) + ')</span>'  : '';
+    const oppCoach = oppCoachName ? ' <span class="pl">(' + escapeHtml(oppCoachName) + ')</span>' : '';
     const oppName  = opp ? escapeHtml(opp.name) : 'TBD';
 
     // Right side of the header row: final score, or the "Next" tag.
