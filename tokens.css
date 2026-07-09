@@ -1,0 +1,16 @@
+/* ============================================================================
+   SBL Hub — shared design tokens (tokens.css)
+   Link into any page with:  <link rel="stylesheet" href="/tokens.css">
+   (in <head>, before the page's own <style>). Every page used to carry an
+   identical copy of this :root block; a theme change now happens here once.
+   Page-specific variables (e.g. index's --silver, postseason's --col-w) stay
+   in their own page's <style>.
+   --nav-h is a boot default: nav.js re-measures and overrides it on
+   documentElement once the nav (and any banners) actually render.
+   ============================================================================ */
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+  --nav-h: 49px;
+}
