@@ -188,6 +188,20 @@ async function getMatchesForTeamIds(ids) {
   return r.data || [];
 }
 
+// A player's matches are only those played while one of their ownership stints
+// was active (same week semantics as makeCoachAtWeek in utils.js: ended_week is
+// the week the next owner takes over). Postseason week numbers don't line up
+// with stint windows (see coachNow in postseason.html), so postseason matches
+// belong to the open stint only.
+function ownershipCoversMatch(owners, teamId, m) {
+  const week = (m.stage && m.stage !== 'regular') ? null : m.week;
+  return (owners || []).some(o => {
+    if (o.team_id !== teamId) return false;
+    if (week == null) return o.ended_week == null;
+    return (o.started_week || 1) <= week && (o.ended_week == null || o.ended_week > week);
+  });
+}
+
 async function showMatchesClick() {
   const name1 = ($id('player1').value || '').trim();
   const name2 = ($id('player2').value || '').trim();
@@ -223,8 +237,10 @@ async function showMatchesClick() {
       const sres = await sb.from('seasons').select('id,name,slug').in('id', seasonIds);
       if (!sres.error && sres.data) { sres.data.forEach(s => seasonById[s.id] = s); }
     }
-    // filter head-to-head: one side in teamIds1 and the other in teamIds2
-    const h2h = matches.filter(m => (teamIds1.includes(m.team_a_id) && teamIds2.includes(m.team_b_id)) || (teamIds1.includes(m.team_b_id) && teamIds2.includes(m.team_a_id)));
+    // filter head-to-head: each player's stint must have been active when the match was played
+    const h2h = matches.filter(m =>
+      (ownershipCoversMatch(owners1, m.team_a_id, m) && ownershipCoversMatch(owners2, m.team_b_id, m))
+      || (ownershipCoversMatch(owners1, m.team_b_id, m) && ownershipCoversMatch(owners2, m.team_a_id, m)));
     // fetch match_pokemon for these head-to-head matches so we can show brought sprites
     const matchIds = h2h.map(m => m.id).filter(Boolean);
     let broughtMap = {}; // match_id -> { team_id -> [pokemon_id,...] }
@@ -275,7 +291,9 @@ async function showRecordClick() {
     const owners = await getPlayerOwners(player.id);
     const teamIds = owners.map(o => o.team_id).filter(Boolean);
     if (!teamIds.length) { out.innerHTML = '<div class="empty">This player has no team ownership records.</div>'; return; }
-    const filteredMatches = await getMatchesForTeamIds(teamIds);
+    const allMatches = await getMatchesForTeamIds(teamIds);
+    const filteredMatches = allMatches.filter(m =>
+      ownershipCoversMatch(owners, m.team_a_id, m) || ownershipCoversMatch(owners, m.team_b_id, m));
     if (!filteredMatches.length) {
       out.innerHTML = '<div class="empty">No matches found for this player.</div>'; return; }
     let matchWins = 0, matchLosses = 0, draws = 0;
