@@ -837,7 +837,9 @@ function renderIdentity() {
   logo.alt = team.name + ' logo';
   // Prefer the season-8 logo asset (filename matches the team slug); fall back to
   // any stored logo_url, then the Pokéball placeholder.
-  const slugLogo = team.slug ? '/assets/Logos/s8/' + encodeURIComponent(team.slug) + '.png' : '';
+  const slugLogo = (team.slug && season && season.slug)
+    ? '/assets/Logos/' + encodeURIComponent(season.slug) + '/' + encodeURIComponent(team.slug) + '.png'
+    : '';
   const fallbacks = [slugLogo, team.logo_url || ''].filter(Boolean);
   let fbIdx = 0;
   logo.src = fallbacks[0] || POKEBALL_FALLBACK;
