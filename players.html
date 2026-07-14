@@ -103,7 +103,6 @@ const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
 // Duplicated from pokemon.html (small, deliberate - matches this codebase's existing
 // per-page-inline-script convention rather than sharing a module).
 let pokemonList = [];
-function spriteUrlById(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
 function pokemonNameById(id) { const s = String(id); const p = pokemonList.find(x => String(x.id) === s || String(x.id) === String(parseInt(s,10))); return p ? p.name : String(id); }
 
 function normalizeStage(stage) {
@@ -119,7 +118,7 @@ function renderSpriteSet(pids) {
   const max = 6; const list = pids || [];
   const arr = list.slice(0, max);
   let out = '';
-  arr.forEach(pid => { const name = pokemonNameById(pid) || pid; out += '<img src="' + spriteUrlById(pid) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '" class="sprite">'; });
+  arr.forEach(pid => { const name = pokemonNameById(pid) || pid; out += '<img src="' + spriteUrl(pid) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '" class="sprite">'; });
   if (list.length > max) {
     const hidden = list.slice(max).map(pokemonNameById).filter(Boolean).join(', ');
     const more = list.length - max;
@@ -166,27 +165,26 @@ async function findPlayerByName(name) {
   return null;
 }
 
-async function getPlayerOwners(playerId) {
-  if (!playerId) return [];
-  const r = await sb.from('team_owners').select('team_id,started_week,ended_week').eq('player_id', playerId);
-  if (r.error) throw r.error;
-  return r.data || [];
-}
-
-async function getTeamsByIds(ids) {
-  if (!ids || !ids.length) return [];
-  const r = await sb.from('teams').select('id,name,slug,season_id').in('id', ids);
-  if (r.error) throw r.error;
-  return r.data || [];
-}
-
-async function getMatchesForTeamIds(ids) {
-  if (!ids || !ids.length) return [];
-  // use OR: team_a_id in (...) OR team_b_id in (...)
-  const q = 'team_a_id.in.(' + ids.join(',') + '),team_b_id.in.(' + ids.join(',') + ')';
-  const r = await sb.from('matches').select('id,season_id,stage,week,team_a_id,team_b_id,team_a_score,team_b_score,match_date,winner_team_id').or(q);
-  if (r.error) throw r.error;
-  return r.data || [];
+// League-wide tables are a static snapshot per page load; fetch once, in
+// parallel, and reuse across clicks. The rating sim needs every match and
+// every ownership stint, not just the queried player's (see
+// calculatePlayerRatingHistory). Caching the promise (not the result) also
+// dedupes concurrent clicks; a failed fetch clears it so retries work.
+let leagueDataPromise = null;
+function getLeagueData() {
+  if (!leagueDataPromise) {
+    leagueDataPromise = Promise.all([
+      fetchAll('team_owners', 'player_id,team_id,started_week,ended_week'),
+      fetchAll('matches', 'id,season_id,stage,week,team_a_id,team_b_id,team_a_score,team_b_score,match_date,winner_team_id'),
+      fetchAll('seasons', 'id,name,slug'),
+      fetchAll('teams', 'id,name,slug,season_id')
+    ]).then(([allOwners, allMatches, seasons, teams]) => {
+      const seasonById = {}; seasons.forEach(s => seasonById[s.id] = s);
+      const teamById = {}; teams.forEach(t => teamById[t.id] = t);
+      return { allOwners, allMatches, seasonById, teamById };
+    }).catch(e => { leagueDataPromise = null; throw e; });
+  }
+  return leagueDataPromise;
 }
 
 // A player's matches are only those played while one of their ownership stints
@@ -210,8 +208,9 @@ async function showMatchesClick() {
   if (!name1 || !name2) { out.innerHTML = '<div class="empty">Enter two player names to see head-to-head matches.</div>'; return; }
   $id('show-matches').disabled = true; $id('match-spinner').hidden = false;
   try {
-    const p1 = await findPlayerByName(name1);
-    const p2 = await findPlayerByName(name2);
+    const [p1, p2, league] = await Promise.all([
+      findPlayerByName(name1), findPlayerByName(name2), getLeagueData()
+    ]);
     if (!p1 || !p2) {
       const missing = [];
       if (!p1) missing.push(escapeHtml(name1));
@@ -219,55 +218,40 @@ async function showMatchesClick() {
       out.innerHTML = '<div class="empty">Player(s) not found: ' + missing.join(', ') + '</div>';
       return;
     }
-    const owners1 = await getPlayerOwners(p1.id);
-    const owners2 = await getPlayerOwners(p2.id);
-    const teamIds1 = owners1.map(o => o.team_id).filter(Boolean);
-    const teamIds2 = owners2.map(o => o.team_id).filter(Boolean);
-    if (!teamIds1.length || !teamIds2.length) {
+    const { allOwners, allMatches, seasonById, teamById } = league;
+    const owners1 = allOwners.filter(o => o.player_id === p1.id);
+    const owners2 = allOwners.filter(o => o.player_id === p2.id);
+    const player1Teams = new Set(owners1.map(o => o.team_id).filter(Boolean));
+    const player2Teams = new Set(owners2.map(o => o.team_id).filter(Boolean));
+    if (!player1Teams.size || !player2Teams.size) {
       out.innerHTML = '<div class="empty">One or both players have no team ownership records.</div>';
       return;
     }
-    const allTeamIds = [...new Set([...teamIds1, ...teamIds2])];
-    const teams = await getTeamsByIds(allTeamIds);
-    const teamById = {}; teams.forEach(t => teamById[t.id] = t);
-    const matches = await getMatchesForTeamIds(allTeamIds);
-    // fetch seasons for matches
-    const seasonIds = [...new Set(matches.map(m => m.season_id).filter(Boolean))];
-    let seasonById = {};
-    if (seasonIds.length) {
-      const sres = await sb.from('seasons').select('id,name,slug').in('id', seasonIds);
-      if (!sres.error && sres.data) { sres.data.forEach(s => seasonById[s.id] = s); }
-    }
     // filter head-to-head: each player's stint must have been active when the match was played
-    const h2h = matches.filter(m =>
+    const h2h = allMatches.filter(m =>
       (ownershipCoversMatch(owners1, m.team_a_id, m) && ownershipCoversMatch(owners2, m.team_b_id, m))
       || (ownershipCoversMatch(owners1, m.team_b_id, m) && ownershipCoversMatch(owners2, m.team_a_id, m)));
-    // fetch match_pokemon for these head-to-head matches so we can show brought sprites
-    const matchIds = h2h.map(m => m.id).filter(Boolean);
-    let broughtMap = {}; // match_id -> { team_id -> [pokemon_id,...] }
-    if (matchIds.length) {
-      const mpRes = await sb.from('match_pokemon').select('match_id,team_id,pokemon_id').in('match_id', matchIds);
-      if (!mpRes.error && mpRes.data) {
-        (mpRes.data || []).forEach(r => {
-          broughtMap[r.match_id] = broughtMap[r.match_id] || {};
-          broughtMap[r.match_id][r.team_id] = broughtMap[r.match_id][r.team_id] || [];
-          broughtMap[r.match_id][r.team_id].push(r.pokemon_id);
-        });
-      }
-    }
     if (!h2h.length) { out.innerHTML = '<div class="empty">No head-to-head matches found for these players.</div>'; return; }
+    // fetch match_pokemon for these head-to-head matches so we can show brought sprites
+    const broughtMap = {}; // match_id -> { team_id -> [pokemon_id,...] }
+    const mpRes = await sb.from('match_pokemon').select('match_id,team_id,pokemon_id').in('match_id', h2h.map(m => m.id));
+    if (!mpRes.error && mpRes.data) {
+      mpRes.data.forEach(r => {
+        broughtMap[r.match_id] = broughtMap[r.match_id] || {};
+        broughtMap[r.match_id][r.team_id] = broughtMap[r.match_id][r.team_id] || [];
+        broughtMap[r.match_id][r.team_id].push(r.pokemon_id);
+      });
+    }
     const sortedH2h = sortMatchesChronologically(h2h, seasonById);
     // compute record
     let p1wins = 0, p2wins = 0, draws = 0;
     sortedH2h.forEach(m => {
       if (!m.winner_team_id) draws++;
-      else if (teamIds1.includes(m.winner_team_id)) p1wins++;
-      else if (teamIds2.includes(m.winner_team_id)) p2wins++;
+      else if (player1Teams.has(m.winner_team_id)) p1wins++;
+      else if (player2Teams.has(m.winner_team_id)) p2wins++;
     });
     let html = renderMatchSummary(p1, p2, p1wins, p2wins, draws);
     html += '<div class="match-list">';
-    const player1Teams = new Set(teamIds1);
-    const player2Teams = new Set(teamIds2);
     sortedH2h.forEach(m => {
       html += renderMatchCard(m, teamById, player1Teams, player2Teams, seasonById, broughtMap);
     });
@@ -287,12 +271,12 @@ async function showRecordClick() {
   if (!name) { out.innerHTML = '<div class="empty">Enter a player name to see their record.</div>'; return; }
   $id('show-record').disabled = true; $id('record-spinner').hidden = false;
   try {
-    const player = await findPlayerByName(name);
+    const [player, league] = await Promise.all([findPlayerByName(name), getLeagueData()]);
     if (!player) { out.innerHTML = '<div class="empty">Player not found: ' + escapeHtml(name) + '</div>'; return; }
-    const owners = await getPlayerOwners(player.id);
+    const { allOwners, allMatches, seasonById, teamById } = league;
+    const owners = allOwners.filter(o => o.player_id === player.id);
     const teamIds = owners.map(o => o.team_id).filter(Boolean);
     if (!teamIds.length) { out.innerHTML = '<div class="empty">This player has no team ownership records.</div>'; return; }
-    const allMatches = await getMatchesForTeamIds(teamIds);
     const filteredMatches = allMatches.filter(m =>
       ownershipCoversMatch(owners, m.team_a_id, m) || ownershipCoversMatch(owners, m.team_b_id, m));
     if (!filteredMatches.length) {
@@ -311,41 +295,23 @@ async function showRecordClick() {
       else matchLosses++;
     });
     const matchRecord = matchWins + '-' + matchLosses;
-    const matchPct = filteredMatches.length ? ((matchWins / filteredMatches.length) * 100).toFixed(1) : '0.0';
+    // Only resolved matches count toward win % — scheduled-but-unplayed rows
+    // are in filteredMatches but never reach the W/L/D tallies.
+    const decided = matchWins + matchLosses + draws;
+    const matchPct = decided ? ((matchWins / decided) * 100).toFixed(1) : '0.0';
     const gameTotal = gameWins + gameLosses;
     const gamePct = gameTotal ? ((gameWins / gameTotal) * 100).toFixed(1) : '0.0';
-    const seasonIds = [...new Set(filteredMatches.map(m => m.season_id).filter(Boolean))];
-    let seasonById = {};
-    if (seasonIds.length) {
-      const sres = await sb.from('seasons').select('id,name,slug').in('id', seasonIds);
-      if (!sres.error && sres.data) { sres.data.forEach(s => seasonById[s.id] = s); }
-    }
-    const allMatchTeamIds = [...new Set(filteredMatches.flatMap(m => [m.team_a_id, m.team_b_id]).filter(Boolean))];
-    const allTeams = await getTeamsByIds(allMatchTeamIds);
-    const teamById = {}; allTeams.forEach(t => teamById[t.id] = t);
-    const ratingHistory = calculatePlayerRatingHistory(filteredMatches, teamIds, seasonById, teamById);
+    const ratingHistory = calculatePlayerRatingHistory(player.id, allMatches, allOwners, seasonById, teamById);
     const currentElo = ratingHistory.length ? ratingHistory[ratingHistory.length - 1].rating : null;
     const chartHtml = renderPlayerRatingChart(ratingHistory);
     out.innerHTML = '<div class="record-summary">'
       + '<div class="record-title">' + escapeHtml(player.display_name) + '</div>'
       + '<div class="record-stats-row">'
-        + '<div class="record-stat">'
-          + '<div class="record-stat-title">Matches</div>'
-          + '<div class="record-stat-value">' + escapeHtml(matchRecord) + '</div>'
-        + '</div>'
-        + '<div class="record-stat">'
-          + '<div class="record-stat-title">Games</div>'
-          + '<div class="record-stat-value">' + escapeHtml(gameWins + '-' + gameLosses) + '</div>'
-        + '</div>'
-        + '<div class="record-stat">'
-          + '<div class="record-stat-title">Match win %</div>'
-          + '<div class="record-stat-value ' + (parseFloat(matchPct) >= 50 ? 'positive' : 'negative') + '">' + escapeHtml(matchPct) + '</div>'
-        + '</div>'
-        + '<div class="record-stat">'
-          + '<div class="record-stat-title">Game win %</div>'
-          + '<div class="record-stat-value ' + (parseFloat(gamePct) >= 50 ? 'positive' : 'negative') + '">' + escapeHtml(gamePct) + '</div>'
-        + '</div>'
-        + (currentElo != null ? '<div class="record-stat"><div class="record-stat-title">Current ELO</div><div class="record-stat-value">' + currentElo + '</div></div>' : '')
+        + renderStatTile('Matches', escapeHtml(matchRecord))
+        + renderStatTile('Games', escapeHtml(gameWins + '-' + gameLosses))
+        + renderStatTile('Match win %', escapeHtml(matchPct), parseFloat(matchPct) >= 50 ? 'positive' : 'negative')
+        + renderStatTile('Game win %', escapeHtml(gamePct), parseFloat(gamePct) >= 50 ? 'positive' : 'negative')
+        + (currentElo != null ? renderStatTile('Current ELO', currentElo) : '')
       + '</div>'
       + '<div class="record-graph">' + chartHtml + '</div>'
     + '</div>';
@@ -367,6 +333,11 @@ function formatMatchWhen(m) {
   return (m.stage && m.stage !== 'regular') ? normalizeStage(m.stage) : ('Week ' + (m.week || '?'));
 }
 
+function renderStatTile(title, value, cls) {
+  return '<div class="record-stat"><div class="record-stat-title">' + title + '</div>'
+    + '<div class="record-stat-value' + (cls ? ' ' + cls : '') + '">' + value + '</div></div>';
+}
+
 function renderMatchSummary(p1, p2, p1wins, p2wins, draws) {
   return '<div class="match-summary">'
     + '<div class="match-summary-p1">' + escapeHtml(p1.display_name) + '</div>'
@@ -385,8 +356,13 @@ function sortMatchesChronologically(matches, seasonById) {
     const aw = a.week == null ? Infinity : a.week;
     const bw = b.week == null ? Infinity : b.week;
     if (aw !== bw) return aw - bw;
-    if (a.match_date && b.match_date) return String(a.match_date).localeCompare(String(b.match_date));
-    return 0;
+    if (a.match_date && b.match_date) {
+      const c = String(a.match_date).localeCompare(String(b.match_date));
+      if (c) return c;
+    }
+    // The league-wide ELO sim replays every match on one shared timeline, so
+    // ties must break the same way on every load.
+    return String(a.id).localeCompare(String(b.id));
   });
 }
 
@@ -398,32 +374,58 @@ function formatRatingLabel(m, seasonById) {
   return (seasonLabel ? seasonLabel + ' ' : '') + week;
 }
 
-function calculatePlayerRatingHistory(matches, playerTeamIds, seasonById, teamById) {
-  const sorted = sortMatchesChronologically(matches, seasonById);
+// Resolve which player owned a team when a match was played — same stint
+// semantics as ownershipCoversMatch. Returns a player_id or null.
+function ownerAtMatch(ownersByTeam, teamId, m) {
+  const week = (m.stage && m.stage !== 'regular') ? null : m.week;
+  const stint = (ownersByTeam[teamId] || []).find(o => {
+    if (week == null) return o.ended_week == null;
+    return (o.started_week || 1) <= week && (o.ended_week == null || o.ended_week > week);
+  });
+  return stint ? stint.player_id : null;
+}
+
+// League-wide ELO simulation: every match updates both owners' ratings, so an
+// opponent's rating at match time is their real one rather than an assumed
+// 1500. Ratings follow players across team switches; a side whose owner can't
+// be resolved plays as an untracked 1500 placeholder.
+function calculatePlayerRatingHistory(playerId, allMatches, allOwners, seasonById, teamById) {
+  const sorted = sortMatchesChronologically(allMatches, seasonById);
+  const ownersByTeam = {};
+  (allOwners || []).forEach(o => {
+    if (!o.team_id) return;
+    (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push(o);
+  });
+  const ratings = {}; // player_id -> current rating
   const history = [];
-  let rating = 1500;
   const K = 24;
   let lastSeasonNumber = null;
   sorted.forEach(m => {
-    const isPlayerA = playerTeamIds.includes(m.team_a_id);
-    const isPlayerB = playerTeamIds.includes(m.team_b_id);
-    if (!isPlayerA && !isPlayerB) return;
-    const playerTeamId = isPlayerA ? m.team_a_id : m.team_b_id;
+    // Scheduled-but-unplayed rows have no scores; they must not count as draws.
+    if (m.team_a_score == null || m.team_b_score == null) return;
+    const playerA = ownerAtMatch(ownersByTeam, m.team_a_id, m);
+    const playerB = ownerAtMatch(ownersByTeam, m.team_b_id, m);
+    if (playerA == null && playerB == null) return;
+    const ratingA = playerA != null && ratings[playerA] != null ? ratings[playerA] : 1500;
+    const ratingB = playerB != null && ratings[playerB] != null ? ratings[playerB] : 1500;
+    const resultA = m.winner_team_id == null ? 0.5 : (m.winner_team_id === m.team_a_id ? 1 : 0);
+    const expectedA = 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+    if (playerA != null) ratings[playerA] = ratingA + K * (resultA - expectedA);
+    if (playerB != null) ratings[playerB] = ratingB + K * (expectedA - resultA);
+    const isPlayerA = playerA === playerId;
+    if (!isPlayerA && playerB !== playerId) return;
     const opponentTeamId = isPlayerA ? m.team_b_id : m.team_a_id;
     const opponentTeam = (teamById && teamById[opponentTeamId]) || null;
-    const opponentName = opponentTeam ? (opponentTeam.name || opponentTeam.slug || '') : '';
-    const opponentSlug = opponentTeam ? (opponentTeam.slug || '') : '';
-    const result = m.winner_team_id == null ? 0.5 : (m.winner_team_id === playerTeamId ? 1 : 0);
-    const expected = 1 / (1 + Math.pow(10, (1500 - rating) / 400));
-    rating += K * (result - expected);
+    const result = isPlayerA ? resultA : 1 - resultA;
     const seasonLabel = (seasonById[m.season_id] && (seasonById[m.season_id].name || seasonById[m.season_id].slug)) || '';
     const seasonNumber = parseSeasonNumberLabel(seasonLabel);
     history.push({
-      rating: Math.round(rating),
+      rating: Math.round(ratings[playerId]),
       result: result === 1 ? 'W' : (result === 0.5 ? 'D' : 'L'),
+      opponentRating: Math.round(isPlayerA ? ratingB : ratingA),
       label: formatRatingLabel(m, seasonById),
-      opponent: opponentName,
-      opponentSlug: opponentSlug,
+      opponent: opponentTeam ? (opponentTeam.name || opponentTeam.slug || '') : '',
+      opponentSlug: opponentTeam ? (opponentTeam.slug || '') : '',
       seasonNumber: seasonNumber || null,
       seasonSlug: (seasonById[m.season_id] && seasonById[m.season_id].slug) || '',
       xLabel: (seasonNumber && seasonNumber !== lastSeasonNumber) ? ('S' + seasonNumber) : ''
@@ -495,7 +497,7 @@ function initRatingChart(history) {
             }
             var idx = model.dataPoints[0].dataIndex;
             var h = history[idx];
-            var delta = idx === 0 ? 0 : h.rating - history[idx - 1].rating;
+            var delta = h.rating - (idx === 0 ? 1500 : history[idx - 1].rating);
             var deltaStr = delta > 0 ? '+' + delta : String(delta);
             var oppHtml = '';
             if (h.opponent) {
@@ -508,7 +510,8 @@ function initRatingChart(history) {
               }
             }
             el.innerHTML = '<div style="font-weight:600;margin-bottom:4px">' + escapeHtml(h.label) + oppHtml + '</div>'
-              + '<div style="color:rgba(255,255,255,0.75)"> Rating: ' + h.rating + ' (' + (idx === 0 ? '0' : deltaStr) + ') — ' + h.result + '</div>';
+              + '<div style="color:rgba(255,255,255,0.75)"> Rating: ' + h.rating + ' (' + deltaStr + ') — ' + h.result
+              + (h.opponentRating != null ? ' vs ' + h.opponentRating : '') + '</div>';
             el.style.opacity = '1';
             el.style.pointerEvents = 'auto';
             var tipW = el.offsetWidth;
