@@ -208,7 +208,7 @@ select:disabled, input:disabled { opacity: .5; }
   <!-- ───────────── SECTION 3: COACHES / OWNERS ───────────── -->
   <div class="section" id="owners-section">
     <div class="section-title">Coaches &amp; Substitutions</div>
-    <div class="section-sub">Assign a coach to a team, or record a mid-season substitution. A substitution closes the previous coach's stint and opens the new one - by default the prior coach ends the week before the new one starts, which you can override.</div>
+    <div class="section-sub">Assign a coach to a team, or record a mid-season substitution. A substitution closes the previous coach's stint and opens the new one. The old coach's end week and the new coach's start week should be equal to the week when the new coach played their first match for that team.</div>
 
     <div class="controls">
       <div class="group">
@@ -235,7 +235,7 @@ select:disabled, input:disabled { opacity: .5; }
             <span class="hint" id="player-chosen"></span>
           </div>
           <div class="fld"><label for="assign-start">Starts Week</label><input type="number" id="assign-start" min="1" step="1" value="1" oninput="onStartWeekChange()"></div>
-          <div class="fld" id="close-prev-fld" hidden><label for="assign-close">Previous coach ends Week</label><input type="number" id="assign-close" min="1" step="1"><span class="hint" id="close-prev-hint"></span></div>
+          <div class="fld" id="close-prev-fld" hidden><label for="assign-close">New coach takes over at Week</label><input type="number" id="assign-close" min="1" step="1"><span class="hint" id="close-prev-hint"></span></div>
         </div>
         <div class="form-actions">
           <button class="btn btn-accent" id="assign-btn" onclick="assignOwner()">Assign coach</button>
@@ -1045,10 +1045,16 @@ function onStartWeekChange() {
   if (!open) { fld.hidden = true; return; }
   fld.hidden = false;
   const start = parseInt(document.getElementById('assign-start').value, 10);
-  const suggested = Number.isInteger(start) ? start - 1 : '';
+  /* ended_week is exclusive (the week the successor takes over),
+  so the outgoing coach's stint ends at the same number the new coach starts.
+  The prior coach's last PLAYED week is therefore start - 1.
+  Suggest the shared boundary. Override is probably unnecessary but still present just in case. */
+  const suggested = Number.isInteger(start) ? start : '';
   document.getElementById('assign-close').value = suggested;
   const nm = open.players ? open.players.display_name : 'previous coach';
-  hint.textContent = 'Auto-closes ' + nm + ' (starts week ' + (open.started_week || 1) + '). Override if needed.';
+  hint.textContent = Number.isInteger(start)
+    ? nm + ' plays through week ' + (start - 1) + '; new coach takes over at week ' + start + '. Subbed out player gets forfeits if there is a gap.'
+    : 'Enter the new coach\u2019s start week above.';
 }
 
 async function assignOwner() {
@@ -1061,8 +1067,13 @@ async function assignOwner() {
   let closeWeek = null;
   if (open) {
     closeWeek = parseInt(document.getElementById('assign-close').value, 10);
-    if (!Number.isInteger(closeWeek) || closeWeek < (open.started_week || 1)) {
-      showToast('Previous coach\u2019s end week must be \u2265 their start week (' + (open.started_week || 1) + ').', 'err'); return;
+    /* ended_week is exclusive, so it must be after the prior coach's start week.
+    It should also equal the new coach's start week to avoid gaps. Situations where there is a gap should be handled by forfeits for the outgoing coach */
+    if (!Number.isInteger(closeWeek) || closeWeek <= (open.started_week || 1)) {
+      showToast('Previous coach\u2019s takeover week must be after their start week (' + (open.started_week || 1) + ').', 'err'); return;
+    }
+    if (closeWeek > start) {
+      showToast('Takeover week can\u2019t be after the new coach\u2019s start week (' + start + ') - that would leave an unowned gap.', 'err'); return;
     }
     if (open.player_id === chosenPlayer.id) { showToast('That coach already pilots this team.', 'err'); return; }
   }
