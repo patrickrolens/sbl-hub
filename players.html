@@ -137,8 +137,8 @@ a.sig-card:hover{border-color:var(--accent)}
   <summary class="card-heading">Player Record</summary>
   <div class="card-copy">Enter a player display name to see their career record. Suggestions appear as you type, and results are linkable (e.g. <span style="font-family:monospace">players.html#shrug</span>).</div>
   <div class="form-row">
-    <input id="record-player" class="form-input wide" placeholder="Player name" list="player-names">
-    <button id="show-record" class="sbln-btn">Show record</button>
+    <input id="record-player" class="form-input wide" placeholder="Player Name" list="player-names">
+    <button id="show-record" class="sbln-btn">Show Record</button>
     <span id="record-spinner" hidden class="spinner-text">Loading…</span>
   </div>
   <div id="record-results" class="card-body"></div>
@@ -150,9 +150,9 @@ a.sig-card:hover{border-color:var(--accent)}
   <summary class="card-heading">Matchup History</summary>
   <div class="card-copy">Enter two player display names to view their match history (linkable as <span style="font-family:monospace">#name1-vs-name2</span>).</div>
   <div class="form-row">
-    <input id="player1" class="form-input narrow" placeholder="Player one name" list="player-names">
-    <input id="player2" class="form-input narrow" placeholder="Player two name" list="player-names">
-    <button id="show-matches" class="sbln-btn">Show matches</button>
+    <input id="player1" class="form-input narrow" placeholder="Player One Name" list="player-names">
+    <input id="player2" class="form-input narrow" placeholder="Player Two Name" list="player-names">
+    <button id="show-matches" class="sbln-btn">Show Matches</button>
     <span id="match-spinner" hidden class="spinner-text">Loading…</span>
   </div>
   <div id="match-results" class="card-body"></div>
@@ -575,7 +575,7 @@ async function showMatchesClick(fromHash) {
     let html = renderMatchSummary(p1, p2, p1wins, p2wins, draws);
     if (sim1.history.length || sim2.history.length) {
       html += '<div class="record-chart" style="margin:4px 0 18px">'
-        + '<div class="record-chart-title">ELO comparison</div>'
+        + '<div class="record-chart-title">ELO Comparison</div>'
         + '<div style="position:relative;height:240px"><canvas id="compare-chart-canvas"></canvas></div>'
         + '</div>';
     }
@@ -679,20 +679,20 @@ async function showRecordClick(fromHash) {
       + '<div class="record-stats-row">'
         + renderStatTile('Matches', escapeHtml(matchWins + '-' + matchLosses + (draws ? '-' + draws : '')))
         + renderStatTile('Games', escapeHtml(gameWins + '-' + gameLosses))
-        + renderStatTile('Match win %', escapeHtml(matchPct), parseFloat(matchPct) >= 50 ? 'positive' : 'negative')
-        + renderStatTile('Game win %', escapeHtml(gamePct), parseFloat(gamePct) >= 50 ? 'positive' : 'negative')
+        + renderStatTile('Match Win %', escapeHtml(matchPct), parseFloat(matchPct) >= 50 ? 'positive' : 'negative')
+        + renderStatTile('Game Win %', escapeHtml(gamePct), parseFloat(gamePct) >= 50 ? 'positive' : 'negative')
         + (currentElo != null
             ? renderStatTile('Current ELO', currentElo, '', rankIdx >= 0 ? '<div class="record-stat-sub">#' + (rankIdx + 1) + ' of ' + rankings.length + '</div>' : '')
             : '')
         + (peakElo != null ? renderStatTile('Peak ELO', String(peakElo)) : '')
       + '</div>'
       + '<div class="record-stats-row">'
-        + renderStatTile('Current streak', curType ? escapeHtml(curType + curLen) : '—', curType === 'W' ? 'positive' : (curType === 'L' ? 'negative' : ''))
-        + renderStatTile('Longest win streak', String(longestW))
-        + renderStatTile('Regular season', escapeHtml(regW + '-' + regL))
+        + renderStatTile('Current Streak', curType ? escapeHtml(curType + curLen) : '—', curType === 'W' ? 'positive' : (curType === 'L' ? 'negative' : ''))
+        + renderStatTile('Longest Win Streak', String(longestW))
+        + renderStatTile('Regular Season', escapeHtml(regW + '-' + regL))
         + (postAny ? renderStatTile('Postseason', escapeHtml(postW + '-' + postL)) : '')
-        + (potwRows.length ? renderStatTile('POTW awards', String(potwRows.length)) : '')
-        + (upset ? renderStatTile('Biggest upset', '+' + upset.gap, 'positive',
+        + (potwRows.length ? renderStatTile('POTW Awards', String(potwRows.length)) : '')
+        + (upset ? renderStatTile('Biggest Upset', '+' + upset.gap, 'positive',
             '<div class="record-stat-sub">' + escapeHtml('beat ' + upset.h.opponentRating + '-rated ' + (upset.h.opponent || '?') + ' · ' + upset.h.label) + '</div>') : '')
       + '</div>'
       + '<div class="record-graph">' + renderPlayerRatingChart(ratingHistory) + '</div>'
@@ -755,7 +755,7 @@ function renderAccolades(career, potwRows, league) {
         const cupIcon = stage === 'cup' ? '🏅' : '🏆';
         if (!f.winner_team_id) badges.push('<span class="accolade">🎯 ' + sLabel + ' ' + prefix + 'Finalist</span>');
         else if (f.winner_team_id === side) badges.push('<span class="accolade gold">' + cupIcon + ' ' + sLabel + ' ' + prefix + 'Champion</span>');
-        else badges.push('<span class="accolade">🥈 ' + sLabel + ' ' + prefix + 'Runner-up</span>');
+        else badges.push('<span class="accolade">🥈 ' + sLabel + ' ' + prefix + 'Runner-Up</span>');
       });
     });
   if (potwRows.length) {
@@ -832,7 +832,7 @@ function renderSeasonSection(career, league) {
       if (f && career.sideOf(f)) {
         if (!f.winner_team_id) parts.push(prefix + 'Finalist');
         else if (f.winner_team_id === career.sideOf(f)) parts.push(prefix + 'Champion ' + (stage === 'cup' ? '🏅' : '🏆'));
-        else parts.push(prefix + 'Runner-up');
+        else parts.push(prefix + 'Runner-Up');
         return;
       }
       const last = mine[mine.length - 1]; // career.matches is chronological
@@ -862,9 +862,9 @@ function renderSeasonSection(career, league) {
       + '<td>' + escapeHtml(parts.join(' · ') || '—') + '</td>'
     + '</tr>';
   }).join('');
-  return sectionHtml('Season by season', '',
+  return sectionHtml('Season by Season', '',
     '<div class="table-wrap"><table class="stat-table"><thead><tr>'
-    + '<th>Season</th><th>Team</th><th class="num">Reg. record</th><th class="num">Games</th><th>Result</th>'
+    + '<th>Season</th><th>Team</th><th class="num">Reg. Record</th><th class="num">Games</th><th>Result</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
 }
 
@@ -903,7 +903,7 @@ function renderH2HSection(player, career, league) {
       + '<td>' + vsCell + '</td>'
     + '</tr>';
   }).join('');
-  return sectionHtml('Head-to-head records',
+  return sectionHtml('Head-to-Head Records',
     'Record against every coach this player has faced. Names open that player\'s record; H2H opens the full matchup history below.',
     tilesHtml
     + '<div class="table-wrap"><table class="stat-table"><thead><tr>'
@@ -924,7 +924,7 @@ function renderRivalryTiles(rows) {
   const fav = sorted[0];
   const nem = sorted[sorted.length - 1];
   const tiles = [];
-  if (fav && pctOf(fav) > 0.5) tiles.push(rivalryTile('good', '😈', 'Favorite matchup', fav));
+  if (fav && pctOf(fav) > 0.5) tiles.push(rivalryTile('good', '😈', 'Favorite Matchup', fav));
   if (nem && nem !== fav && pctOf(nem) < 0.5) tiles.push(rivalryTile('bad', '☠️', 'Nemesis', nem));
   return tiles.length ? '<div class="rivalry-row">' + tiles.join('') + '</div>' : '';
 }
