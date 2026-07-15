@@ -684,11 +684,11 @@ async function showRecordClick(fromHash) {
         + (currentElo != null
             ? renderStatTile('Current ELO', currentElo, '', rankIdx >= 0 ? '<div class="record-stat-sub">#' + (rankIdx + 1) + ' of ' + rankings.length + '</div>' : '')
             : '')
+        + (peakElo != null ? renderStatTile('Peak ELO', String(peakElo)) : '')
       + '</div>'
       + '<div class="record-stats-row">'
         + renderStatTile('Current streak', curType ? escapeHtml(curType + curLen) : '—', curType === 'W' ? 'positive' : (curType === 'L' ? 'negative' : ''))
         + renderStatTile('Longest win streak', String(longestW))
-        + (peakElo != null ? renderStatTile('Peak ELO', String(peakElo)) : '')
         + renderStatTile('Regular season', escapeHtml(regW + '-' + regL))
         + (postAny ? renderStatTile('Postseason', escapeHtml(postW + '-' + postL)) : '')
         + (potwRows.length ? renderStatTile('POTW awards', String(potwRows.length)) : '')
@@ -698,8 +698,8 @@ async function showRecordClick(fromHash) {
       + '<div class="record-graph">' + renderPlayerRatingChart(ratingHistory) + '</div>'
     + '</div>';
 
-    html += renderSignatureSection(career, mpRows, gameStats);
     html += renderSeasonSection(career, league);
+    html += renderSignatureSection(career, mpRows, gameStats);
     html += renderH2HSection(player, career, league);
 
     out.innerHTML = html;
