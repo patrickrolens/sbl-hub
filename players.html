@@ -103,6 +103,18 @@ a.lb-row:hover{background:var(--bg3)}
   .lb-track,.lb-head span:nth-child(4){display:none}
 }
 
+/* Nemesis / favorite-matchup callout tiles (top of H2H section) */
+.rivalry-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.rivalry-tile{flex:1;min-width:180px;display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:10px;text-decoration:none;color:inherit;border:1px solid var(--border);background:var(--bg3)}
+.rivalry-tile.good{border-color:rgba(74,222,128,0.35);background:rgba(74,222,128,0.06)}
+.rivalry-tile.bad{border-color:rgba(248,113,113,0.35);background:rgba(248,113,113,0.06)}
+.rivalry-tile:hover{filter:brightness(1.12)}
+.rivalry-label{font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text2)}
+.rivalry-name{font-weight:800;font-size:1.15rem}
+.rivalry-tile.good .rivalry-name{color:#4ade80}
+.rivalry-tile.bad .rivalry-name{color:#f87171}
+.rivalry-rec{color:var(--text2);font-size:12px;font-variant-numeric:tabular-nums}
+
 .sig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
 .sig-card{display:flex;gap:10px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;color:inherit;text-decoration:none}
 a.sig-card:hover{border-color:var(--accent)}
@@ -158,6 +170,9 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
 // Minimum rated matches before a player appears in ELO rankings (~one season).
 const LEADERBOARD_MIN_MATCHES = 10;
+// Decided head-to-head matches (wins+losses) required before an opponent can be
+// flagged as a nemesis / favorite matchup — keeps one-off results out.
+const RIVALRY_MIN_MATCHES = 2;
 
 // Duplicated from pokemon.html (small, deliberate - matches this codebase's existing
 // per-page-inline-script convention rather than sharing a module).
@@ -869,6 +884,7 @@ function renderH2HSection(player, career, league) {
   const rows = Object.values(agg).sort((x, y) => y.n - x.n || y.w - x.w || x.name.localeCompare(y.name));
   if (!rows.length) return '';
   const mySlug = slugifyName(player.display_name);
+  const tilesHtml = renderRivalryTiles(rows);
   const body = rows.map(r => {
     const decided = r.w + r.l;
     const pct = decided ? ((r.w / decided) * 100).toFixed(0) + '%' : '—';
@@ -889,9 +905,37 @@ function renderH2HSection(player, career, league) {
   }).join('');
   return sectionHtml('Head-to-head records',
     'Record against every coach this player has faced. Names open that player\'s record; H2H opens the full matchup history below.',
-    '<div class="table-wrap"><table class="stat-table"><thead><tr>'
+    tilesHtml
+    + '<div class="table-wrap"><table class="stat-table"><thead><tr>'
     + '<th>Opponent</th><th class="num">Record</th><th class="num">Matches</th><th class="num">Win %</th><th></th>'
     + '</tr></thead><tbody>' + body + '</tbody></table></div>');
+}
+
+// Highlight the two matchups worth talking about: the opponent this player beats
+// most (favorite matchup, net-positive only) and the one who beats them most
+// (nemesis, net-negative only). Both require a known opponent and enough decided
+// meetings (RIVALRY_MIN_MATCHES); when neither side is lopsided, nothing shows.
+function renderRivalryTiles(rows) {
+  const qualified = rows.filter(r => r.known && (r.w + r.l) >= RIVALRY_MIN_MATCHES);
+  if (!qualified.length) return '';
+  const pctOf = r => r.w / (r.w + r.l);
+  const byPct = (a, b) => pctOf(b) - pctOf(a) || (b.w - b.l) - (a.w - a.l) || (b.w + b.l) - (a.w + a.l);
+  const sorted = qualified.slice().sort(byPct);
+  const fav = sorted[0];
+  const nem = sorted[sorted.length - 1];
+  const tiles = [];
+  if (fav && pctOf(fav) > 0.5) tiles.push(rivalryTile('good', '😈', 'Favorite matchup', fav));
+  if (nem && nem !== fav && pctOf(nem) < 0.5) tiles.push(rivalryTile('bad', '☠️', 'Nemesis', nem));
+  return tiles.length ? '<div class="rivalry-row">' + tiles.join('') + '</div>' : '';
+}
+function rivalryTile(cls, icon, label, r) {
+  const slug = slugifyName(r.name);
+  const pct = Math.round(r.w / (r.w + r.l) * 100);
+  return '<a class="rivalry-tile ' + cls + '" href="#' + slug + '">'
+    + '<div class="rivalry-label">' + icon + ' ' + label + '</div>'
+    + '<div class="rivalry-name">' + escapeHtml(r.name) + '</div>'
+    + '<div class="rivalry-rec">' + r.w + '-' + r.l + (r.d ? '-' + r.d : '') + ' · ' + pct + '% W</div>'
+  + '</a>';
 }
 
 function renderMatchSummary(p1, p2, p1wins, p2wins, draws) {
@@ -956,7 +1000,11 @@ function calculatePlayerRatingHistory(playerId, allMatches, allOwners, seasonByI
   const played = {};  // player_id -> rated matches count (leaderboard cutoff)
   const history = [];
   const timeline = []; // one ''/'S#' entry per rated league match — the shared x-axis for the comparison chart
-  const K = 24;
+  // Provisional K: new players move faster until their rating has enough
+  // matches behind it, then settle to the stable K. Per-side K means updates
+  // aren't zero-sum, which is expected with provisional periods.
+  const K_PROVISIONAL = 40, K_STABLE = 24, PROVISIONAL_MATCHES = 10;
+  const kFor = pid => ((played[pid] || 0) < PROVISIONAL_MATCHES ? K_PROVISIONAL : K_STABLE);
   let lastSeasonNumber = null;
   let lastTimelineSeason = null;
   sorted.forEach(m => {
@@ -975,8 +1023,8 @@ function calculatePlayerRatingHistory(playerId, allMatches, allOwners, seasonByI
     const ratingB = playerB != null && ratings[playerB] != null ? ratings[playerB] : 1500;
     const resultA = m.winner_team_id == null ? 0.5 : (m.winner_team_id === m.team_a_id ? 1 : 0);
     const expectedA = 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
-    if (playerA != null) { ratings[playerA] = ratingA + K * (resultA - expectedA); played[playerA] = (played[playerA] || 0) + 1; }
-    if (playerB != null) { ratings[playerB] = ratingB + K * (expectedA - resultA); played[playerB] = (played[playerB] || 0) + 1; }
+    if (playerA != null) { ratings[playerA] = ratingA + kFor(playerA) * (resultA - expectedA); played[playerA] = (played[playerA] || 0) + 1; }
+    if (playerB != null) { ratings[playerB] = ratingB + kFor(playerB) * (expectedA - resultA); played[playerB] = (played[playerB] || 0) + 1; }
     const isPlayerA = playerA === playerId;
     if (!isPlayerA && playerB !== playerId) return;
     const opponentTeamId = isPlayerA ? m.team_b_id : m.team_a_id;

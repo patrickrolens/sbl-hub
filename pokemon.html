@@ -33,9 +33,9 @@ body{font-family:Segoe UI,system-ui,-apple-system,Roboto,Arial,sans-serif;backgr
 .team-sprites{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;overflow:hidden}
 .team-sprites img.sprite{width:36px;height:36px;border-radius:6px;background:rgba(255,255,255,0.02);padding:4px;object-fit:contain;border:1px solid var(--border)}
 .sprite-more{display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;border-radius:6px;background:rgba(124,111,247,0.10);color:var(--accent);font-size:12px;padding:4px;border:1px solid rgba(124,111,247,0.12)}
-.history-card-header{display:flex;align-items:center;gap:16px;margin-bottom:16px}
-.history-sprite{width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px;object-fit:contain}
-.history-heading-text{font-size:1.35rem;font-weight:800}
+.history-card-header{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;margin:18px 0 16px}
+.history-sprite{width:104px;height:104px;border-radius:18px;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:12px;object-fit:contain}
+.history-heading-text{font-size:1.7rem;font-weight:800}
 .history-subtitle{color:var(--text2);font-size:13px;margin-top:4px}
 .history-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
 .history-item{padding:16px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);border-radius:12px}
@@ -52,7 +52,7 @@ body{font-family:Segoe UI,system-ui,-apple-system,Roboto,Arial,sans-serif;backgr
 .record-stat-value{font-size:2rem;font-weight:800;color:#ffffff;line-height:1}
 .record-stat-value.positive{color:#4ade80}
 .record-stat-value.negative{color:#f87171}
-.badge-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.badge-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;justify-content:center}
 .accolade{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;background:rgba(124,111,247,0.12);color:var(--accent);font-size:12px;font-weight:700;border:1px solid rgba(124,111,247,0.2)}
 .accolade a{color:inherit;text-decoration:none}
 .accolade a:hover{text-decoration:underline}
@@ -92,10 +92,7 @@ details.record-section[open]>summary::before{transform:rotate(90deg)}
   </div>
 
   <div id="results" class="card-body"></div>
-  <div class="card-footer">
-    <button id="load-more" class="sbln-btn" hidden>Load more</button>
-    <button id="export-csv" class="sbln-btn" hidden>Export CSV</button>
-  </div>
+  <div class="card-footer"><button id="load-more" class="sbln-btn" hidden>Load more</button></div>
 </div>
 </div><!-- /.page-wrap -->
 
@@ -224,7 +221,6 @@ async function boot() {
   input.addEventListener('keydown', onInputKeyDown);
   input.addEventListener('blur', () => setTimeout(() => { $id('suggestions').hidden = true; suggestIndex = -1; }, 150));
   $id('load-more').addEventListener('click', loadMore);
-  $id('export-csv').addEventListener('click', exportCSV);
 
   // Try to prefetch pokemon.json but tolerate failures.
   try {
@@ -313,7 +309,6 @@ async function doSearchById(pokemonId) {
     + '</div>'
     + '<div id="mon-stats"></div><div id="mon-draft"></div><div id="mon-ledger"></div>';
   attachImageFallback($id('results'));
-  $id('export-csv').hidden = true;
   await Promise.all([loadPage(), loadMonStats(pokemonId)]);
   renderDraftSection(); // needs both: ledger rows (teams) + tier costs
 }
@@ -329,7 +324,7 @@ async function loadMonStats(pokemonId) {
       fetchAllIn('game_pokemon_stats', 'game_id,team_id,kills,deaths', 'pokemon_id', [pokemonId]),
       fetchAllIn('season_pokemon_tiers', 'season_id,point_cost', 'pokemon_id', [pokemonId]).catch(() => []),
       fetchAllIn('potw', 'season_id,week,player_id', 'pokemon_id', [pokemonId]).catch(() => []),
-      fetchAll('seasons', 'id,name,slug')
+      fetchAll('seasons', 'id,name,slug,point_limit')
     ]);
     _tiersBySeason = {}; tiers.forEach(t => _tiersBySeason[t.season_id] = t.point_cost);
     _statsSeasonById = {}; seasons.forEach(s => _statsSeasonById[s.id] = s);
@@ -421,10 +416,9 @@ async function loadMonStats(pokemonId) {
     if (sids.length) {
       const rows = sids.map(sid => {
         const a = bySeason[sid] || { brought: 0, w: 0, l: 0, d: 0, kills: 0, deaths: 0 };
-        const cost = _tiersBySeason[sid];
         return '<tr>'
           + '<td>' + escapeHtml(seasonShortLabel(_statsSeasonById[sid])) + '</td>'
-          + '<td class="num">' + (cost != null ? escapeHtml(cost + ' pts') : '—') + '</td>'
+          + '<td class="num">' + draftCostCell(_tiersBySeason[sid], sid) + '</td>'
           + '<td class="num">' + a.brought + '</td>'
           + '<td class="num">' + (a.brought ? escapeHtml(a.w + '-' + a.l + (a.d ? '-' + a.d : '')) : '—') + '</td>'
           + '<td class="num">' + a.kills + '</td>'
@@ -451,9 +445,9 @@ async function loadMonStats(pokemonId) {
           + '<td class="num">' + h.kills + '</td>'
         + '</tr>';
       }).join('');
-      html += sectionHtml('Handlers',
+      html += sectionHtml('Trainers',
         '<div class="table-wrap"><table class="stat-table"><thead><tr>'
-        + '<th>Coach</th><th class="num">Brought</th><th class="num">Record</th><th class="num">Win %</th><th class="num">KOs</th>'
+        + '<th>Trainer</th><th class="num">Brought</th><th class="num">Record</th><th class="num">Win %</th><th class="num">KOs</th>'
         + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
     }
 
@@ -462,6 +456,17 @@ async function loadMonStats(pokemonId) {
     console.error('mon stats load failed', e);
     el.innerHTML = '';
   }
+}
+
+// Cost shown against that season's draft budget (seasons.point_limit) — 80 pts
+// means nothing on its own when budgets ranged from 115 to 310 across seasons.
+function draftCostCell(cost, seasonId) {
+  if (cost == null) return '—';
+  const limit = ((_statsSeasonById[seasonId] || {}).point_limit) || 0;
+  if (!limit) return escapeHtml(cost + ' pts');
+  const pct = Math.round((cost / limit) * 100);
+  return escapeHtml(String(cost)) + '<span style="color:var(--text2)"> / ' + limit + ' pts</span>'
+    + ' <span style="color:var(--text2);font-size:11px">(' + pct + '%)</span>';
 }
 
 function renderDraftSection() {
@@ -481,7 +486,7 @@ function renderDraftSection() {
       + '<td>' + teamHtml + '</td>'
       + '<td>' + (drafter ? playerLink(drafter) : '—') + '</td>'
       + '<td class="num">' + (r.draft_pick_number != null ? '#' + r.draft_pick_number : '—') + '</td>'
-      + '<td class="num">' + (cost != null ? escapeHtml(cost + ' pts') : '—') + '</td>'
+      + '<td class="num">' + draftCostCell(cost, r.team.season_id) + '</td>'
     + '</tr>';
   }).join('');
   el.innerHTML = sectionHtml('Draft history',
@@ -591,7 +596,6 @@ function renderResults(rows) {
   });
   el.innerHTML = sectionHtml('Ownership history', '<ul class="history-list">' + list + '</ul>');
   attachImageFallback(el);
-  $id('export-csv').hidden = false;
 }
 
 function parseSeasonNumberLabel(label) {
@@ -611,20 +615,6 @@ function seasonShortLabel(season) {
 function renderPokemonSprite(id, name) {
   const src = spriteUrlById(id) || POKEBALL_FALLBACK;
   return '<img class="history-sprite" src="' + escapeHtml(src) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '">';
-}
-
-function exportCSV() {
-  if (!allRows.length) return;
-  const cols = ['team','team_slug','season','acquired_week','released_week'];
-  const lines = [cols.join(',')];
-  allRows.forEach(r => {
-    const teamName = r.team ? '"' + (r.team.name || '').replace(/"/g,'""') + '"' : '';
-    const teamSlug = r.team ? (r.team.slug || '') : '';
-    const seasonName = r.team && r.team.season ? (r.team.season.name || r.team.season.slug || '') : '';
-    lines.push([teamName,teamSlug,seasonName,r.acquired_week||'',r.released_week||''].join(','));
-  });
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'pokemon-history-' + (lastPokemonId || 'data') + '.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
 // initialize
