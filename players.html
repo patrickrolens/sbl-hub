@@ -25,6 +25,7 @@ body{font-family:Segoe UI,system-ui,-apple-system,Roboto,Arial,sans-serif;backgr
 .card-copy{color:var(--text2);font-size:13px;margin-bottom:18px}
 .empty{color:var(--text2);font-style:italic;padding:10px}
 .link{color:var(--accent);text-decoration:none;font-weight:600}
+.link:hover{text-decoration:underline}
 
 .match-summary{display:grid;grid-template-columns:1fr auto 1fr;align-items:baseline;gap:12px;margin-bottom:8px;padding:12px 0}
 .match-summary-p1{font-weight:700;font-size:1.5rem;text-align:right; margin-right: 12px;}
@@ -50,7 +51,7 @@ body{font-family:Segoe UI,system-ui,-apple-system,Roboto,Arial,sans-serif;backgr
 .team-link{color:var(--accent);font-weight:700;text-decoration:none}.team-link:hover{text-decoration:underline}
 .record-summary{display:flex;flex-direction:column;justify-content:flex-start;gap:16px;padding:16px 24px;border:1px solid rgba(124,111,247,0.16);background:rgba(124,111,247,0.06);border-radius:12px;margin-top:12px}
 .record-summary .record-title{font-size:2.2rem;font-weight:800;color:#ffffff;margin-bottom:0;text-align:center}
-.record-stats-row{display:flex;flex-wrap:wrap;gap:16px;max-width:860px;margin-inline:auto;}
+.record-stats-row{display:flex;flex-wrap:wrap;gap:16px;max-width:980px;margin-inline:auto;}
 .record-stat{flex:1;display:flex;flex-direction:column;gap:8px;padding:12px 0;border:none;background:transparent;position:relative;min-width:140px;text-align:center;}
 .record-stat-title{color:#6b7280;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;margin:0}
 .record-stat-value{font-size:2.3rem;font-weight:800;color:#ffffff;line-height:1}
@@ -59,6 +60,67 @@ body{font-family:Segoe UI,system-ui,-apple-system,Roboto,Arial,sans-serif;backgr
 .record-graph{min-width:0;margin:0;min-height:280px}
 .record-chart{border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;background:rgba(255,255,255,0.015)}
 .record-chart-title{font-size:0.95rem;font-weight:700;color:#ffffff;margin-bottom:16px}
+.record-stat-sub{color:var(--text2);font-size:11px}
+.badge-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.accolade{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;background:rgba(124,111,247,0.12);color:var(--accent);font-size:12px;font-weight:700;border:1px solid rgba(124,111,247,0.2)}
+.accolade.gold{background:rgba(250,204,21,0.10);color:#facc15;border-color:rgba(250,204,21,0.25)}
+
+/* Record sub-sections (collapsible) */
+details.record-section{margin:26px 0 0}
+details.record-section>summary,details.card-fold>summary{cursor:pointer;list-style:none;user-select:none}
+details.record-section>summary::-webkit-details-marker,details.card-fold>summary::-webkit-details-marker{display:none}
+details.record-section>summary::before,details.card-fold>summary::before{content:'▸';display:inline-block;margin-right:8px;color:var(--accent);transition:transform .15s}
+details.record-section[open]>summary::before,details.card-fold[open]>summary::before{transform:rotate(90deg)}
+.section-title{font-size:1.05rem;font-weight:800;margin:0 0 10px}
+.section-copy{color:var(--text2);font-size:12px;margin:-6px 0 10px}
+.table-wrap{overflow-x:auto}
+.stat-table{width:100%;border-collapse:collapse;font-size:13px}
+.stat-table th{color:var(--text2);text-transform:uppercase;font-size:0.65rem;letter-spacing:0.08em;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.stat-table td{padding:8px 10px;border-bottom:1px solid rgba(46,50,72,0.35);white-space:nowrap}
+.stat-table tr:last-child td{border-bottom:none}
+.stat-table .num{text-align:right}
+/* ELO leaderboard (own card above the lookup) */
+#leaderboard-card details.record-section{margin:0}
+.lb-head,.lb-row{display:grid;grid-template-columns:34px minmax(120px,220px) 70px 1fr 64px;gap:14px;align-items:center}
+.lb-head{padding:0 10px 6px;color:var(--text2);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--border)}
+.lb-head span:nth-child(3),.lb-head span:last-child{text-align:right}
+.lb-list{display:flex;flex-direction:column}
+a.lb-row{padding:7px 10px;border-radius:8px;text-decoration:none;color:var(--text)}
+a.lb-row:hover{background:var(--bg3)}
+.lb-row+.lb-row{margin-top:1px}
+.lb-rank{color:var(--text2);font-weight:700;font-size:13px;text-align:right;font-variant-numeric:tabular-nums}
+.lb-rank.gold{color:#facc15}
+.lb-rank.silver{color:#cbd5e1}
+.lb-rank.bronze{color:#e8a15f}
+.lb-name{font-weight:700;font-size:14px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-trophies{font-size:11px;color:#facc15;margin-left:6px;font-weight:700}
+.lb-record{color:var(--text2);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.lb-track{position:relative;height:4px;border-radius:2px;background:rgba(124,111,247,0.14)}
+.lb-dot{position:absolute;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--bg2)}
+.lb-elo{font-weight:800;font-size:14px;color:#fff;text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:640px){
+  .lb-head,.lb-row{grid-template-columns:28px 1fr 60px 52px}
+  .lb-track,.lb-head span:nth-child(4){display:none}
+}
+
+/* Nemesis / favorite-matchup callout tiles (top of H2H section) */
+.rivalry-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.rivalry-tile{flex:1;min-width:180px;display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:10px;text-decoration:none;color:inherit;border:1px solid var(--border);background:var(--bg3)}
+.rivalry-tile.good{border-color:rgba(74,222,128,0.35);background:rgba(74,222,128,0.06)}
+.rivalry-tile.bad{border-color:rgba(248,113,113,0.35);background:rgba(248,113,113,0.06)}
+.rivalry-tile:hover{filter:brightness(1.12)}
+.rivalry-label{font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text2)}
+.rivalry-name{font-weight:800;font-size:1.15rem}
+.rivalry-tile.good .rivalry-name{color:#4ade80}
+.rivalry-tile.bad .rivalry-name{color:#f87171}
+.rivalry-rec{color:var(--text2);font-size:12px;font-variant-numeric:tabular-nums}
+
+.sig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.sig-card{display:flex;gap:10px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;color:inherit;text-decoration:none}
+a.sig-card:hover{border-color:var(--accent)}
+.sig-card img{width:44px;height:44px;object-fit:contain;flex:none}
+.sig-name{font-weight:700;font-size:13px}
+.sig-meta{color:var(--text2);font-size:11px;margin-top:2px}
 @media (max-width:800px){.match-card{grid-template-columns:1fr;gap:12px}.match-team-col-right{align-items:flex-start}.match-team-col-right .team-sprites{justify-content:flex-start}.record-stats-row{flex-direction:column}}
 </style>
 </head>
@@ -68,42 +130,62 @@ body{font-family:Segoe UI,system-ui,-apple-system,Roboto,Arial,sans-serif;backgr
 <script src="/utils.js?v=20260709"></script>
 
 <div class="page-wrap">
+<datalist id="player-names"></datalist>
+<div class="card" id="leaderboard-card" hidden></div>
 <div class="card" id="player-record-card">
-  <div class="card-heading">Player Record</div>
-  <div class="card-copy">Enter a player display name to see their season record.</div>
+  <details class="card-fold" open>
+  <summary class="card-heading">Player Record</summary>
+  <div class="card-copy">Enter a player display name to see their career record. Suggestions appear as you type, and results are linkable (e.g. <span style="font-family:monospace">players.html#shrug</span>).</div>
   <div class="form-row">
-    <input id="record-player" class="form-input wide" placeholder="Player name">
-    <button id="show-record" class="sbln-btn">Show record</button>
+    <input id="record-player" class="form-input wide" placeholder="Player Name" list="player-names">
+    <button id="show-record" class="sbln-btn">Show Record</button>
     <span id="record-spinner" hidden class="spinner-text">Loading…</span>
   </div>
   <div id="record-results" class="card-body"></div>
+  </details>
 </div>
 
 <div class="card" id="player-matches-card">
-  <div class="card-heading">Matchup History</div>
-  <div class="card-copy">Enter two player display names to view their match history.</div>
+  <details class="card-fold" open>
+  <summary class="card-heading">Matchup History</summary>
+  <div class="card-copy">Enter two player display names to view their match history (linkable as <span style="font-family:monospace">#name1-vs-name2</span>).</div>
   <div class="form-row">
-    <input id="player1" class="form-input narrow" placeholder="Player one name">
-    <input id="player2" class="form-input narrow" placeholder="Player two name">
-    <button id="show-matches" class="sbln-btn">Show matches</button>
+    <input id="player1" class="form-input narrow" placeholder="Player One Name" list="player-names">
+    <input id="player2" class="form-input narrow" placeholder="Player Two Name" list="player-names">
+    <button id="show-matches" class="sbln-btn">Show Matches</button>
     <span id="match-spinner" hidden class="spinner-text">Loading…</span>
   </div>
   <div id="match-results" class="card-body"></div>
+  </details>
 </div>
 </div><!-- /.page-wrap -->
 
 <script>
-const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
-const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// dbClient() (utils.js) owns the Supabase URL/key; stash the client on
+// window.sb so utils' own fetchAll/fetchAllIn reuse it instead of creating
+// a fresh client per paginated request.
+const sb = window.sb = window.sb || dbClient();
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
+// Minimum rated matches before a player appears in ELO rankings (~one season).
+const LEADERBOARD_MIN_MATCHES = 10;
+// Decided head-to-head matches (wins+losses) required before an opponent can be
+// flagged as a nemesis / favorite matchup — keeps one-off results out.
+const RIVALRY_MIN_MATCHES = 2;
 
 // Duplicated from pokemon.html (small, deliberate - matches this codebase's existing
 // per-page-inline-script convention rather than sharing a module).
 let pokemonList = [];
-function pokemonNameById(id) { const s = String(id); const p = pokemonList.find(x => String(x.id) === s || String(x.id) === String(parseInt(s,10))); return p ? p.name : String(id); }
+// Exact id first — the numeric fallback (leading-zero/number-vs-string ids)
+// must only apply to all-digit ids, otherwise a suffixed form ("892-r",
+// Urshifu-RS) parseInts to its base form ("892") and shows the wrong name.
+function pokemonNameById(id) {
+  const s = String(id);
+  let p = pokemonList.find(x => String(x.id) === s);
+  if (!p && /^\d+$/.test(s)) p = pokemonList.find(x => String(x.id) === String(parseInt(s, 10)));
+  return p ? p.name : s;
+}
 
 function normalizeStage(stage) {
   if (!stage) return '';
@@ -118,7 +200,7 @@ function renderSpriteSet(pids) {
   const max = 6; const list = pids || [];
   const arr = list.slice(0, max);
   let out = '';
-  arr.forEach(pid => { const name = pokemonNameById(pid) || pid; out += '<img src="' + spriteUrl(pid) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '" class="sprite">'; });
+  arr.forEach(pid => { const name = pokemonNameById(pid) || pid; out += '<img src="' + spriteUrl(pid) + '" data-pid="' + escapeHtml(String(pid)) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '" class="sprite">'; });
   if (list.length > max) {
     const hidden = list.slice(max).map(pokemonNameById).filter(Boolean).join(', ');
     const more = list.length - max;
@@ -127,42 +209,121 @@ function renderSpriteSet(pids) {
   return '<div class="team-sprites">' + out + '</div>';
 }
 
+// Wire utils.js's sprite → icon → pokéball fallback chain onto every rendered
+// sprite (all imgs in these views carry data-pid).
 function attachImageFallback(container) {
-  const imgs = container.querySelectorAll('img');
-  imgs.forEach(img => { img.onerror = function(){ this.onerror = null; this.src = POKEBALL_FALLBACK; this.style.opacity = '.5'; }; });
+  container.querySelectorAll('img[data-pid]').forEach(img => attachSpriteFallback(img, img.dataset.pid));
 }
 
 function $id(id) { return document.getElementById(id); }
 
+// ----- Hash routing (#name for a record, #name1-vs-name2 for a matchup) -----
+let lastAppliedHash = '';
+function slugifyName(s) { return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+function resolvePlayerBySlug(slug, allPlayers) {
+  slug = slugifyName(slug);
+  if (!slug) return null;
+  return allPlayers.find(p => slugifyName(p.display_name) === slug)
+    || allPlayers.find(p => slugifyName(p.display_name).startsWith(slug))
+    || findPlayerByName(allPlayers, slug.replace(/-/g, ' '))
+    || null;
+}
+// Records the hash a just-rendered view corresponds to; pushes it onto the URL
+// for user-initiated lookups so results are shareable and back/forward works.
+function setViewHash(h, fromHash) {
+  lastAppliedHash = '#' + h;
+  if (fromHash) return; // already navigating from this hash
+  if (location.hash !== lastAppliedHash) location.hash = h;
+}
+async function applyHashRoute() {
+  let raw = location.hash.replace(/^#/, '');
+  try { raw = decodeURIComponent(raw); } catch (e) { /* keep raw */ }
+  raw = raw.trim().toLowerCase();
+  if (!raw) return;
+  lastAppliedHash = location.hash;
+  const league = await getLeagueData();
+  const parts = raw.split('-vs-');
+  if (parts.length === 2) {
+    const a = resolvePlayerBySlug(parts[0], league.allPlayers), b = resolvePlayerBySlug(parts[1], league.allPlayers);
+    if (a && b) {
+      $id('player1').value = a.display_name;
+      $id('player2').value = b.display_name;
+      await showMatchesClick(true);
+      $id('player-matches-card').scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+  }
+  const p = resolvePlayerBySlug(raw, league.allPlayers);
+  if (p) {
+    $id('record-player').value = p.display_name;
+    await showRecordClick(true);
+  }
+}
+
 async function boot() {
-  // Prefetch pokemon.json (needed for renderSpriteSet's pokemonNameById), tolerate failures.
-  try {
-    const res = await fetch(POKEMON_JSON_URL);
+  const recordBtn = $id('show-record'); if (recordBtn) recordBtn.addEventListener('click', () => showRecordClick(false));
+  const recordInput = $id('record-player'); if (recordInput) recordInput.addEventListener('keydown', e => { if (e.key === 'Enter') recordBtn.click(); });
+  const showBtn = $id('show-matches'); if (showBtn) showBtn.addEventListener('click', () => showMatchesClick(false));
+  const p1 = $id('player1'), p2 = $id('player2');
+  if (p1) p1.addEventListener('keydown', e => { if (e.key === 'Enter') showBtn.click(); });
+  if (p2) p2.addEventListener('keydown', e => { if (e.key === 'Enter') showBtn.click(); });
+  window.addEventListener('hashchange', () => { if (location.hash === lastAppliedHash) return; applyHashRoute(); });
+
+  // Prefetch pokemon.json (needed for renderSpriteSet's pokemonNameById) and the
+  // league snapshot (needed for autocomplete + leaderboard), tolerating failures —
+  // a failed league preload just means no suggestions until the first lookup.
+  const pjPromise = fetch(POKEMON_JSON_URL).then(async res => {
     if (res.ok) {
       const pj = await res.json();
       pokemonList = Array.isArray(pj) ? pj : (pj.pokemon || []);
     }
-  } catch (e) { console.warn('pokemon.json load failed', e); }
+  }).catch(e => console.warn('pokemon.json load failed', e));
+  const league = await getLeagueData()
+    .then(l => { populateDatalist(l); return l; })
+    .catch(e => { console.warn('league data preload failed', e); return null; });
+  await pjPromise;
+  if (!league) return;
+  // Leaderboard renders before routing so a deep-linked record can collapse it.
+  const lbCard = $id('leaderboard-card');
+  if (lbCard) {
+    lbCard.innerHTML = renderLeaderboard(league);
+    lbCard.hidden = !lbCard.innerHTML;
+  }
+  await applyHashRoute();
+  if ($id('record-results').innerHTML) collapseLeaderboard(); // covers a lookup that raced boot
+}
 
-  const recordBtn = $id('show-record'); if (recordBtn) recordBtn.addEventListener('click', showRecordClick);
-  const recordInput = $id('record-player'); if (recordInput) recordInput.addEventListener('keydown', e => { if (e.key === 'Enter') recordBtn.click(); });
-  const showBtn = $id('show-matches'); if (showBtn) showBtn.addEventListener('click', showMatchesClick);
-  const p1 = $id('player1'), p2 = $id('player2');
-  if (p1) p1.addEventListener('keydown', e => { if (e.key === 'Enter') showBtn.click(); });
-  if (p2) p2.addEventListener('keydown', e => { if (e.key === 'Enter') showBtn.click(); });
+// Fold the leaderboard to its title bar while a record is on screen; clicking
+// the title reopens it at any time.
+function collapseLeaderboard() {
+  const d = document.querySelector('#leaderboard-card details.record-section');
+  if (d) d.open = false;
+}
+
+// A lookup must never render into a card the user has folded shut.
+function openCardFold(cardId) {
+  const d = document.querySelector('#' + cardId + ' details.card-fold');
+  if (d) d.open = true;
+}
+
+function populateDatalist(league) {
+  const dl = $id('player-names');
+  if (!dl) return;
+  dl.innerHTML = [...league.allPlayers]
+    .sort((a, b) => a.display_name.localeCompare(b.display_name))
+    .map(p => '<option value="' + escapeHtml(p.display_name) + '">')
+    .join('');
 }
 
 // ----- Player match history helpers -----
-async function findPlayerByName(name) {
+function findPlayerByName(allPlayers, name) {
   if (!name) return null;
-  name = name.trim();
-  // try exact display_name first
-  let res = await sb.from('players').select('id,display_name').eq('display_name', name).maybeSingle();
-  if (res && !res.error && res.data) return res.data;
-  // try partial match
-  res = await sb.from('players').select('id,display_name').ilike('display_name', '%' + name + '%').limit(1).maybeSingle();
-  if (res && !res.error && res.data) return res.data;
-  return null;
+  const n = String(name).trim().toLowerCase();
+  if (!n) return null;
+  return allPlayers.find(p => p.display_name.toLowerCase() === n)
+    || allPlayers.find(p => p.display_name.toLowerCase().startsWith(n))
+    || allPlayers.find(p => p.display_name.toLowerCase().includes(n))
+    || null;
 }
 
 // League-wide tables are a static snapshot per page load; fetch once, in
@@ -174,14 +335,22 @@ let leagueDataPromise = null;
 function getLeagueData() {
   if (!leagueDataPromise) {
     leagueDataPromise = Promise.all([
+      fetchAll('players', 'id,display_name'),
       fetchAll('team_owners', 'player_id,team_id,started_week,ended_week'),
-      fetchAll('matches', 'id,season_id,stage,week,team_a_id,team_b_id,team_a_score,team_b_score,match_date,winner_team_id'),
+      fetchAll('matches', 'id,season_id,stage,week,postseason_round,team_a_id,team_b_id,team_a_score,team_b_score,match_date,winner_team_id'),
       fetchAll('seasons', 'id,name,slug'),
       fetchAll('teams', 'id,name,slug,season_id')
-    ]).then(([allOwners, allMatches, seasons, teams]) => {
+    ]).then(([allPlayers, allOwners, allMatches, seasons, teams]) => {
       const seasonById = {}; seasons.forEach(s => seasonById[s.id] = s);
       const teamById = {}; teams.forEach(t => teamById[t.id] = t);
-      return { allOwners, allMatches, seasonById, teamById };
+      const playerById = {}; allPlayers.forEach(p => playerById[p.id] = p);
+      const ownersByTeam = {};
+      allOwners.forEach(o => {
+        if (!o.team_id) return;
+        (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push(o);
+      });
+      Object.values(ownersByTeam).forEach(list => list.sort((a, b) => (a.started_week || 1) - (b.started_week || 1)));
+      return { allPlayers, allOwners, allMatches, seasonById, teamById, playerById, ownersByTeam };
     }).catch(e => { leagueDataPromise = null; throw e; });
   }
   return leagueDataPromise;
@@ -201,16 +370,166 @@ function ownershipCoversMatch(owners, teamId, m) {
   });
 }
 
-async function showMatchesClick() {
+// Who owned this team when the match was played (for the head-to-head table).
+// Same week semantics as ownershipCoversMatch, with makeCoachAtWeek's fallback
+// for data gaps. The ELO sim's ownerAtMatch stays strict on purpose: an
+// unresolved side there must rate as an untracked 1500, not a guessed owner.
+function ownerStintAtMatch(ownersByTeam, teamId, m) {
+  const stints = ownersByTeam[teamId] || [];
+  if (!stints.length) return null;
+  const week = (m.stage && m.stage !== 'regular') ? null : m.week;
+  if (week == null) return stints.find(x => x.ended_week == null) || stints[stints.length - 1];
+  return stints.find(x => (x.started_week || 1) <= week && (x.ended_week == null || x.ended_week > week))
+    || stints.find(x => x.ended_week == null) || stints[0];
+}
+
+// ----- Per-player career (computed once per page load from league data) -----
+// resultOf distinguishes unplayed from drawn: schedules are bulk-inserted before
+// the season with 0-0 scores and no winner, so "no winner" alone isn't a draw.
+const careerCache = new Map();
+function getCareer(pid, league) {
+  if (careerCache.has(pid)) return careerCache.get(pid);
+  const owners = league.allOwners.filter(o => o.player_id === pid);
+  const teamIds = [...new Set(owners.map(o => o.team_id).filter(Boolean))];
+  const sideOf = m => ownershipCoversMatch(owners, m.team_a_id, m) ? m.team_a_id
+    : (ownershipCoversMatch(owners, m.team_b_id, m) ? m.team_b_id : null);
+  const resultOf = m => {
+    const side = sideOf(m);
+    if (!side) return null;
+    if (m.winner_team_id) return m.winner_team_id === side ? 'W' : 'L';
+    return ((m.team_a_score || 0) + (m.team_b_score || 0)) > 0 ? 'D' : null;
+  };
+  const matches = sortMatchesChronologically(league.allMatches.filter(m => sideOf(m) != null), league.seasonById);
+  const rated = matches.filter(m => resultOf(m) != null);
+  const career = { owners, teamIds, sideOf, resultOf, matches, rated };
+  careerCache.set(pid, career);
+  return career;
+}
+
+// Leaderboard built from the league-wide ELO sim's final ratings, so ranks use
+// the same numbers as the Current ELO tile. Players under the match cutoff are
+// unranked everywhere (no leaderboard row, no "#N of M" on their record).
+let _eloRankings = null;
+function getEloRankings(sim, allPlayers) {
+  if (!_eloRankings) {
+    _eloRankings = allPlayers
+      .map(p => ({ id: p.id, name: p.display_name, elo: sim.finalRatings[p.id] != null ? Math.round(sim.finalRatings[p.id]) : null }))
+      .filter(x => x.elo != null && (sim.played[x.id] || 0) >= LEADERBOARD_MIN_MATCHES)
+      .sort((a, b) => b.elo - a.elo);
+  }
+  return _eloRankings;
+}
+
+// One full-league sim run for the landing leaderboard; '__none__' matches no
+// player id, so only finalRatings is consumed (history stays empty).
+let _leagueSim = null;
+function getLeagueSim(league) {
+  if (!_leagueSim) _leagueSim = calculatePlayerRatingHistory('__none__', league.allMatches, league.allOwners, league.seasonById, league.teamById);
+  return _leagueSim;
+}
+
+function renderLeaderboard(league) {
+  const rankings = getEloRankings(getLeagueSim(league), league.allPlayers);
+  if (!rankings.length) return '';
+  const lo = Math.min(...rankings.map(r => r.elo));
+  const hi = Math.max(...rankings.map(r => r.elo));
+  const span = Math.max(hi - lo, 1);
+  const finals = getFinalsBySeason(league);
+  const rows = rankings.map((r, i) => {
+    const career = getCareer(r.id, league);
+    let w = 0, l = 0;
+    career.rated.forEach(m => { const res = career.resultOf(m); if (res === 'W') w++; else if (res === 'L') l++; });
+    let titles = 0, cups = 0;
+    Object.keys(finals).forEach(sid => ['playoffs', 'cup'].forEach(stage => {
+      const f = finals[sid][stage];
+      if (f && f.winner_team_id && career.sideOf(f) === f.winner_team_id) {
+        if (stage === 'cup') cups++; else titles++;
+      }
+    }));
+    const rankCls = i === 0 ? ' gold' : (i === 1 ? ' silver' : (i === 2 ? ' bronze' : ''));
+    // Dot position on the shared lo→hi scale, held to 4–96% so it never clips the track ends.
+    const pct = ((r.elo - lo) / span * 92 + 4).toFixed(1);
+    return '<a class="lb-row" href="#' + slugifyName(r.name) + '">'
+      + '<span class="lb-rank' + rankCls + '">' + (i + 1) + '</span>'
+      + '<span class="lb-name">' + escapeHtml(r.name)
+        + (titles ? '<span class="lb-trophies" title="League championships">🏆' + (titles > 1 ? '×' + titles : '') + '</span>' : '')
+        + (cups ? '<span class="lb-trophies" title="Cup championships">🏅' + (cups > 1 ? '×' + cups : '') + '</span>' : '')
+      + '</span>'
+      + '<span class="lb-record">' + w + '-' + l + '</span>'
+      + '<span class="lb-track"><span class="lb-dot" style="left:' + pct + '%"></span></span>'
+      + '<span class="lb-elo">' + r.elo + '</span>'
+    + '</a>';
+  }).join('');
+  return sectionHtml('ELO Leaderboard', '',
+    '<div class="lb-head"><span></span><span>Player</span><span>W-L</span><span></span><span>ELO</span></div>'
+    + '<div class="lb-list">' + rows + '</div>');
+}
+
+// season_id -> { playoffs: finalMatch|null, cup: finalMatch|null }. The final is
+// the last-scheduled match of the bracket (max week; postseason_round used as a
+// tiebreaker so a double-elim grand final beats a same-week losers final). If it
+// has no winner yet the bracket is in progress and nobody is champion.
+let _finalsBySeason = null;
+function getFinalsBySeason(league) {
+  if (_finalsBySeason) return _finalsBySeason;
+  _finalsBySeason = {};
+  ['playoffs', 'cup'].forEach(stage => {
+    const bySeason = {};
+    league.allMatches.forEach(m => { if (m.stage === stage && m.season_id) (bySeason[m.season_id] = bySeason[m.season_id] || []).push(m); });
+    Object.entries(bySeason).forEach(([sid, list]) => {
+      const maxWeek = list.reduce((mx, m) => Math.max(mx, m.week || 0), 0);
+      const lastWeek = list.filter(m => (m.week || 0) === maxWeek);
+      const final = lastWeek.find(m => /grand\s*final/i.test(m.postseason_round || ''))
+        || lastWeek.find(m => /final/i.test(m.postseason_round || ''))
+        || sortMatchesChronologically(lastWeek, league.seasonById)[lastWeek.length - 1];
+      _finalsBySeason[sid] = _finalsBySeason[sid] || {};
+      _finalsBySeason[sid][stage] = final || null;
+    });
+  });
+  return _finalsBySeason;
+}
+
+function seasonNumberOf(sid, seasonById) {
+  const s = seasonById[sid] || {};
+  return parseSeasonNumberLabel(s.name || s.slug || '');
+}
+function seasonShortLabel(sid, seasonById) {
+  const n = seasonNumberOf(sid, seasonById);
+  return n ? 'S' + n : ((seasonById[sid] || {}).slug || '?');
+}
+
+// ----- Remote extras fetched per record view -----
+async function fetchBrought(matchIds) {
+  if (!matchIds.length) return [];
+  try { return await fetchAllIn('match_pokemon', 'match_id,team_id,pokemon_id', 'match_id', matchIds); }
+  catch (e) { console.warn('match_pokemon load failed', e); return []; }
+}
+async function fetchGameStats(matchIds) {
+  try {
+    const games = matchIds.length ? await fetchAllIn('games', 'id,match_id', 'match_id', matchIds) : [];
+    const gameIds = games.map(g => g.id);
+    const stats = gameIds.length ? await fetchAllIn('game_pokemon_stats', 'game_id,team_id,pokemon_id,kills,deaths', 'game_id', gameIds) : [];
+    const gameToMatch = {}; games.forEach(g => gameToMatch[g.id] = g.match_id);
+    return { stats, gameToMatch };
+  } catch (e) { console.warn('game stats load failed', e); return { stats: [], gameToMatch: {} }; }
+}
+async function fetchPotw(playerId) {
+  const r = await sb.from('potw').select('season_id,week,pokemon_id').eq('player_id', playerId);
+  return (r && !r.error && r.data) ? r.data : [];
+}
+
+async function showMatchesClick(fromHash) {
+  fromHash = fromHash === true; // guard: also used directly as a click handler
   const name1 = ($id('player1').value || '').trim();
   const name2 = ($id('player2').value || '').trim();
   const out = $id('match-results'); out.innerHTML = '';
   if (!name1 || !name2) { out.innerHTML = '<div class="empty">Enter two player names to see head-to-head matches.</div>'; return; }
+  openCardFold('player-matches-card');
   $id('show-matches').disabled = true; $id('match-spinner').hidden = false;
   try {
-    const [p1, p2, league] = await Promise.all([
-      findPlayerByName(name1), findPlayerByName(name2), getLeagueData()
-    ]);
+    const league = await getLeagueData();
+    const p1 = findPlayerByName(league.allPlayers, name1);
+    const p2 = findPlayerByName(league.allPlayers, name2);
     if (!p1 || !p2) {
       const missing = [];
       if (!p1) missing.push(escapeHtml(name1));
@@ -218,6 +537,7 @@ async function showMatchesClick() {
       out.innerHTML = '<div class="empty">Player(s) not found: ' + missing.join(', ') + '</div>';
       return;
     }
+    if (p1.id === p2.id) { out.innerHTML = '<div class="empty">Pick two different players.</div>'; return; }
     const { allOwners, allMatches, seasonById, teamById } = league;
     const owners1 = allOwners.filter(o => o.player_id === p1.id);
     const owners2 = allOwners.filter(o => o.player_id === p2.id);
@@ -250,7 +570,15 @@ async function showMatchesClick() {
       else if (player1Teams.has(m.winner_team_id)) p1wins++;
       else if (player2Teams.has(m.winner_team_id)) p2wins++;
     });
+    const sim1 = calculatePlayerRatingHistory(p1.id, allMatches, allOwners, seasonById, teamById);
+    const sim2 = calculatePlayerRatingHistory(p2.id, allMatches, allOwners, seasonById, teamById);
     let html = renderMatchSummary(p1, p2, p1wins, p2wins, draws);
+    if (sim1.history.length || sim2.history.length) {
+      html += '<div class="record-chart" style="margin:4px 0 18px">'
+        + '<div class="record-chart-title">ELO Comparison</div>'
+        + '<div style="position:relative;height:240px"><canvas id="compare-chart-canvas"></canvas></div>'
+        + '</div>';
+    }
     html += '<div class="match-list">';
     sortedH2h.forEach(m => {
       html += renderMatchCard(m, teamById, player1Teams, player2Teams, seasonById, broughtMap);
@@ -258,6 +586,8 @@ async function showMatchesClick() {
     html += '</div>';
     out.innerHTML = html;
     attachImageFallback(out);
+    initComparisonChart(sim1.history, sim2.history, p1.display_name, p2.display_name, sim1.timeline);
+    setViewHash(slugifyName(p1.display_name) + '-vs-' + slugifyName(p2.display_name), fromHash);
   } catch (e) {
     console.error(e); out.innerHTML = '<div class="empty">Error loading matches.</div>';
   } finally {
@@ -265,57 +595,118 @@ async function showMatchesClick() {
   }
 }
 
-async function showRecordClick() {
+async function showRecordClick(fromHash) {
+  fromHash = fromHash === true; // guard: also used directly as a click handler
   const name = ($id('record-player').value || '').trim();
   const out = $id('record-results'); out.innerHTML = '';
   if (!name) { out.innerHTML = '<div class="empty">Enter a player name to see their record.</div>'; return; }
+  openCardFold('player-record-card');
   $id('show-record').disabled = true; $id('record-spinner').hidden = false;
   try {
-    const [player, league] = await Promise.all([findPlayerByName(name), getLeagueData()]);
+    const league = await getLeagueData();
+    const player = findPlayerByName(league.allPlayers, name);
     if (!player) { out.innerHTML = '<div class="empty">Player not found: ' + escapeHtml(name) + '</div>'; return; }
     const { allOwners, allMatches, seasonById, teamById } = league;
-    const owners = allOwners.filter(o => o.player_id === player.id);
-    const teamIds = owners.map(o => o.team_id).filter(Boolean);
-    if (!teamIds.length) { out.innerHTML = '<div class="empty">This player has no team ownership records.</div>'; return; }
-    const filteredMatches = allMatches.filter(m =>
-      ownershipCoversMatch(owners, m.team_a_id, m) || ownershipCoversMatch(owners, m.team_b_id, m));
-    if (!filteredMatches.length) {
-      out.innerHTML = '<div class="empty">No matches found for this player.</div>'; return; }
-    let matchWins = 0, matchLosses = 0, draws = 0;
-    let gameWins = 0, gameLosses = 0;
-    filteredMatches.forEach(m => {
-      const isPlayerSide = teamIds.includes(m.team_a_id);
-      const teamScore = isPlayerSide ? m.team_a_score : m.team_b_score;
-      const oppScore = isPlayerSide ? m.team_b_score : m.team_a_score;
-      if (teamScore == null || oppScore == null) return;
-      gameWins += teamScore;
-      gameLosses += oppScore;
-      if (!m.winner_team_id) draws++;
-      else if (teamIds.includes(m.winner_team_id)) matchWins++;
-      else matchLosses++;
+    const career = getCareer(player.id, league);
+    if (!career.teamIds.length) { out.innerHTML = '<div class="empty">This player has no team ownership records.</div>'; return; }
+    if (!career.matches.length) { out.innerHTML = '<div class="empty">No matches found for this player.</div>'; return; }
+
+    const matchIds = career.matches.map(m => m.id);
+    const [mpRows, gameStats, potwRows] = await Promise.all([
+      fetchBrought(matchIds),
+      fetchGameStats(matchIds),
+      fetchPotw(player.id)
+    ]);
+
+    // Core record (career.rated already excludes scheduled-but-unplayed rows)
+    let matchWins = 0, matchLosses = 0, draws = 0, gameWins = 0, gameLosses = 0;
+    career.rated.forEach(m => {
+      const side = career.sideOf(m);
+      const ts = side === m.team_a_id ? m.team_a_score : m.team_b_score;
+      const os = side === m.team_a_id ? m.team_b_score : m.team_a_score;
+      gameWins += ts || 0; gameLosses += os || 0;
+      const r = career.resultOf(m);
+      if (r === 'W') matchWins++; else if (r === 'L') matchLosses++; else draws++;
     });
-    const matchRecord = matchWins + '-' + matchLosses;
-    // Only resolved matches count toward win % — scheduled-but-unplayed rows
-    // are in filteredMatches but never reach the W/L/D tallies.
-    const decided = matchWins + matchLosses + draws;
-    const matchPct = decided ? ((matchWins / decided) * 100).toFixed(1) : '0.0';
+    const played = career.rated.length;
+    const matchPct = played ? ((matchWins / played) * 100).toFixed(1) : '0.0';
     const gameTotal = gameWins + gameLosses;
     const gamePct = gameTotal ? ((gameWins / gameTotal) * 100).toFixed(1) : '0.0';
-    const ratingHistory = calculatePlayerRatingHistory(player.id, allMatches, allOwners, seasonById, teamById);
+
+    // Streaks + regular/postseason splits
+    const results = career.rated.map(career.resultOf);
+    let longestW = 0, run = 0;
+    results.forEach(r => { if (r === 'W') { run++; if (run > longestW) longestW = run; } else run = 0; });
+    let curType = null, curLen = 0;
+    for (let i = results.length - 1; i >= 0; i--) {
+      const r = results[i];
+      if (r === 'D') break;
+      if (curType == null) { curType = r; curLen = 1; }
+      else if (r === curType) curLen++;
+      else break;
+    }
+    let regW = 0, regL = 0, postW = 0, postL = 0, postAny = false;
+    career.rated.forEach(m => {
+      const r = career.resultOf(m);
+      const reg = !m.stage || m.stage === 'regular';
+      if (!reg) postAny = true;
+      if (r === 'W') { reg ? regW++ : postW++; }
+      else if (r === 'L') { reg ? regL++ : postL++; }
+    });
+
+    // ELO (league-wide sim) + leaderboard rank
+    const sim = calculatePlayerRatingHistory(player.id, allMatches, allOwners, seasonById, teamById);
+    const ratingHistory = sim.history;
     const currentElo = ratingHistory.length ? ratingHistory[ratingHistory.length - 1].rating : null;
-    const chartHtml = renderPlayerRatingChart(ratingHistory);
-    out.innerHTML = '<div class="record-summary">'
+    const rankings = getEloRankings(sim, league.allPlayers);
+    const rankIdx = rankings.findIndex(r => r.id === player.id);
+    const peakElo = ratingHistory.reduce((mx, h) => Math.max(mx, h.rating), 0) || null;
+    // Biggest upset: the win over the largest pre-match rating deficit. The
+    // opponent's rating is pre-match (see the sim); ours is the previous entry's.
+    let upset = null;
+    ratingHistory.forEach((h, i) => {
+      if (h.result !== 'W' || h.opponentRating == null) return;
+      const pre = i === 0 ? 1500 : ratingHistory[i - 1].rating;
+      const gap = h.opponentRating - pre;
+      if (gap > 0 && (!upset || gap > upset.gap)) upset = { gap, h };
+    });
+
+    const badgesHtml = renderAccolades(career, potwRows, league);
+
+    let html = '<div class="record-summary">'
       + '<div class="record-title">' + escapeHtml(player.display_name) + '</div>'
+      + (badgesHtml ? '<div class="badge-row">' + badgesHtml + '</div>' : '')
       + '<div class="record-stats-row">'
-        + renderStatTile('Matches', escapeHtml(matchRecord))
+        + renderStatTile('Matches', escapeHtml(matchWins + '-' + matchLosses + (draws ? '-' + draws : '')))
         + renderStatTile('Games', escapeHtml(gameWins + '-' + gameLosses))
-        + renderStatTile('Match win %', escapeHtml(matchPct), parseFloat(matchPct) >= 50 ? 'positive' : 'negative')
-        + renderStatTile('Game win %', escapeHtml(gamePct), parseFloat(gamePct) >= 50 ? 'positive' : 'negative')
-        + (currentElo != null ? renderStatTile('Current ELO', currentElo) : '')
+        + renderStatTile('Match Win %', escapeHtml(matchPct), parseFloat(matchPct) >= 50 ? 'positive' : 'negative')
+        + renderStatTile('Game Win %', escapeHtml(gamePct), parseFloat(gamePct) >= 50 ? 'positive' : 'negative')
+        + (currentElo != null
+            ? renderStatTile('Current ELO', currentElo, '', rankIdx >= 0 ? '<div class="record-stat-sub">#' + (rankIdx + 1) + ' of ' + rankings.length + '</div>' : '')
+            : '')
+        + (peakElo != null ? renderStatTile('Peak ELO', String(peakElo)) : '')
       + '</div>'
-      + '<div class="record-graph">' + chartHtml + '</div>'
+      + '<div class="record-stats-row">'
+        + renderStatTile('Current Streak', curType ? escapeHtml(curType + curLen) : '—', curType === 'W' ? 'positive' : (curType === 'L' ? 'negative' : ''))
+        + renderStatTile('Longest Win Streak', String(longestW))
+        + renderStatTile('Regular Season', escapeHtml(regW + '-' + regL))
+        + (postAny ? renderStatTile('Postseason', escapeHtml(postW + '-' + postL)) : '')
+        + (potwRows.length ? renderStatTile('POTW Awards', String(potwRows.length)) : '')
+        + (upset ? renderStatTile('Biggest Upset', '+' + upset.gap, 'positive',
+            '<div class="record-stat-sub">' + escapeHtml('beat ' + upset.h.opponentRating + '-rated ' + (upset.h.opponent || '?') + ' · ' + upset.h.label) + '</div>') : '')
+      + '</div>'
+      + '<div class="record-graph">' + renderPlayerRatingChart(ratingHistory) + '</div>'
     + '</div>';
+
+    html += renderSeasonSection(career, league);
+    html += renderSignatureSection(career, mpRows, gameStats);
+    html += renderH2HSection(player, career, league);
+
+    out.innerHTML = html;
+    attachImageFallback(out);
     initRatingChart(ratingHistory);
+    collapseLeaderboard();
+    setViewHash(slugifyName(player.display_name), fromHash);
   } catch (e) {
     console.error(e); out.innerHTML = '<div class="empty">Error loading record.</div>';
   } finally {
@@ -333,9 +724,218 @@ function formatMatchWhen(m) {
   return (m.stage && m.stage !== 'regular') ? normalizeStage(m.stage) : ('Week ' + (m.week || '?'));
 }
 
-function renderStatTile(title, value, cls) {
+function renderStatTile(title, value, cls, subHtml) {
   return '<div class="record-stat"><div class="record-stat-title">' + title + '</div>'
-    + '<div class="record-stat-value' + (cls ? ' ' + cls : '') + '">' + value + '</div></div>';
+    + '<div class="record-stat-value' + (cls ? ' ' + cls : '') + '">' + value + '</div>'
+    + (subHtml || '') + '</div>';
+}
+
+// Collapsible section wrapper — native <details>, open by default.
+function sectionHtml(title, copy, bodyHtml) {
+  return '<details class="record-section" open>'
+    + '<summary class="section-title">' + title + '</summary>'
+    + (copy ? '<div class="section-copy">' + copy + '</div>' : '')
+    + bodyHtml
+  + '</details>';
+}
+
+function renderAccolades(career, potwRows, league) {
+  const finals = getFinalsBySeason(league);
+  const badges = [];
+  Object.keys(finals)
+    .sort((a, b) => seasonNumberOf(a, league.seasonById) - seasonNumberOf(b, league.seasonById))
+    .forEach(sid => {
+      const sLabel = seasonShortLabel(sid, league.seasonById);
+      ['playoffs', 'cup'].forEach(stage => {
+        const f = finals[sid][stage];
+        if (!f) return;
+        const side = career.sideOf(f);
+        if (!side) return;
+        const prefix = stage === 'cup' ? 'Cup ' : '';
+        const cupIcon = stage === 'cup' ? '🏅' : '🏆';
+        if (!f.winner_team_id) badges.push('<span class="accolade">🎯 ' + sLabel + ' ' + prefix + 'Finalist</span>');
+        else if (f.winner_team_id === side) badges.push('<span class="accolade gold">' + cupIcon + ' ' + sLabel + ' ' + prefix + 'Champion</span>');
+        else badges.push('<span class="accolade">🥈 ' + sLabel + ' ' + prefix + 'Runner-Up</span>');
+      });
+    });
+  if (potwRows.length) {
+    const detail = potwRows.map(r => seasonShortLabel(r.season_id, league.seasonById) + ' W' + r.week + ' — ' + pokemonNameById(r.pokemon_id)).join(', ');
+    badges.push('<span class="accolade" title="' + escapeHtml(detail) + '">⭐ POTW ×' + potwRows.length + '</span>');
+  }
+  return badges.join('');
+}
+
+function renderSignatureSection(career, mpRows, gameStats) {
+  const matchSide = {}; career.matches.forEach(m => { matchSide[m.id] = career.sideOf(m); });
+  const matchRes = {}; career.rated.forEach(m => { matchRes[m.id] = career.resultOf(m); });
+  const agg = {}; // pokemon_id -> { brought, w, l, kills, deaths, games }
+  mpRows.forEach(r => {
+    if (matchSide[r.match_id] !== r.team_id) return;
+    const a = agg[r.pokemon_id] = agg[r.pokemon_id] || { brought: 0, w: 0, l: 0, kills: 0, deaths: 0, games: 0 };
+    a.brought++;
+    const res = matchRes[r.match_id];
+    if (res === 'W') a.w++; else if (res === 'L') a.l++;
+  });
+  gameStats.stats.forEach(r => {
+    const mid = gameStats.gameToMatch[r.game_id];
+    if (!mid || matchSide[mid] !== r.team_id) return;
+    const a = agg[r.pokemon_id] = agg[r.pokemon_id] || { brought: 0, w: 0, l: 0, kills: 0, deaths: 0, games: 0 };
+    a.kills += r.kills || 0; a.deaths += r.deaths || 0; a.games++;
+  });
+  const top = Object.entries(agg)
+    .map(([pid, a]) => Object.assign({ pid }, a))
+    .sort((x, y) => y.brought - x.brought || y.kills - x.kills)
+    .slice(0, 8);
+  if (!top.length) return '';
+  const cards = top.map(s => {
+    const nm = pokemonNameById(s.pid);
+    const decided = s.w + s.l;
+    const pct = decided ? Math.round((s.w / decided) * 100) + '% W' : '';
+    const meta = 'Brought ' + s.brought + (pct ? ' · ' + pct : '') + (s.games ? ' · ' + s.kills + ' KOs / ' + s.deaths + ' faints' : '');
+    return '<a class="sig-card" href="pokemon.html?q=' + encodeURIComponent(nm) + '"><img src="' + spriteUrl(s.pid) + '" data-pid="' + escapeHtml(String(s.pid)) + '" alt="' + escapeHtml(nm) + '">'
+      + '<div><div class="sig-name">' + escapeHtml(nm) + '</div><div class="sig-meta">' + escapeHtml(meta) + '</div></div></a>';
+  }).join('');
+  return sectionHtml('Signature Pokémon',
+    'Most-brought Pokémon across this player\'s matches, with kills/faints while they were at the helm.',
+    '<div class="sig-grid">' + cards + '</div>');
+}
+
+function renderSeasonSection(career, league) {
+  const { seasonById, teamById } = league;
+  const bySeason = {};
+  career.matches.forEach(m => { if (m.season_id) (bySeason[m.season_id] = bySeason[m.season_id] || []).push(m); });
+  const sids = Object.keys(bySeason).sort((a, b) => seasonNumberOf(a, seasonById) - seasonNumberOf(b, seasonById));
+  if (!sids.length) return '';
+  const finals = getFinalsBySeason(league);
+  const rows = sids.map(sid => {
+    const list = bySeason[sid];
+    const season = seasonById[sid] || {};
+    let w = 0, l = 0, d = 0, gw = 0, gl = 0;
+    const sideTeams = new Set();
+    list.forEach(m => {
+      const side = career.sideOf(m); if (!side) return;
+      sideTeams.add(side);
+      if (m.stage && m.stage !== 'regular') return; // regular-season record; postseason lands in Result
+      const r = career.resultOf(m); if (!r) return;
+      const ts = side === m.team_a_id ? m.team_a_score : m.team_b_score;
+      const os = side === m.team_a_id ? m.team_b_score : m.team_a_score;
+      gw += ts || 0; gl += os || 0;
+      if (r === 'W') w++; else if (r === 'L') l++; else d++;
+    });
+    // Postseason result label
+    const parts = [];
+    ['playoffs', 'cup'].forEach(stage => {
+      const mine = list.filter(m => m.stage === stage && career.sideOf(m));
+      if (!mine.length) return;
+      const prefix = stage === 'cup' ? 'Cup ' : '';
+      const f = (finals[sid] || {})[stage];
+      if (f && career.sideOf(f)) {
+        if (!f.winner_team_id) parts.push(prefix + 'Finalist');
+        else if (f.winner_team_id === career.sideOf(f)) parts.push(prefix + 'Champion ' + (stage === 'cup' ? '🏅' : '🏆'));
+        else parts.push(prefix + 'Runner-Up');
+        return;
+      }
+      const last = mine[mine.length - 1]; // career.matches is chronological
+      if (career.resultOf(last) === 'L') parts.push('Lost in ' + (last.postseason_round || (prefix + 'bracket')));
+      else parts.push(stage === 'cup' ? 'Cup' : 'Playoffs');
+    });
+    // A closed stint means another coach took the team over mid-season
+    // (ended_week is the week the successor starts, so the last week owned
+    // is ended_week - 1 — same semantics as ownershipCoversMatch).
+    career.owners.forEach(o => {
+      const t = teamById[o.team_id];
+      if (!t || String(t.season_id) !== String(sid) || o.ended_week == null) return;
+      parts.push('Left after W' + (o.ended_week - 1));
+    });
+    const teamLinks = [...sideTeams].map(tid => {
+      const t = teamById[tid];
+      if (!t) return escapeHtml(String(tid));
+      return t.slug && season.slug
+        ? '<a class="team-link" href="team.html?season=' + season.slug + '#' + encodeURIComponent(t.slug) + '">' + escapeHtml(t.name) + '</a>'
+        : escapeHtml(t.name);
+    }).join(', ');
+    return '<tr>'
+      + '<td>' + escapeHtml(seasonShortLabel(sid, seasonById)) + '</td>'
+      + '<td>' + teamLinks + '</td>'
+      + '<td class="num">' + escapeHtml(w + '-' + l + (d ? '-' + d : '')) + '</td>'
+      + '<td class="num">' + escapeHtml(gw + '-' + gl) + '</td>'
+      + '<td>' + escapeHtml(parts.join(' · ') || '—') + '</td>'
+    + '</tr>';
+  }).join('');
+  return sectionHtml('Season by Season', '',
+    '<div class="table-wrap"><table class="stat-table"><thead><tr>'
+    + '<th>Season</th><th>Team</th><th class="num">Reg. Record</th><th class="num">Games</th><th>Result</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
+}
+
+function renderH2HSection(player, career, league) {
+  const agg = {}; // opponent player_id (or 'unknown') -> { name, known, w, l, d, n }
+  career.rated.forEach(m => {
+    const r = career.resultOf(m);
+    const side = career.sideOf(m);
+    const oppTeam = side === m.team_a_id ? m.team_b_id : m.team_a_id;
+    const stint = ownerStintAtMatch(league.ownersByTeam, oppTeam, m);
+    const oppPlayer = stint ? league.playerById[stint.player_id] : null;
+    const key = oppPlayer ? oppPlayer.id : 'unknown';
+    const a = agg[key] = agg[key] || { name: oppPlayer ? oppPlayer.display_name : 'Unknown', known: !!oppPlayer, w: 0, l: 0, d: 0, n: 0 };
+    a.n++;
+    if (r === 'W') a.w++; else if (r === 'L') a.l++; else a.d++;
+  });
+  const rows = Object.values(agg).sort((x, y) => y.n - x.n || y.w - x.w || x.name.localeCompare(y.name));
+  if (!rows.length) return '';
+  const mySlug = slugifyName(player.display_name);
+  const tilesHtml = renderRivalryTiles(rows);
+  const body = rows.map(r => {
+    const decided = r.w + r.l;
+    const pct = decided ? ((r.w / decided) * 100).toFixed(0) + '%' : '—';
+    const oppSlug = slugifyName(r.name);
+    const nameCell = r.known
+      ? '<a class="link" href="#' + oppSlug + '">' + escapeHtml(r.name) + '</a>'
+      : escapeHtml(r.name);
+    const vsCell = r.known
+      ? '<a class="link" href="#' + mySlug + '-vs-' + oppSlug + '">H2H →</a>'
+      : '';
+    return '<tr>'
+      + '<td>' + nameCell + '</td>'
+      + '<td class="num">' + escapeHtml(r.w + '-' + r.l + (r.d ? '-' + r.d : '')) + '</td>'
+      + '<td class="num">' + r.n + '</td>'
+      + '<td class="num">' + pct + '</td>'
+      + '<td>' + vsCell + '</td>'
+    + '</tr>';
+  }).join('');
+  return sectionHtml('Head-to-Head Records',
+    'Record against every coach this player has faced. Names open that player\'s record; H2H opens the full matchup history below.',
+    tilesHtml
+    + '<div class="table-wrap"><table class="stat-table"><thead><tr>'
+    + '<th>Opponent</th><th class="num">Record</th><th class="num">Matches</th><th class="num">Win %</th><th></th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>');
+}
+
+// Highlight the two matchups worth talking about: the opponent this player beats
+// most (favorite matchup, net-positive only) and the one who beats them most
+// (nemesis, net-negative only). Both require a known opponent and enough decided
+// meetings (RIVALRY_MIN_MATCHES); when neither side is lopsided, nothing shows.
+function renderRivalryTiles(rows) {
+  const qualified = rows.filter(r => r.known && (r.w + r.l) >= RIVALRY_MIN_MATCHES);
+  if (!qualified.length) return '';
+  const pctOf = r => r.w / (r.w + r.l);
+  const byPct = (a, b) => pctOf(b) - pctOf(a) || (b.w - b.l) - (a.w - a.l) || (b.w + b.l) - (a.w + a.l);
+  const sorted = qualified.slice().sort(byPct);
+  const fav = sorted[0];
+  const nem = sorted[sorted.length - 1];
+  const tiles = [];
+  if (fav && pctOf(fav) > 0.5) tiles.push(rivalryTile('good', '😈', 'Favorite Matchup', fav));
+  if (nem && nem !== fav && pctOf(nem) < 0.5) tiles.push(rivalryTile('bad', '☠️', 'Nemesis', nem));
+  return tiles.length ? '<div class="rivalry-row">' + tiles.join('') + '</div>' : '';
+}
+function rivalryTile(cls, icon, label, r) {
+  const slug = slugifyName(r.name);
+  const pct = Math.round(r.w / (r.w + r.l) * 100);
+  return '<a class="rivalry-tile ' + cls + '" href="#' + slug + '">'
+    + '<div class="rivalry-label">' + icon + ' ' + label + '</div>'
+    + '<div class="rivalry-name">' + escapeHtml(r.name) + '</div>'
+    + '<div class="rivalry-rec">' + r.w + '-' + r.l + (r.d ? '-' + r.d : '') + ' · ' + pct + '% W</div>'
+  + '</a>';
 }
 
 function renderMatchSummary(p1, p2, p1wins, p2wins, draws) {
@@ -397,32 +997,44 @@ function calculatePlayerRatingHistory(playerId, allMatches, allOwners, seasonByI
     (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push(o);
   });
   const ratings = {}; // player_id -> current rating
+  const played = {};  // player_id -> rated matches count (leaderboard cutoff)
   const history = [];
-  const K = 24;
+  const timeline = []; // one ''/'S#' entry per rated league match — the shared x-axis for the comparison chart
+  // Provisional K: new players move faster until their rating has enough
+  // matches behind it, then settle to the stable K. Per-side K means updates
+  // aren't zero-sum, which is expected with provisional periods.
+  const K_PROVISIONAL = 40, K_STABLE = 24, PROVISIONAL_MATCHES = 10;
+  const kFor = pid => ((played[pid] || 0) < PROVISIONAL_MATCHES ? K_PROVISIONAL : K_STABLE);
   let lastSeasonNumber = null;
+  let lastTimelineSeason = null;
   sorted.forEach(m => {
-    // Scheduled-but-unplayed rows have no scores; they must not count as draws.
+    // Scheduled-but-unplayed rows must not count as draws: they have null
+    // scores, or (bulk-inserted schedules) 0-0 scores with no winner.
     if (m.team_a_score == null || m.team_b_score == null) return;
+    if (m.winner_team_id == null && ((m.team_a_score || 0) + (m.team_b_score || 0)) === 0) return;
     const playerA = ownerAtMatch(ownersByTeam, m.team_a_id, m);
     const playerB = ownerAtMatch(ownersByTeam, m.team_b_id, m);
     if (playerA == null && playerB == null) return;
+    const seasonLabel = (seasonById[m.season_id] && (seasonById[m.season_id].name || seasonById[m.season_id].slug)) || '';
+    const seasonNumber = parseSeasonNumberLabel(seasonLabel);
+    timeline.push((seasonNumber && seasonNumber !== lastTimelineSeason) ? 'S' + seasonNumber : '');
+    lastTimelineSeason = seasonNumber;
     const ratingA = playerA != null && ratings[playerA] != null ? ratings[playerA] : 1500;
     const ratingB = playerB != null && ratings[playerB] != null ? ratings[playerB] : 1500;
     const resultA = m.winner_team_id == null ? 0.5 : (m.winner_team_id === m.team_a_id ? 1 : 0);
     const expectedA = 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
-    if (playerA != null) ratings[playerA] = ratingA + K * (resultA - expectedA);
-    if (playerB != null) ratings[playerB] = ratingB + K * (expectedA - resultA);
+    if (playerA != null) { ratings[playerA] = ratingA + kFor(playerA) * (resultA - expectedA); played[playerA] = (played[playerA] || 0) + 1; }
+    if (playerB != null) { ratings[playerB] = ratingB + kFor(playerB) * (expectedA - resultA); played[playerB] = (played[playerB] || 0) + 1; }
     const isPlayerA = playerA === playerId;
     if (!isPlayerA && playerB !== playerId) return;
     const opponentTeamId = isPlayerA ? m.team_b_id : m.team_a_id;
     const opponentTeam = (teamById && teamById[opponentTeamId]) || null;
     const result = isPlayerA ? resultA : 1 - resultA;
-    const seasonLabel = (seasonById[m.season_id] && (seasonById[m.season_id].name || seasonById[m.season_id].slug)) || '';
-    const seasonNumber = parseSeasonNumberLabel(seasonLabel);
     history.push({
       rating: Math.round(ratings[playerId]),
       result: result === 1 ? 'W' : (result === 0.5 ? 'D' : 'L'),
       opponentRating: Math.round(isPlayerA ? ratingB : ratingA),
+      t: timeline.length - 1,
       label: formatRatingLabel(m, seasonById),
       opponent: opponentTeam ? (opponentTeam.name || opponentTeam.slug || '') : '',
       opponentSlug: opponentTeam ? (opponentTeam.slug || '') : '',
@@ -432,7 +1044,9 @@ function calculatePlayerRatingHistory(playerId, allMatches, allOwners, seasonByI
     });
     lastSeasonNumber = seasonNumber;
   });
-  return history;
+  // finalRatings holds every tracked player's post-sim rating — the ELO
+  // leaderboard (getEloRankings) is derived from it so ranks match the tiles.
+  return { history, finalRatings: ratings, played, timeline };
 }
 
 function renderPlayerRatingChart(history) {
@@ -529,6 +1143,83 @@ function initRatingChart(history) {
         },
         y: {
           ticks: { color: 'rgba(255,255,255,0.65)', font: { size: 10 }, callback: function(v) { return String(v); } },
+          grid: { color: 'rgba(255,255,255,0.08)' },
+          border: { color: 'rgba(255,255,255,0.2)' }
+        }
+      }
+    }
+  });
+}
+
+// Two full career rating lines on one chart, aligned on the shared league
+// timeline (every rated league match, in chronological order) so players who
+// started in different seasons or played different match counts line up by
+// when they actually played. Straight segments across a player's idle gaps are
+// accurate — a rating doesn't move while its owner isn't playing.
+function initComparisonChart(h1, h2, name1, name2, timeline) {
+  const canvas = document.getElementById('compare-chart-canvas');
+  if (!canvas || !timeline || !timeline.length) return;
+  if (!h1.length && !h2.length) return;
+  const seasonTicks = [];
+  timeline.forEach((lbl, t) => { if (lbl) seasonTicks.push({ t, label: lbl }); });
+  function ds(hist, name, color, bg) {
+    return {
+      label: name,
+      data: hist.map(h => ({ x: h.t, y: h.rating })),
+      _hist: hist,
+      borderColor: color,
+      backgroundColor: bg,
+      borderWidth: 2.5,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      tension: 0.1
+    };
+  }
+  new Chart(canvas, {
+    type: 'line',
+    data: {
+      datasets: [
+        ds(h1, name1, '#7c6ff7', 'rgba(124,111,247,0.08)'),
+        ds(h2, name2, '#4ade80', 'rgba(74,222,128,0.08)')
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false },
+      plugins: {
+        legend: { display: true, labels: { color: 'rgba(255,255,255,0.75)', boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: items => {
+              const it = items[0];
+              if (!it) return '';
+              const h = it.chart.data.datasets[it.datasetIndex]._hist[it.dataIndex];
+              return (h && h.label) || '';
+            },
+            label: ctx => {
+              const h = ctx.chart.data.datasets[ctx.datasetIndex]._hist[ctx.dataIndex];
+              return ctx.dataset.label + ': ' + ctx.parsed.y
+                + (h && h.opponent ? ' (' + h.result + ' vs ' + h.opponent + ')' : '');
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          min: 0,
+          max: timeline.length - 1,
+          afterBuildTicks: axis => { axis.ticks = seasonTicks.map(s => ({ value: s.t })); },
+          ticks: {
+            color: 'rgba(255,255,255,0.65)', font: { size: 10 }, maxRotation: 0,
+            callback: v => { const s = seasonTicks.find(x => x.t === v); return s ? s.label : ''; }
+          },
+          grid: { color: 'rgba(255,255,255,0.08)' },
+          border: { color: 'rgba(255,255,255,0.2)' }
+        },
+        y: {
+          ticks: { color: 'rgba(255,255,255,0.65)', font: { size: 10 } },
           grid: { color: 'rgba(255,255,255,0.08)' },
           border: { color: 'rgba(255,255,255,0.2)' }
         }

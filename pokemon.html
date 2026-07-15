@@ -33,15 +33,42 @@ body{font-family:Segoe UI,system-ui,-apple-system,Roboto,Arial,sans-serif;backgr
 .team-sprites{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;overflow:hidden}
 .team-sprites img.sprite{width:36px;height:36px;border-radius:6px;background:rgba(255,255,255,0.02);padding:4px;object-fit:contain;border:1px solid var(--border)}
 .sprite-more{display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;border-radius:6px;background:rgba(124,111,247,0.10);color:var(--accent);font-size:12px;padding:4px;border:1px solid rgba(124,111,247,0.12)}
-.history-card-header{display:flex;align-items:center;gap:16px;margin-bottom:16px}
-.history-sprite{width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px;object-fit:contain}
-.history-heading-text{font-size:1.35rem;font-weight:800}
+.history-card-header{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;margin:18px 0 16px}
+.history-sprite{width:104px;height:104px;border-radius:18px;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:12px;object-fit:contain}
+.history-heading-text{font-size:1.7rem;font-weight:800}
 .history-subtitle{color:var(--text2);font-size:13px;margin-top:4px}
 .history-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
 .history-item{padding:16px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);border-radius:12px}
 .history-team-name{color:var(--accent);font-weight:700}
 .team-link{color:var(--accent);font-weight:700;text-decoration:none}.team-link:hover{text-decoration:underline}
 .history-item-copy{color:var(--text2);line-height:1.5}
+.history-season{color:var(--text2);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-top:6px}
+.link:hover{text-decoration:underline}
+
+/* Stat tiles + collapsible sections (same treatment as players.html) */
+.record-stats-row{display:flex;flex-wrap:wrap;gap:16px;max-width:860px;margin:14px auto 0;width:100%}
+.record-stat{flex:1;display:flex;flex-direction:column;gap:8px;padding:12px 0;min-width:110px;text-align:center}
+.record-stat-title{color:#6b7280;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em}
+.record-stat-value{font-size:2rem;font-weight:800;color:#ffffff;line-height:1}
+.record-stat-value.positive{color:#4ade80}
+.record-stat-value.negative{color:#f87171}
+.badge-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;justify-content:center}
+.accolade{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;background:rgba(124,111,247,0.12);color:var(--accent);font-size:12px;font-weight:700;border:1px solid rgba(124,111,247,0.2)}
+.accolade a{color:inherit;text-decoration:none}
+.accolade a:hover{text-decoration:underline}
+details.record-section{margin:26px 0 0}
+details.record-section>summary{cursor:pointer;list-style:none;user-select:none}
+details.record-section>summary::-webkit-details-marker{display:none}
+details.record-section>summary::before{content:'▸';display:inline-block;margin-right:8px;color:var(--accent);transition:transform .15s}
+details.record-section[open]>summary::before{transform:rotate(90deg)}
+.section-title{font-size:1.05rem;font-weight:800;margin:0 0 10px}
+.table-wrap{overflow-x:auto}
+.stat-table{width:100%;border-collapse:collapse;font-size:13px}
+.stat-table th{color:var(--text2);text-transform:uppercase;font-size:0.65rem;letter-spacing:0.08em;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.stat-table td{padding:8px 10px;border-bottom:1px solid rgba(46,50,72,0.35);white-space:nowrap}
+.stat-table tr:last-child td{border-bottom:none}
+.stat-table .num{text-align:right}
+@media (max-width:640px){.record-stats-row{gap:8px}.record-stat{min-width:90px}.record-stat-value{font-size:1.5rem}}
 </style>
 </head>
 <body>
@@ -78,7 +105,43 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
 
 function spriteUrlById(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
-function pokemonNameById(id) { const s = String(id); const p = pokemonList.find(x => String(x.id) === s || String(x.id) === String(parseInt(s,10))); return p ? p.name : String(id); }
+// Exact id first — the numeric fallback (leading-zero/number-vs-string ids)
+// must only apply to all-digit ids, otherwise a suffixed form ("892-r",
+// Urshifu-RS) parseInts to its base form ("892") and shows the wrong name.
+function pokemonNameById(id) {
+  const s = String(id);
+  let p = pokemonList.find(x => String(x.id) === s);
+  if (!p && /^\d+$/.test(s)) p = pokemonList.find(x => String(x.id) === String(parseInt(s, 10)));
+  return p ? p.name : s;
+}
+
+function slugifyName(s) { return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+function playerLink(name) {
+  return '<a class="link" href="players.html#' + slugifyName(name) + '">' + escapeHtml(name) + '</a>';
+}
+function renderStatTile(title, value, cls) {
+  return '<div class="record-stat"><div class="record-stat-title">' + title + '</div>'
+    + '<div class="record-stat-value' + (cls ? ' ' + cls : '') + '">' + value + '</div></div>';
+}
+// Collapsible section wrapper — native <details>, open by default (players.html pattern).
+function sectionHtml(title, bodyHtml) {
+  return '<details class="record-section" open>'
+    + '<summary class="section-title">' + title + '</summary>'
+    + bodyHtml
+  + '</details>';
+}
+
+// Who owned this team when a match was played — same week semantics as
+// players.html: ended_week is the week the successor takes over; postseason
+// week numbers don't line up with stints, so those go to the open stint.
+function ownerStintAtMatch(ownersByTeam, teamId, m) {
+  const stints = ownersByTeam[teamId] || [];
+  if (!stints.length) return null;
+  const week = (m.stage && m.stage !== 'regular') ? null : m.week;
+  if (week == null) return stints.find(x => x.ended_week == null) || stints[stints.length - 1];
+  return stints.find(x => (x.started_week || 1) <= week && (x.ended_week == null || x.ended_week > week))
+    || stints.find(x => x.ended_week == null) || stints[0];
+}
 
 function getAcquisitionInfo(via) {
   const key = String(via || '').toLowerCase();
@@ -120,7 +183,8 @@ function getTeamLabel(team, week) {
 }
 
 function createHistoryItem(row, pokemonName) {
-  const teamName = getTeamLabel(row.team, row.acquired_week);
+  const teamName = (row.team && row.team.name) || 'Unknown team';
+  const ownerName = getOwnerDisplayName(row.team, row.acquired_week);
   const action = getAcquisitionInfo(row.acquired_via).label;
   const when = formatSeasonWeek(row.team, row.acquired_week);
   const releaseNote = row.released_week == null ? '' : ' It was dropped Week ' + row.released_week + '.';
@@ -129,8 +193,11 @@ function createHistoryItem(row, pokemonName) {
   const teamHtml = teamSlug && teamSeasonSlug
     ? '<a class="history-team-name team-link" href="team.html?season=' + teamSeasonSlug + '#' + encodeURIComponent(teamSlug) + '">' + escapeHtml(teamName) + '</a>'
     : '<span class="history-team-name">' + escapeHtml(teamName) + '</span>';
+  // Owner rides outside the team link so it can carry its own players.html link.
+  const ownerHtml = ownerName && String(ownerName).trim().toLowerCase() !== String(teamName).trim().toLowerCase()
+    ? ' (' + playerLink(ownerName) + ')' : '';
   return '<li class="history-item">'
-    + '<div class="history-item-copy">' + teamHtml + ' ' + escapeHtml(action) + ' ' + escapeHtml(pokemonName) + ' in ' + escapeHtml(when) + '.' + escapeHtml(releaseNote) + '</div>'
+    + '<div class="history-item-copy">' + teamHtml + ownerHtml + ' ' + escapeHtml(action) + ' ' + escapeHtml(pokemonName) + ' in ' + escapeHtml(when) + '.' + escapeHtml(releaseNote) + '</div>'
     + '</li>';
 }
 
@@ -233,8 +300,199 @@ async function onSearchClick() {
 async function doSearchById(pokemonId) {
   // reset paging
   pageOffset = 0; lastPokemonId = pokemonId; allRows = [];
-  $id('results').innerHTML = '';
-  await loadPage();
+  const name = pokemonNameById(pokemonId) || 'Pokémon';
+  // Skeleton first: the ledger (loadPage) and the stats bundle (loadMonStats)
+  // load in parallel and each fills its own container.
+  $id('results').innerHTML = '<div class="history-card-header">'
+    + renderPokemonSprite(pokemonId, name)
+    + '<div><div class="history-heading-text">' + escapeHtml(name) + '</div><div id="mon-badges"></div></div>'
+    + '</div>'
+    + '<div id="mon-stats"></div><div id="mon-draft"></div><div id="mon-ledger"></div>';
+  attachImageFallback($id('results'));
+  await Promise.all([loadPage(), loadMonStats(pokemonId)]);
+  renderDraftSection(); // needs both: ledger rows (teams) + tier costs
+}
+
+// ----- Combat/usage stats for one Pokémon -----
+let _tiersBySeason = {}, _statsSeasonById = {};
+async function loadMonStats(pokemonId) {
+  const el = $id('mon-stats');
+  if (!el) return;
+  try {
+    const [mpRows, gpsRows, tiers, potwRows, seasons] = await Promise.all([
+      fetchAllIn('match_pokemon', 'match_id,team_id', 'pokemon_id', [pokemonId]),
+      fetchAllIn('game_pokemon_stats', 'game_id,team_id,kills,deaths', 'pokemon_id', [pokemonId]),
+      fetchAllIn('season_pokemon_tiers', 'season_id,point_cost', 'pokemon_id', [pokemonId]).catch(() => []),
+      fetchAllIn('potw', 'season_id,week,player_id', 'pokemon_id', [pokemonId]).catch(() => []),
+      fetchAll('seasons', 'id,name,slug,point_limit')
+    ]);
+    _tiersBySeason = {}; tiers.forEach(t => _tiersBySeason[t.season_id] = t.point_cost);
+    _statsSeasonById = {}; seasons.forEach(s => _statsSeasonById[s.id] = s);
+
+    const gameIds = [...new Set(gpsRows.map(r => r.game_id))];
+    const teamIds = [...new Set(mpRows.map(r => r.team_id).concat(gpsRows.map(r => r.team_id)).filter(Boolean))];
+    const [games, owners] = await Promise.all([
+      gameIds.length ? fetchAllIn('games', 'id,match_id', 'id', gameIds) : [],
+      teamIds.length ? fetchAllIn('team_owners', 'team_id,player_id,started_week,ended_week', 'team_id', teamIds) : []
+    ]);
+    const gameToMatch = {}; games.forEach(g => gameToMatch[g.id] = g.match_id);
+    const matchIds = [...new Set(mpRows.map(r => r.match_id).concat(games.map(g => g.match_id)).filter(Boolean))];
+    const playerIds = [...new Set(owners.map(o => o.player_id).concat(potwRows.map(r => r.player_id)).filter(Boolean))];
+    const [matches, players] = await Promise.all([
+      matchIds.length ? fetchAllIn('matches', 'id,season_id,stage,week,team_a_id,team_b_id,team_a_score,team_b_score,winner_team_id', 'id', matchIds) : [],
+      playerIds.length ? fetchAllIn('players', 'id,display_name', 'id', playerIds) : []
+    ]);
+    const matchById = {}; matches.forEach(m => matchById[m.id] = m);
+    const playerById = {}; players.forEach(p => playerById[p.id] = p);
+    const ownersByTeam = {};
+    owners.forEach(o => { if (o.team_id) (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push(o); });
+    Object.values(ownersByTeam).forEach(list => list.sort((a, b) => (a.started_week || 1) - (b.started_week || 1)));
+
+    // Same played/draw semantics as players.html: winner → W/L, otherwise a
+    // draw only if the match actually has games on the board.
+    const resultFor = (m, teamId) => {
+      if (m.winner_team_id) return m.winner_team_id === teamId ? 'W' : 'L';
+      return ((m.team_a_score || 0) + (m.team_b_score || 0)) > 0 ? 'D' : null;
+    };
+
+    let w = 0, l = 0, d = 0, kills = 0, deaths = 0;
+    const bySeason = {}; // season_id -> { brought, w, l, d, kills, deaths }
+    const byHandler = {}; // player_id -> { name, brought, w, l, d, kills }
+    mpRows.forEach(r => {
+      const m = matchById[r.match_id]; if (!m) return;
+      const res = resultFor(m, r.team_id);
+      const sAgg = bySeason[m.season_id] = bySeason[m.season_id] || { brought: 0, w: 0, l: 0, d: 0, kills: 0, deaths: 0 };
+      sAgg.brought++;
+      if (res === 'W') { w++; sAgg.w++; } else if (res === 'L') { l++; sAgg.l++; } else if (res === 'D') { d++; sAgg.d++; }
+      const stint = ownerStintAtMatch(ownersByTeam, r.team_id, m);
+      const pl = stint && playerById[stint.player_id];
+      if (pl) {
+        const h = byHandler[pl.id] = byHandler[pl.id] || { name: pl.display_name, brought: 0, w: 0, l: 0, d: 0, kills: 0 };
+        h.brought++;
+        if (res === 'W') h.w++; else if (res === 'L') h.l++; else if (res === 'D') h.d++;
+      }
+    });
+    gpsRows.forEach(r => {
+      kills += r.kills || 0; deaths += r.deaths || 0;
+      const m = matchById[gameToMatch[r.game_id]];
+      if (!m) return;
+      const sAgg = bySeason[m.season_id] = bySeason[m.season_id] || { brought: 0, w: 0, l: 0, d: 0, kills: 0, deaths: 0 };
+      sAgg.kills += r.kills || 0; sAgg.deaths += r.deaths || 0;
+      const stint = ownerStintAtMatch(ownersByTeam, r.team_id, m);
+      const pl = stint && playerById[stint.player_id];
+      if (pl && byHandler[pl.id]) byHandler[pl.id].kills += r.kills || 0;
+    });
+
+    // POTW badges under the heading
+    const badgeEl = $id('mon-badges');
+    if (badgeEl && potwRows.length) {
+      badgeEl.className = 'badge-row';
+      badgeEl.innerHTML = potwRows
+        .sort((a, b) => parseSeasonNumberLabel((_statsSeasonById[a.season_id] || {}).name) - parseSeasonNumberLabel((_statsSeasonById[b.season_id] || {}).name) || (a.week || 0) - (b.week || 0))
+        .map(r => {
+          const pl = playerById[r.player_id];
+          return '<span class="accolade">⭐ POTW ' + escapeHtml(seasonShortLabel(_statsSeasonById[r.season_id]) + ' W' + r.week)
+            + (pl ? ' — ' + playerLink(pl.display_name) : '') + '</span>';
+        }).join('');
+    }
+
+    if (!mpRows.length && !gpsRows.length) { el.innerHTML = ''; return; }
+
+    // Tiles
+    const decided = w + l + d;
+    const pct = decided ? ((w / decided) * 100).toFixed(1) : null;
+    let html = '<div class="record-stats-row">'
+      + renderStatTile('Brought', String(mpRows.length))
+      + renderStatTile('Record', escapeHtml(w + '-' + l + (d ? '-' + d : '')))
+      + (pct != null ? renderStatTile('Win %', escapeHtml(pct), parseFloat(pct) >= 50 ? 'positive' : 'negative') : '')
+      + renderStatTile('KOs', String(kills))
+      + renderStatTile('Faints', String(deaths))
+      + renderStatTile('K/D', (kills / Math.max(deaths, 1)).toFixed(2))
+    + '</div>';
+
+    // Season-by-season usage (union of seasons it was used in or priced for)
+    const sids = [...new Set(Object.keys(bySeason).concat(Object.keys(_tiersBySeason)))]
+      .sort((a, b) => parseSeasonNumberLabel((_statsSeasonById[a] || {}).name || (_statsSeasonById[a] || {}).slug) - parseSeasonNumberLabel((_statsSeasonById[b] || {}).name || (_statsSeasonById[b] || {}).slug));
+    if (sids.length) {
+      const rows = sids.map(sid => {
+        const a = bySeason[sid] || { brought: 0, w: 0, l: 0, d: 0, kills: 0, deaths: 0 };
+        return '<tr>'
+          + '<td>' + escapeHtml(seasonShortLabel(_statsSeasonById[sid])) + '</td>'
+          + '<td class="num">' + draftCostCell(_tiersBySeason[sid], sid) + '</td>'
+          + '<td class="num">' + a.brought + '</td>'
+          + '<td class="num">' + (a.brought ? escapeHtml(a.w + '-' + a.l + (a.d ? '-' + a.d : '')) : '—') + '</td>'
+          + '<td class="num">' + a.kills + '</td>'
+          + '<td class="num">' + a.deaths + '</td>'
+        + '</tr>';
+      }).join('');
+      html += sectionHtml('Season by season',
+        '<div class="table-wrap"><table class="stat-table"><thead><tr>'
+        + '<th>Season</th><th class="num">Draft cost</th><th class="num">Brought</th><th class="num">Record</th><th class="num">KOs</th><th class="num">Faints</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
+    }
+
+    // Best handlers
+    const handlers = Object.values(byHandler).sort((x, y) => y.brought - x.brought || y.w - x.w || x.name.localeCompare(y.name));
+    if (handlers.length) {
+      const rows = handlers.map(h => {
+        const hd = h.w + h.l + h.d;
+        const hp = hd ? ((h.w / hd) * 100).toFixed(0) + '%' : '—';
+        return '<tr>'
+          + '<td>' + playerLink(h.name) + '</td>'
+          + '<td class="num">' + h.brought + '</td>'
+          + '<td class="num">' + escapeHtml(h.w + '-' + h.l + (h.d ? '-' + h.d : '')) + '</td>'
+          + '<td class="num">' + hp + '</td>'
+          + '<td class="num">' + h.kills + '</td>'
+        + '</tr>';
+      }).join('');
+      html += sectionHtml('Trainers',
+        '<div class="table-wrap"><table class="stat-table"><thead><tr>'
+        + '<th>Trainer</th><th class="num">Brought</th><th class="num">Record</th><th class="num">Win %</th><th class="num">KOs</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
+    }
+
+    el.innerHTML = html;
+  } catch (e) {
+    console.error('mon stats load failed', e);
+    el.innerHTML = '';
+  }
+}
+
+// Cost shown against that season's draft budget (seasons.point_limit) — 80 pts
+// means nothing on its own when budgets ranged from 115 to 310 across seasons.
+function draftCostCell(cost, seasonId) {
+  if (cost == null) return '—';
+  const limit = ((_statsSeasonById[seasonId] || {}).point_limit) || 0;
+  if (!limit) return escapeHtml(cost + ' pts');
+  const pct = Math.round((cost / limit) * 100);
+  return escapeHtml(String(cost)) + '<span style="color:var(--text2)"> / ' + limit + ' pts</span>'
+    + ' <span style="color:var(--text2);font-size:11px">(' + pct + '%)</span>';
+}
+
+function renderDraftSection() {
+  const el = $id('mon-draft');
+  if (!el) return;
+  const drafts = allRows.filter(r => String(r.acquired_via || '').toLowerCase().includes('draft') && r.team);
+  if (!drafts.length) { el.innerHTML = ''; return; }
+  const rows = drafts.slice().sort((a, b) => getSeasonNumber(a.team) - getSeasonNumber(b.team)).map(r => {
+    const season = r.team.season || null;
+    const cost = r.team.season_id != null ? _tiersBySeason[r.team.season_id] : null;
+    const teamHtml = r.team.slug && season && season.slug
+      ? '<a class="team-link" href="team.html?season=' + season.slug + '#' + encodeURIComponent(r.team.slug) + '">' + escapeHtml(r.team.name || '?') + '</a>'
+      : escapeHtml(r.team.name || '?');
+    const drafter = getOwnerDisplayName(r.team, 1); // week-1 owner = the drafter
+    return '<tr>'
+      + '<td>' + escapeHtml(seasonShortLabel(season)) + '</td>'
+      + '<td>' + teamHtml + '</td>'
+      + '<td>' + (drafter ? playerLink(drafter) : '—') + '</td>'
+      + '<td class="num">' + (r.draft_pick_number != null ? '#' + r.draft_pick_number : '—') + '</td>'
+      + '<td class="num">' + draftCostCell(cost, r.team.season_id) + '</td>'
+    + '</tr>';
+  }).join('');
+  el.innerHTML = sectionHtml('Draft history',
+    '<div class="table-wrap"><table class="stat-table"><thead><tr>'
+    + '<th>Season</th><th>Team</th><th>Drafted by</th><th class="num">Pick</th><th class="num">Cost</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
 }
 
 async function loadPage() {
@@ -295,9 +553,9 @@ async function loadPage() {
     Object.values(teamById).forEach(team => {
       if (team.owners) team.owners.sort((a,b) => (a.started_week || 0) - (b.started_week || 0));
     });
-    // attach team info
-    const out = allRows.map(r => Object.assign({}, r, { team: teamById[r.team_id] || null }));
-    renderResults(out);
+    // attach team info in place — renderDraftSection and exportCSV read allRows too
+    allRows.forEach(r => { r.team = teamById[r.team_id] || null; });
+    renderResults(allRows);
     // show load-more if this page was full
     pageOffset += rows.length;
     $id('load-more').hidden = rows.length < pageSize;
@@ -308,17 +566,13 @@ async function loadPage() {
   } finally { setLoading(false); }
 }
 
-async function loadMore() { await loadPage(); }
+async function loadMore() { await loadPage(); renderDraftSection(); }
 
 function renderResults(rows) {
-  const el = $id('results'); el.innerHTML = '';
-  if (!rows || !rows.length) { el.innerHTML = '<div class="empty">No results.</div>'; return; }
+  const el = $id('mon-ledger') || $id('results');
+  el.innerHTML = '';
+  if (!rows || !rows.length) { el.innerHTML = '<div class="empty">No ownership records.</div>'; return; }
   const pokemonName = pokemonNameById(lastPokemonId) || 'Pokémon';
-  const heading = '<div class="history-card-header">'
-    + renderPokemonSprite(lastPokemonId, pokemonName)
-    + '<div><div class="history-heading-text">' + escapeHtml(pokemonName) + '</div></div>'
-    + '</div>';
-  let html = heading + '<ul class="history-list">';
   const sortedRows = rows.slice().sort((a,b) => {
     const aSeason = getSeasonNumber(a.team);
     const bSeason = getSeasonNumber(b.team);
@@ -330,38 +584,37 @@ function renderResults(rows) {
     const bAction = getAcquisitionInfo(b.acquired_via).priority;
     return aAction - bAction;
   });
+  // Grouped by season with small subheaders
+  let list = '', lastSeasonKey = null;
   sortedRows.forEach(r => {
-    html += createHistoryItem(r, pokemonName);
+    const key = r.team && r.team.season ? seasonShortLabel(r.team.season) : '?';
+    if (key !== lastSeasonKey) {
+      list += '<li class="history-season">' + escapeHtml(key === '?' ? 'Unknown season' : 'Season ' + key.replace(/^S/, '')) + '</li>';
+      lastSeasonKey = key;
+    }
+    list += createHistoryItem(r, pokemonName);
   });
-  html += '</ul>';
-  el.innerHTML = html;
+  el.innerHTML = sectionHtml('Ownership history', '<ul class="history-list">' + list + '</ul>');
   attachImageFallback(el);
 }
 
+function parseSeasonNumberLabel(label) {
+  const match = String(label || '').match(/(\d+(?:[.\-]\d+)?)/);
+  if (!match) return 0;
+  return parseFloat(match[1].replace('-', '.'));
+}
 function getSeasonNumber(team) {
   if (!team || !team.season) return 0;
-  const label = String(team.season.name || team.season.slug || '');
-  const match = label.match(/(\d+)/);
-  return match ? parseInt(match[1], 10) : 0;
+  return parseSeasonNumberLabel(team.season.name || team.season.slug || '');
+}
+function seasonShortLabel(season) {
+  const n = parseSeasonNumberLabel((season && (season.name || season.slug)) || '');
+  return n ? 'S' + n : ((season && season.slug) || '?');
 }
 
 function renderPokemonSprite(id, name) {
   const src = spriteUrlById(id) || POKEBALL_FALLBACK;
   return '<img class="history-sprite" src="' + escapeHtml(src) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '">';
-}
-
-function exportCSV() {
-  if (!allRows.length) return;
-  const cols = ['team','team_slug','season','acquired_week','released_week'];
-  const lines = [cols.join(',')];
-  allRows.forEach(r => {
-    const teamName = r.team ? '"' + (r.team.name || '').replace(/"/g,'""') + '"' : '';
-    const teamSlug = r.team ? (r.team.slug || '') : '';
-    const seasonName = r.team && r.team.season ? (r.team.season.name || r.team.season.slug || '') : '';
-    lines.push([teamName,teamSlug,seasonName,r.acquired_week||'',r.released_week||''].join(','));
-  });
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'pokemon-history-' + (lastPokemonId || 'data') + '.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
 // initialize
