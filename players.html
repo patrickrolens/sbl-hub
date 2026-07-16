@@ -174,18 +174,8 @@ const LEADERBOARD_MIN_MATCHES = 10;
 // flagged as a nemesis / favorite matchup — keeps one-off results out.
 const RIVALRY_MIN_MATCHES = 2;
 
-// Duplicated from pokemon.html (small, deliberate - matches this codebase's existing
-// per-page-inline-script convention rather than sharing a module).
+// pokemonNameById (utils.js) reads this page-owned list as a bare global.
 let pokemonList = [];
-// Exact id first — the numeric fallback (leading-zero/number-vs-string ids)
-// must only apply to all-digit ids, otherwise a suffixed form ("892-r",
-// Urshifu-RS) parseInts to its base form ("892") and shows the wrong name.
-function pokemonNameById(id) {
-  const s = String(id);
-  let p = pokemonList.find(x => String(x.id) === s);
-  if (!p && /^\d+$/.test(s)) p = pokemonList.find(x => String(x.id) === String(parseInt(s, 10)));
-  return p ? p.name : s;
-}
 
 function normalizeStage(stage) {
   if (!stage) return '';
@@ -219,7 +209,7 @@ function $id(id) { return document.getElementById(id); }
 
 // ----- Hash routing (#name for a record, #name1-vs-name2 for a matchup) -----
 let lastAppliedHash = '';
-function slugifyName(s) { return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+// slugifyName comes from utils.js.
 function resolvePlayerBySlug(slug, allPlayers) {
   slug = slugifyName(slug);
   if (!slug) return null;
@@ -331,27 +321,46 @@ function findPlayerByName(allPlayers, name) {
 // every ownership stint, not just the queried player's (see
 // calculatePlayerRatingHistory). Caching the promise (not the result) also
 // dedupes concurrent clicks; a failed fetch clears it so retries work.
+// The raw arrays are additionally cached in sessionStorage (same pattern as
+// pokemon.html's leaders card) so revisits within the TTL render the
+// leaderboard without waiting on ~7 paginated requests.
 let leagueDataPromise = null;
+const LEAGUE_CACHE_KEY = 'sbl-league-v1', LEAGUE_CACHE_TTL = 10 * 60 * 1000;
+
+function buildLeague([allPlayers, allOwners, allMatches, seasons, teams]) {
+  const seasonById = {}; seasons.forEach(s => seasonById[s.id] = s);
+  const teamById = {}; teams.forEach(t => teamById[t.id] = t);
+  const playerById = {}; allPlayers.forEach(p => playerById[p.id] = p);
+  const ownersByTeam = {};
+  allOwners.forEach(o => {
+    if (!o.team_id) return;
+    (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push(o);
+  });
+  Object.values(ownersByTeam).forEach(list => list.sort((a, b) => (a.started_week || 1) - (b.started_week || 1)));
+  return { allPlayers, allOwners, allMatches, seasonById, teamById, playerById, ownersByTeam };
+}
+
 function getLeagueData() {
   if (!leagueDataPromise) {
-    leagueDataPromise = Promise.all([
-      fetchAll('players', 'id,display_name'),
-      fetchAll('team_owners', 'player_id,team_id,started_week,ended_week'),
-      fetchAll('matches', 'id,season_id,stage,week,postseason_round,team_a_id,team_b_id,team_a_score,team_b_score,match_date,winner_team_id'),
-      fetchAll('seasons', 'id,name,slug'),
-      fetchAll('teams', 'id,name,slug,season_id')
-    ]).then(([allPlayers, allOwners, allMatches, seasons, teams]) => {
-      const seasonById = {}; seasons.forEach(s => seasonById[s.id] = s);
-      const teamById = {}; teams.forEach(t => teamById[t.id] = t);
-      const playerById = {}; allPlayers.forEach(p => playerById[p.id] = p);
-      const ownersByTeam = {};
-      allOwners.forEach(o => {
-        if (!o.team_id) return;
-        (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push(o);
-      });
-      Object.values(ownersByTeam).forEach(list => list.sort((a, b) => (a.started_week || 1) - (b.started_week || 1)));
-      return { allPlayers, allOwners, allMatches, seasonById, teamById, playerById, ownersByTeam };
-    }).catch(e => { leagueDataPromise = null; throw e; });
+    let cached = null;
+    try {
+      const c = JSON.parse(sessionStorage.getItem(LEAGUE_CACHE_KEY));
+      if (c && Array.isArray(c.arrs) && c.arrs.length === 5 && Date.now() - c.t < LEAGUE_CACHE_TTL) cached = c.arrs;
+    } catch (e) { /* corrupt cache — refetch */ }
+    if (cached) {
+      leagueDataPromise = Promise.resolve(buildLeague(cached));
+    } else {
+      leagueDataPromise = Promise.all([
+        fetchAll('players', 'id,display_name'),
+        fetchAll('team_owners', 'player_id,team_id,started_week,ended_week'),
+        fetchAll('matches', 'id,season_id,stage,week,postseason_round,team_a_id,team_b_id,team_a_score,team_b_score,match_date,winner_team_id'),
+        fetchAll('seasons', 'id,name,slug'),
+        fetchAll('teams', 'id,name,slug,season_id')
+      ]).then(arrs => {
+        try { sessionStorage.setItem(LEAGUE_CACHE_KEY, JSON.stringify({ t: Date.now(), arrs })); } catch (e) {}
+        return buildLeague(arrs);
+      }).catch(e => { leagueDataPromise = null; throw e; });
+    }
   }
   return leagueDataPromise;
 }
@@ -370,18 +379,9 @@ function ownershipCoversMatch(owners, teamId, m) {
   });
 }
 
-// Who owned this team when the match was played (for the head-to-head table).
-// Same week semantics as ownershipCoversMatch, with makeCoachAtWeek's fallback
-// for data gaps. The ELO sim's ownerAtMatch stays strict on purpose: an
-// unresolved side there must rate as an untracked 1500, not a guessed owner.
-function ownerStintAtMatch(ownersByTeam, teamId, m) {
-  const stints = ownersByTeam[teamId] || [];
-  if (!stints.length) return null;
-  const week = (m.stage && m.stage !== 'regular') ? null : m.week;
-  if (week == null) return stints.find(x => x.ended_week == null) || stints[stints.length - 1];
-  return stints.find(x => (x.started_week || 1) <= week && (x.ended_week == null || x.ended_week > week))
-    || stints.find(x => x.ended_week == null) || stints[0];
-}
+// ownerStintAtMatch comes from utils.js (used for the head-to-head table).
+// The ELO sim's ownerAtMatch stays strict on purpose: an unresolved side there
+// must rate as an untracked 1500, not a guessed owner.
 
 // ----- Per-player career (computed once per page load from league data) -----
 // resultOf distinguishes unplayed from drawn: schedules are bulk-inserted before
@@ -514,6 +514,19 @@ async function fetchPotw(playerId) {
   return (r && !r.error && r.data) ? r.data : [];
 }
 
+// Per-player bundle of the three record-view fetches, cached as a promise so
+// re-viewing a player (or bouncing between two via H2H links) skips the
+// network. Keyed by player id; a failed load evicts itself so retries work.
+const recordExtrasCache = new Map();
+function getRecordExtras(playerId, matchIds) {
+  if (!recordExtrasCache.has(playerId)) {
+    const p = Promise.all([fetchBrought(matchIds), fetchGameStats(matchIds), fetchPotw(playerId)])
+      .catch(e => { recordExtrasCache.delete(playerId); throw e; });
+    recordExtrasCache.set(playerId, p);
+  }
+  return recordExtrasCache.get(playerId);
+}
+
 async function showMatchesClick(fromHash) {
   fromHash = fromHash === true; // guard: also used directly as a click handler
   const name1 = ($id('player1').value || '').trim();
@@ -608,11 +621,7 @@ async function showRecordClick(fromHash) {
     if (!career.matches.length) { out.innerHTML = '<div class="empty">No matches found for this player.</div>'; return; }
 
     const matchIds = career.matches.map(m => m.id);
-    const [mpRows, gameStats, potwRows] = await Promise.all([
-      fetchBrought(matchIds),
-      fetchGameStats(matchIds),
-      fetchPotw(player.id)
-    ]);
+    const [mpRows, gameStats, potwRows] = await getRecordExtras(player.id, matchIds);
 
     // Core record (career.rated already excludes scheduled-but-unplayed rows)
     let matchWins = 0, matchLosses = 0, draws = 0, gameWins = 0, gameLosses = 0;

@@ -85,6 +85,7 @@ details.leaders-fold{margin:0}
 .leader-table-title{font-size:1.05rem;font-weight:800;margin:22px 0 10px}
 .stat-table th.sortable{cursor:pointer;user-select:none}
 .stat-table th.sortable:hover{color:var(--text)}
+.stat-table th.sortable:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;color:var(--text)}
 .stat-table th .arrow{color:var(--accent);margin-left:2px}
 @media (max-width:640px){.leader-tiles{gap:8px}.leader-tile{min-width:104px}}
 </style>
@@ -132,17 +133,7 @@ const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
 
 function spriteUrlById(id) { return id ? ASSET_BASE + 'sprites/' + localId(id) + '.png' : ''; }
-// Exact id first — the numeric fallback (leading-zero/number-vs-string ids)
-// must only apply to all-digit ids, otherwise a suffixed form ("892-r",
-// Urshifu-RS) parseInts to its base form ("892") and shows the wrong name.
-function pokemonNameById(id) {
-  const s = String(id);
-  let p = pokemonList.find(x => String(x.id) === s);
-  if (!p && /^\d+$/.test(s)) p = pokemonList.find(x => String(x.id) === String(parseInt(s, 10)));
-  return p ? p.name : s;
-}
-
-function slugifyName(s) { return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+// pokemonNameById/pokemonEntryById/slugifyName come from utils.js.
 function playerLink(name) {
   return '<a class="link" href="players.html#' + slugifyName(name) + '">' + escapeHtml(name) + '</a>';
 }
@@ -160,17 +151,7 @@ function sectionHtml(title, bodyHtml, closed) {
   + '</details>';
 }
 
-// Who owned this team when a match was played — same week semantics as
-// players.html: ended_week is the week the successor takes over; postseason
-// week numbers don't line up with stints, so those go to the open stint.
-function ownerStintAtMatch(ownersByTeam, teamId, m) {
-  const stints = ownersByTeam[teamId] || [];
-  if (!stints.length) return null;
-  const week = (m.stage && m.stage !== 'regular') ? null : m.week;
-  if (week == null) return stints.find(x => x.ended_week == null) || stints[stints.length - 1];
-  return stints.find(x => (x.started_week || 1) <= week && (x.ended_week == null || x.ended_week > week))
-    || stints.find(x => x.ended_week == null) || stints[0];
-}
+// ownerStintAtMatch comes from utils.js.
 
 function getAcquisitionInfo(via) {
   const key = String(via || '').toLowerCase();
@@ -239,6 +220,13 @@ let pokemonList = [];
 let suggestIndex = -1;
 let debounceTimer = null;
 let pageOffset = 0, pageSize = 100, lastPokemonId = null, allRows = [];
+// Bumped by every new search; in-flight loaders compare their captured copy
+// after each await and bail if a newer search started, so a slow response can
+// never write into the view (or the shared allRows) of a later search.
+let searchToken = 0;
+// Ledger team/owner data accumulated across "Load more" pages, so each page
+// only fetches teams it hasn't seen yet. Reset per search.
+let ledgerTeamById = {};
 
 function $id(id) { return document.getElementById(id); }
 function showStatus(txt, kind) { const s = $id('status'); s.textContent = txt || ''; s.style.color = kind === 'err' ? 'var(--red)' : 'var(--text2)'; }
@@ -330,8 +318,9 @@ async function onSearchClick() {
 }
 
 async function doSearchById(pokemonId) {
-  // reset paging
-  pageOffset = 0; lastPokemonId = pokemonId; allRows = [];
+  // reset paging + invalidate any in-flight loaders from a previous search
+  searchToken++;
+  pageOffset = 0; lastPokemonId = pokemonId; allRows = []; ledgerTeamById = {};
   const name = pokemonNameById(pokemonId) || 'Pokémon';
   // Keep the URL shareable: ?q=<name> round-trips through the boot deep-link.
   try {
@@ -339,7 +328,7 @@ async function doSearchById(pokemonId) {
     sp.set('q', name);
     history.replaceState(null, '', location.pathname + '?' + sp.toString() + location.hash);
   } catch (e) { /* history API unavailable — links just won't carry ?q */ }
-  const mon = pokemonList.find(x => String(x.id) === String(pokemonId));
+  const mon = pokemonEntryById(pokemonId);
   const types = mon ? [mon.type1, mon.type2].filter(Boolean).join(' · ') : '';
   // Skeleton first: the ledger (loadPage) and the stats bundle (loadMonStats)
   // load in parallel and each fills its own container.
@@ -357,18 +346,27 @@ async function doSearchById(pokemonId) {
 
 // ----- Combat/usage stats for one Pokémon -----
 let _tiersBySeason = {}, _statsSeasonById = {};
+// Seasons can't change mid-session; fetch once and reuse across searches.
+let _seasonsPromise = null;
+function getSeasons() {
+  if (!_seasonsPromise) _seasonsPromise = fetchAll('seasons', 'id,name,slug,point_limit')
+    .catch(e => { _seasonsPromise = null; throw e; });
+  return _seasonsPromise;
+}
 async function loadMonStats(pokemonId) {
   const el = $id('mon-stats');
   if (!el) return;
+  const token = searchToken;
   try {
     const [mpRows, gpsRows, tiers, potwRows, seasons, tpRows] = await Promise.all([
       fetchAllIn('match_pokemon', 'match_id,team_id', 'pokemon_id', [pokemonId]),
       fetchAllIn('game_pokemon_stats', 'game_id,team_id,kills,deaths', 'pokemon_id', [pokemonId]),
       fetchAllIn('season_pokemon_tiers', 'season_id,point_cost', 'pokemon_id', [pokemonId]).catch(() => []),
       fetchAllIn('potw', 'season_id,week,player_id', 'pokemon_id', [pokemonId]).catch(() => []),
-      fetchAll('seasons', 'id,name,slug,point_limit'),
+      getSeasons(),
       fetchAllIn('team_pokemon', 'team_id', 'pokemon_id', [pokemonId]).catch(() => [])
     ]);
+    if (token !== searchToken) return;
     _tiersBySeason = {}; tiers.forEach(t => _tiersBySeason[t.season_id] = t.point_cost);
     _statsSeasonById = {}; seasons.forEach(s => _statsSeasonById[s.id] = s);
 
@@ -378,6 +376,7 @@ async function loadMonStats(pokemonId) {
       gameIds.length ? fetchAllIn('games', 'id,match_id,winner_team_id', 'id', gameIds) : [],
       teamIds.length ? fetchAllIn('team_owners', 'team_id,player_id,started_week,ended_week', 'team_id', teamIds) : []
     ]);
+    if (token !== searchToken) return;
     const gameToMatch = {}; games.forEach(g => gameToMatch[g.id] = g.match_id);
     const gameById = {}; games.forEach(g => gameById[g.id] = g);
     const matchIds = [...new Set(mpRows.map(r => r.match_id).concat(games.map(g => g.match_id)).filter(Boolean))];
@@ -386,6 +385,7 @@ async function loadMonStats(pokemonId) {
       matchIds.length ? fetchAllIn('matches', 'id,season_id,stage,week,team_a_id,team_b_id,team_a_score,team_b_score,winner_team_id', 'id', matchIds) : [],
       playerIds.length ? fetchAllIn('players', 'id,display_name', 'id', playerIds) : []
     ]);
+    if (token !== searchToken) return;
     const matchById = {}; matches.forEach(m => matchById[m.id] = m);
     const playerById = {}; players.forEach(p => playerById[p.id] = p);
     const ownersByTeam = {};
@@ -697,6 +697,10 @@ function leaderSortBy(col) {
   if (_leaderSort.col === col) _leaderSort.dir = _leaderSort.dir === 'asc' ? 'desc' : 'asc';
   else _leaderSort = { col, dir: col === 'name' ? 'asc' : 'desc' };
   renderLeaderTable();
+  // Re-render replaces the <thead>; put focus back on the header that was
+  // activated so keyboard sorting doesn't dump focus to <body>.
+  const th = document.querySelector('#leaders-table th[data-key="' + col + '"]');
+  if (th) th.focus();
 }
 
 function renderLeaderTable() {
@@ -711,9 +715,15 @@ function renderLeaderTable() {
     return b.games - a.games || a.name.localeCompare(b.name);
   }).slice(0, 25);
 
-  const head = LEADER_COLS.map(c =>
-    '<th class="sortable' + (c.num ? ' num' : '') + '" onclick="leaderSortBy(\'' + c.key + '\')">' + c.label
-    + (_leaderSort.col === c.key ? '<span class="arrow">' + (_leaderSort.dir === 'asc' ? '▲' : '▼') + '</span>' : '') + '</th>').join('');
+  const head = LEADER_COLS.map(c => {
+    const active = _leaderSort.col === c.key;
+    return '<th class="sortable' + (c.num ? ' num' : '') + '" tabindex="0" data-key="' + c.key + '"'
+      + ' aria-sort="' + (active ? (_leaderSort.dir === 'asc' ? 'ascending' : 'descending') : 'none') + '"'
+      + ' onclick="leaderSortBy(\'' + c.key + '\')"'
+      + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();leaderSortBy(\'' + c.key + '\')}">'
+      + c.label
+      + (active ? '<span class="arrow">' + (_leaderSort.dir === 'asc' ? '▲' : '▼') + '</span>' : '') + '</th>';
+  }).join('');
   const body = rows.map((x, i) => '<tr>'
     + '<td class="num">' + (i + 1) + '</td>'
     + '<td><button type="button" class="leader-row-btn" onclick="leaderGo(\'' + escapeHtml(String(x.id)) + '\')">'
@@ -772,64 +782,68 @@ function renderDraftSection() {
 
 async function loadPage() {
   if (!lastPokemonId) return;
+  const token = searchToken;
   setLoading(true);
   try {
     const from = pageOffset;
     const to = pageOffset + pageSize - 1;
     const sel = 'team_id, pokemon_id, acquired_week, released_week, acquired_via, draft_pick_number';
     const { data: rows, error } = await sb.from('team_pokemon').select(sel).eq('pokemon_id', lastPokemonId).order('acquired_week', { ascending: true }).order('team_id', { ascending: true }).range(from, to);
+    if (token !== searchToken) return;
     if (error) throw error;
     if (!rows || !rows.length) {
       if (!allRows.length) showStatus('No ownership records found.');
       else showStatus('No more records.');
-      setLoading(false);
       $id('load-more').hidden = true;
       renderResults(allRows);
       return;
     }
     allRows.push(...rows);
-    const teamIds = [...new Set(allRows.map(r => r.team_id).filter(Boolean))];
-    let teams = [], owners = [], playerById = {};
+    // Only fetch team/owner data for teams this ledger hasn't seen yet — a
+    // "Load more" page reuses everything already in ledgerTeamById.
+    const teamIds = [...new Set(rows.map(r => r.team_id).filter(id => id && !ledgerTeamById[id]))];
     if (teamIds.length) {
-      const [teamsRes, ownersRes] = await Promise.all([
+      const [teamsRes, ownersRes, seasons] = await Promise.all([
         sb.from('teams').select('id,name,slug,logo_url,season_id').in('id', teamIds),
-        sb.from('team_owners').select('team_id,player_id,started_week,ended_week').in('team_id', teamIds)
+        sb.from('team_owners').select('team_id,player_id,started_week,ended_week').in('team_id', teamIds),
+        getSeasons()
       ]);
+      if (token !== searchToken) return;
       if (teamsRes.error) throw teamsRes.error;
       if (ownersRes.error) throw ownersRes.error;
-      teams = teamsRes.data || [];
-      owners = ownersRes.data || [];
-      const seasonIds = [...new Set(teams.map(x => x.season_id).filter(Boolean))];
+      const teams = teamsRes.data || [];
+      const owners = ownersRes.data || [];
       const playerIds = [...new Set(owners.map(o => o.player_id).filter(Boolean))];
-      const [seasonsRes, playersRes] = await Promise.all([
-        seasonIds.length ? sb.from('seasons').select('id,name,slug').in('id', seasonIds) : Promise.resolve({ data: [], error: null }),
-        playerIds.length ? sb.from('players').select('id,display_name').in('id', playerIds) : Promise.resolve({ data: [], error: null })
-      ]);
-      if (seasonsRes.error) throw seasonsRes.error;
+      const playersRes = playerIds.length
+        ? await sb.from('players').select('id,display_name').in('id', playerIds)
+        : { data: [], error: null };
+      if (token !== searchToken) return;
       if (playersRes.error) throw playersRes.error;
-      const seasonById = {};
-      (seasonsRes.data || []).forEach(ss => seasonById[ss.id] = ss);
-      teams.forEach(ti => ti.season = seasonById[ti.season_id] || null);
+      const playerById = {};
       (playersRes.data || []).forEach(p => { playerById[p.id] = p; });
-    }
-    const teamById = {};
-    teams.forEach(t => teamById[t.id] = t);
-    owners.forEach(o => {
-      const team = teamById[o.team_id];
-      if (!team) return;
-      team.owners = team.owners || [];
-      team.owners.push({
-        player_id: o.player_id,
-        started_week: o.started_week,
-        ended_week: o.ended_week,
-        display_name: playerById[o.player_id] ? playerById[o.player_id].display_name : ''
+      const seasonById = {};
+      seasons.forEach(ss => seasonById[ss.id] = ss);
+      teams.forEach(t => {
+        t.season = seasonById[t.season_id] || null;
+        ledgerTeamById[t.id] = t;
       });
-    });
-    Object.values(teamById).forEach(team => {
-      if (team.owners) team.owners.sort((a,b) => (a.started_week || 0) - (b.started_week || 0));
-    });
+      owners.forEach(o => {
+        const team = ledgerTeamById[o.team_id];
+        if (!team) return;
+        team.owners = team.owners || [];
+        team.owners.push({
+          player_id: o.player_id,
+          started_week: o.started_week,
+          ended_week: o.ended_week,
+          display_name: playerById[o.player_id] ? playerById[o.player_id].display_name : ''
+        });
+      });
+      teams.forEach(team => {
+        if (team.owners) team.owners.sort((a, b) => (a.started_week || 0) - (b.started_week || 0));
+      });
+    }
     // attach team info in place — renderDraftSection and exportCSV read allRows too
-    allRows.forEach(r => { r.team = teamById[r.team_id] || null; });
+    allRows.forEach(r => { if (!r.team) r.team = ledgerTeamById[r.team_id] || null; });
     renderResults(allRows);
     // show load-more if this page was full
     pageOffset += rows.length;
@@ -838,7 +852,7 @@ async function loadPage() {
   } catch (e) {
     console.error(e);
     showStatus('Could not query records — check network or database permissions.', 'err');
-  } finally { setLoading(false); }
+  } finally { if (token === searchToken) setLoading(false); }
 }
 
 async function loadMore() { await loadPage(); renderDraftSection(); }
