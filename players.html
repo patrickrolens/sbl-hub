@@ -768,18 +768,18 @@ function renderAccolades(career, potwRows, league) {
 function renderSignatureSection(career, mpRows, gameStats) {
   const matchSide = {}; career.matches.forEach(m => { matchSide[m.id] = career.sideOf(m); });
   const matchRes = {}; career.rated.forEach(m => { matchRes[m.id] = career.resultOf(m); });
-  const agg = {}; // pokemon_id -> { brought, w, l, kills, deaths, games }
+  const agg = {}; // pokemon_id -> { brought, w, l, d, kills, deaths, games }
   mpRows.forEach(r => {
     if (matchSide[r.match_id] !== r.team_id) return;
-    const a = agg[r.pokemon_id] = agg[r.pokemon_id] || { brought: 0, w: 0, l: 0, kills: 0, deaths: 0, games: 0 };
+    const a = agg[r.pokemon_id] = agg[r.pokemon_id] || { brought: 0, w: 0, l: 0, d: 0, kills: 0, deaths: 0, games: 0 };
     a.brought++;
     const res = matchRes[r.match_id];
-    if (res === 'W') a.w++; else if (res === 'L') a.l++;
+    if (res === 'W') a.w++; else if (res === 'L') a.l++; else if (res === 'D') a.d++;
   });
   gameStats.stats.forEach(r => {
     const mid = gameStats.gameToMatch[r.game_id];
     if (!mid || matchSide[mid] !== r.team_id) return;
-    const a = agg[r.pokemon_id] = agg[r.pokemon_id] || { brought: 0, w: 0, l: 0, kills: 0, deaths: 0, games: 0 };
+    const a = agg[r.pokemon_id] = agg[r.pokemon_id] || { brought: 0, w: 0, l: 0, d: 0, kills: 0, deaths: 0, games: 0 };
     a.kills += r.kills || 0; a.deaths += r.deaths || 0; a.games++;
   });
   const top = Object.entries(agg)
@@ -789,14 +789,16 @@ function renderSignatureSection(career, mpRows, gameStats) {
   if (!top.length) return '';
   const cards = top.map(s => {
     const nm = pokemonNameById(s.pid);
-    const decided = s.w + s.l;
+    // Draws count in the denominator — same as pokemon.html's Trainers table
+    // and this page's own Match Win % tile.
+    const decided = s.w + s.l + (s.d || 0);
     const pct = decided ? Math.round((s.w / decided) * 100) + '% W' : '';
-    const meta = 'Brought ' + s.brought + (pct ? ' · ' + pct : '') + (s.games ? ' · ' + s.kills + ' KOs / ' + s.deaths + ' faints' : '');
+    const meta = 'Sets ' + s.brought + (pct ? ' · ' + pct : '') + (s.games ? ' · ' + s.kills + ' KOs / ' + s.deaths + ' faints' : '');
     return '<a class="sig-card" href="pokemon.html?q=' + encodeURIComponent(nm) + '"><img src="' + spriteUrl(s.pid) + '" data-pid="' + escapeHtml(String(s.pid)) + '" alt="' + escapeHtml(nm) + '">'
       + '<div><div class="sig-name">' + escapeHtml(nm) + '</div><div class="sig-meta">' + escapeHtml(meta) + '</div></div></a>';
   }).join('');
   return sectionHtml('Signature Pokémon',
-    'Most-brought Pokémon across this player\'s matches, with kills/faints while they were at the helm.',
+    'The Pokémon this player brought to the most sets, with KOs/faints while they were at the helm.',
     '<div class="sig-grid">' + cards + '</div>');
 }
 

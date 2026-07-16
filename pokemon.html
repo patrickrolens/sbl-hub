@@ -52,6 +52,7 @@ body{font-family:Segoe UI,system-ui,-apple-system,Roboto,Arial,sans-serif;backgr
 .record-stat-value{font-size:2rem;font-weight:800;color:#ffffff;line-height:1}
 .record-stat-value.positive{color:#4ade80}
 .record-stat-value.negative{color:#f87171}
+.record-stat-sub{color:var(--text2);font-size:11px}
 .badge-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;justify-content:center}
 .accolade{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;background:rgba(124,111,247,0.12);color:var(--accent);font-size:12px;font-weight:700;border:1px solid rgba(124,111,247,0.2)}
 .accolade a{color:inherit;text-decoration:none}
@@ -69,6 +70,23 @@ details.record-section[open]>summary::before{transform:rotate(90deg)}
 .stat-table tr:last-child td{border-bottom:none}
 .stat-table .num{text-align:right}
 @media (max-width:640px){.record-stats-row{gap:8px}.record-stat{min-width:90px}.record-stat-value{font-size:1.5rem}}
+
+/* League-leader tiles (landing view, below the search card) */
+.leader-tiles{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}
+.leader-tile{flex:1;min-width:130px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;cursor:pointer;color:var(--text);font:inherit;text-align:center}
+.leader-tile:hover{border-color:var(--accent);background:rgba(124,111,247,0.06)}
+.leader-tile img{width:52px;height:52px;object-fit:contain}
+.leader-tile-name{font-weight:700;font-size:13px}
+.leader-tile-value{font-size:1.3rem;font-weight:800;color:var(--accent);line-height:1}
+.leader-row-btn{display:flex;align-items:center;gap:7px;background:none;border:none;color:var(--text);font:inherit;cursor:pointer;padding:0}
+.leader-row-btn:hover span{color:var(--accent);text-decoration:underline}
+.leader-row-btn img{width:28px;height:28px;image-rendering:pixelated;flex-shrink:0}
+details.leaders-fold{margin:0}
+.leader-table-title{font-size:1.05rem;font-weight:800;margin:22px 0 10px}
+.stat-table th.sortable{cursor:pointer;user-select:none}
+.stat-table th.sortable:hover{color:var(--text)}
+.stat-table th .arrow{color:var(--accent);margin-left:2px}
+@media (max-width:640px){.leader-tiles{gap:8px}.leader-tile{min-width:104px}}
 </style>
 </head>
 <body>
@@ -93,6 +111,15 @@ details.record-section[open]>summary::before{transform:rotate(90deg)}
 
   <div id="results" class="card-body"></div>
   <div class="card-footer"><button id="load-more" class="sbln-btn" hidden>Load more</button></div>
+</div>
+
+<div class="card" id="leaders-card" hidden>
+  <details class="record-section leaders-fold" open>
+    <summary class="section-title card-heading">All-Time Leaders</summary>
+    <div class="card-copy" id="leaders-copy">Across every season. Click any Pokémon to open its full history.</div>
+    <div id="leaders-tiles" class="leader-tiles"></div>
+    <div id="leaders-table"></div>
+  </details>
 </div>
 </div><!-- /.page-wrap -->
 
@@ -119,13 +146,15 @@ function slugifyName(s) { return String(s || '').toLowerCase().trim().replace(/[
 function playerLink(name) {
   return '<a class="link" href="players.html#' + slugifyName(name) + '">' + escapeHtml(name) + '</a>';
 }
-function renderStatTile(title, value, cls) {
+function renderStatTile(title, value, cls, subHtml) {
   return '<div class="record-stat"><div class="record-stat-title">' + title + '</div>'
-    + '<div class="record-stat-value' + (cls ? ' ' + cls : '') + '">' + value + '</div></div>';
+    + '<div class="record-stat-value' + (cls ? ' ' + cls : '') + '">' + value + '</div>'
+    + (subHtml || '') + '</div>';
 }
-// Collapsible section wrapper — native <details>, open by default (players.html pattern).
-function sectionHtml(title, bodyHtml) {
-  return '<details class="record-section" open>'
+// Collapsible section wrapper — native <details>, open by default (players.html
+// pattern); pass closed=true for long sections that should start collapsed.
+function sectionHtml(title, bodyHtml, closed) {
+  return '<details class="record-section"' + (closed ? '' : ' open') + '>'
     + '<summary class="section-title">' + title + '</summary>'
     + bodyHtml
   + '</details>';
@@ -236,6 +265,9 @@ async function boot() {
   // deep-link support: ?q=Charizard
   const q = new URLSearchParams(location.search).get('q');
   if (q) { $id('search').value = q; debounce(() => onSearchClick(), 60); }
+
+  // League leaders fill in below the search card; never block the search UI.
+  loadLeagueLeaders();
 }
 
 function debounce(fn, ms) {
@@ -319,12 +351,13 @@ async function loadMonStats(pokemonId) {
   const el = $id('mon-stats');
   if (!el) return;
   try {
-    const [mpRows, gpsRows, tiers, potwRows, seasons] = await Promise.all([
+    const [mpRows, gpsRows, tiers, potwRows, seasons, tpRows] = await Promise.all([
       fetchAllIn('match_pokemon', 'match_id,team_id', 'pokemon_id', [pokemonId]),
       fetchAllIn('game_pokemon_stats', 'game_id,team_id,kills,deaths', 'pokemon_id', [pokemonId]),
       fetchAllIn('season_pokemon_tiers', 'season_id,point_cost', 'pokemon_id', [pokemonId]).catch(() => []),
       fetchAllIn('potw', 'season_id,week,player_id', 'pokemon_id', [pokemonId]).catch(() => []),
-      fetchAll('seasons', 'id,name,slug,point_limit')
+      fetchAll('seasons', 'id,name,slug,point_limit'),
+      fetchAllIn('team_pokemon', 'team_id', 'pokemon_id', [pokemonId]).catch(() => [])
     ]);
     _tiersBySeason = {}; tiers.forEach(t => _tiersBySeason[t.season_id] = t.point_cost);
     _statsSeasonById = {}; seasons.forEach(s => _statsSeasonById[s.id] = s);
@@ -332,10 +365,11 @@ async function loadMonStats(pokemonId) {
     const gameIds = [...new Set(gpsRows.map(r => r.game_id))];
     const teamIds = [...new Set(mpRows.map(r => r.team_id).concat(gpsRows.map(r => r.team_id)).filter(Boolean))];
     const [games, owners] = await Promise.all([
-      gameIds.length ? fetchAllIn('games', 'id,match_id', 'id', gameIds) : [],
+      gameIds.length ? fetchAllIn('games', 'id,match_id,winner_team_id', 'id', gameIds) : [],
       teamIds.length ? fetchAllIn('team_owners', 'team_id,player_id,started_week,ended_week', 'team_id', teamIds) : []
     ]);
     const gameToMatch = {}; games.forEach(g => gameToMatch[g.id] = g.match_id);
+    const gameById = {}; games.forEach(g => gameById[g.id] = g);
     const matchIds = [...new Set(mpRows.map(r => r.match_id).concat(games.map(g => g.match_id)).filter(Boolean))];
     const playerIds = [...new Set(owners.map(o => o.player_id).concat(potwRows.map(r => r.player_id)).filter(Boolean))];
     const [matches, players] = await Promise.all([
@@ -372,8 +406,11 @@ async function loadMonStats(pokemonId) {
         if (res === 'W') h.w++; else if (res === 'L') h.l++; else if (res === 'D') h.d++;
       }
     });
+    let gameW = 0, gameL = 0;
     gpsRows.forEach(r => {
       kills += r.kills || 0; deaths += r.deaths || 0;
+      const g = gameById[r.game_id];
+      if (g && g.winner_team_id) { if (g.winner_team_id === r.team_id) gameW++; else gameL++; }
       const m = matchById[gameToMatch[r.game_id]];
       if (!m) return;
       const sAgg = bySeason[m.season_id] = bySeason[m.season_id] || { brought: 0, w: 0, l: 0, d: 0, kills: 0, deaths: 0 };
@@ -398,16 +435,69 @@ async function loadMonStats(pokemonId) {
 
     if (!mpRows.length && !gpsRows.length) { el.innerHTML = ''; return; }
 
-    // Tiles
+    // Streaks + regular/postseason splits + best season (players.html patterns).
+    // Chronological order: season number, regular before postseason, then week.
+    const seasonNumOf = m => parseSeasonNumberLabel(((_statsSeasonById[m.season_id] || {}).name) || ((_statsSeasonById[m.season_id] || {}).slug) || '');
+    const chrono = mpRows
+      .map(r => { const m = matchById[r.match_id]; return m ? { m, res: resultFor(m, r.team_id) } : null; })
+      .filter(x => x && x.res)
+      .sort((a, b) => seasonNumOf(a.m) - seasonNumOf(b.m)
+        || ((a.m.stage && a.m.stage !== 'regular') ? 1 : 0) - ((b.m.stage && b.m.stage !== 'regular') ? 1 : 0)
+        || (a.m.week || 0) - (b.m.week || 0));
+    const results = chrono.map(x => x.res);
+    let longestW = 0, run = 0;
+    results.forEach(r => { if (r === 'W') { run++; if (run > longestW) longestW = run; } else run = 0; });
+    let curType = null, curLen = 0;
+    for (let i = results.length - 1; i >= 0; i--) {
+      const r = results[i];
+      if (r === 'D') break;
+      if (curType == null) { curType = r; curLen = 1; }
+      else if (r === curType) curLen++;
+      else break;
+    }
+    let regW = 0, regL = 0, postW = 0, postL = 0, postAny = false;
+    chrono.forEach(x => {
+      const reg = !x.m.stage || x.m.stage === 'regular';
+      if (!reg) postAny = true;
+      if (x.res === 'W') { reg ? regW++ : postW++; }
+      else if (x.res === 'L') { reg ? regL++ : postL++; }
+    });
+    // Best season by win % over decided matches; ties go to the bigger sample.
+    let bestSid = null, bestScore = -1, bestAgg = null;
+    Object.keys(bySeason).forEach(sid => {
+      const a = bySeason[sid], dec = a.w + a.l + a.d;
+      if (!dec) return;
+      const score = a.w / dec;
+      if (score > bestScore || (score === bestScore && bestAgg && dec > (bestAgg.w + bestAgg.l + bestAgg.d))) { bestScore = score; bestSid = sid; bestAgg = a; }
+    });
+    const teamsOwned = [...new Set(tpRows.map(t => t.team_id).filter(Boolean))].length;
+
+    // Tiles — match record (whole series, bench included) and game record (games
+    // it actually appeared in, per games.winner_team_id) side by side.
     const decided = w + l + d;
     const pct = decided ? ((w / decided) * 100).toFixed(1) : null;
+    const gameDecided = gameW + gameL;
+    const gamePct = gameDecided ? ((gameW / gameDecided) * 100).toFixed(1) : null;
     let html = '<div class="record-stats-row">'
-      + renderStatTile('Brought', String(mpRows.length))
-      + renderStatTile('Record', escapeHtml(w + '-' + l + (d ? '-' + d : '')))
-      + (pct != null ? renderStatTile('Win %', escapeHtml(pct), parseFloat(pct) >= 50 ? 'positive' : 'negative') : '')
+      + renderStatTile('Sets', String(mpRows.length))
+      + renderStatTile('Matches', escapeHtml(w + '-' + l + (d ? '-' + d : '')))
+      + (pct != null ? renderStatTile('Match Win %', escapeHtml(pct), parseFloat(pct) >= 50 ? 'positive' : 'negative') : '')
+      + renderStatTile('Games', escapeHtml(gameW + '-' + gameL))
+      + (gamePct != null ? renderStatTile('Game Win %', escapeHtml(gamePct), parseFloat(gamePct) >= 50 ? 'positive' : 'negative') : '')
+    + '</div>'
+    + '<div class="record-stats-row">'
       + renderStatTile('KOs', String(kills))
       + renderStatTile('Faints', String(deaths))
-      + renderStatTile('K/D', (kills / Math.max(deaths, 1)).toFixed(2))
+      + renderStatTile('K/F', (kills / Math.max(deaths, 1)).toFixed(2))
+      + renderStatTile('Current Streak', curType ? escapeHtml(curType + curLen) : '—', curType === 'W' ? 'positive' : (curType === 'L' ? 'negative' : ''))
+      + renderStatTile('Longest Win Streak', String(longestW))
+    + '</div>'
+    + '<div class="record-stats-row">'
+      + (bestSid ? renderStatTile('Best Season', escapeHtml(seasonShortLabel(_statsSeasonById[bestSid])), '',
+          '<div class="record-stat-sub">' + escapeHtml(bestAgg.w + '-' + bestAgg.l + (bestAgg.d ? '-' + bestAgg.d : '') + ' (' + Math.round(bestScore * 100) + '%)') + '</div>') : '')
+      + renderStatTile('Regular Season', escapeHtml(regW + '-' + regL))
+      + (postAny ? renderStatTile('Postseason', escapeHtml(postW + '-' + postL)) : '')
+      + (teamsOwned ? renderStatTile('Teams', String(teamsOwned)) : '')
     + '</div>';
 
     // Season-by-season usage (union of seasons it was used in or priced for)
@@ -427,7 +517,7 @@ async function loadMonStats(pokemonId) {
       }).join('');
       html += sectionHtml('Season by season',
         '<div class="table-wrap"><table class="stat-table"><thead><tr>'
-        + '<th>Season</th><th class="num">Draft cost</th><th class="num">Brought</th><th class="num">Record</th><th class="num">KOs</th><th class="num">Faints</th>'
+        + '<th>Season</th><th class="num">Draft cost</th><th class="num">Sets</th><th class="num">Record</th><th class="num">KOs</th><th class="num">Faints</th>'
         + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
     }
 
@@ -447,7 +537,7 @@ async function loadMonStats(pokemonId) {
       }).join('');
       html += sectionHtml('Trainers',
         '<div class="table-wrap"><table class="stat-table"><thead><tr>'
-        + '<th>Trainer</th><th class="num">Brought</th><th class="num">Record</th><th class="num">Win %</th><th class="num">KOs</th>'
+        + '<th>Trainer</th><th class="num">Sets</th><th class="num">Record</th><th class="num">Win %</th><th class="num">KOs</th>'
         + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
     }
 
@@ -456,6 +546,148 @@ async function loadMonStats(pokemonId) {
     console.error('mon stats load failed', e);
     el.innerHTML = '';
   }
+}
+
+// ----- League leaders (all-time, every Pokémon) -----
+// Loads once in the background after boot; the card stays hidden if it fails.
+let _leagueMons = [], _leaderSort = { col: 'winpct', dir: 'desc' }, _leaderMin = 20;
+
+async function loadLeagueLeaders() {
+  const card = $id('leaders-card');
+  if (!card) return;
+  try {
+    const [mpRows, gpsRows, games, tpRows, potwRows] = await Promise.all([
+      fetchAll('match_pokemon', 'pokemon_id'),
+      fetchAll('game_pokemon_stats', 'game_id,team_id,pokemon_id,kills,deaths'),
+      fetchAll('games', 'id,winner_team_id'),
+      fetchAll('team_pokemon', 'pokemon_id,team_id'),
+      fetchAll('potw', 'pokemon_id').catch(() => [])
+    ]);
+    const gameById = {}; games.forEach(g => gameById[g.id] = g);
+    const byMon = {};
+    const agg = id => byMon[id] = byMon[id] || { id, brought: 0, games: 0, gw: 0, gl: 0, kills: 0, deaths: 0, teams: new Set(), potw: 0 };
+    mpRows.forEach(r => agg(r.pokemon_id).brought++);
+    // Game-level record: each game_pokemon_stats row is one game the mon actually
+    // played in, and games.winner_team_id decides it — no match-level bench credit.
+    gpsRows.forEach(r => {
+      const a = agg(r.pokemon_id);
+      a.games++; a.kills += r.kills || 0; a.deaths += r.deaths || 0;
+      const g = gameById[r.game_id];
+      if (g && g.winner_team_id) { if (g.winner_team_id === r.team_id) a.gw++; else a.gl++; }
+    });
+    tpRows.forEach(r => { if (r.team_id) agg(r.pokemon_id).teams.add(r.team_id); });
+    potwRows.forEach(r => agg(r.pokemon_id).potw++);
+
+    _leagueMons = Object.values(byMon).map(a => {
+      const dec = a.gw + a.gl;
+      return {
+        id: a.id, name: pokemonNameById(a.id),
+        brought: a.brought, games: a.games, gw: a.gw, gl: a.gl,
+        winpct: dec ? (a.gw / dec) * 100 : 0,
+        kills: a.kills, deaths: a.deaths, kd: a.kills / Math.max(a.deaths, 1),
+        teams: a.teams.size, potw: a.potw
+      };
+    });
+    if (!_leagueMons.length) return;
+    // Relax the qualifying floor for young leagues so the card never comes up empty.
+    while (_leaderMin > 1 && _leagueMons.filter(x => x.games >= _leaderMin).length < 5) _leaderMin = _leaderMin > 5 ? 5 : 1;
+    $id('leaders-copy').textContent = 'Across every season. Win rate and K/F leaders need at least '
+      + _leaderMin + ' games played. Click any Pokémon to open its full history.';
+    renderLeaders();
+    card.hidden = false;
+  } catch (e) { console.error('league leaders load failed', e); }
+}
+
+function topBy(list, score) {
+  return list.slice().sort((a, b) => score(b) - score(a) || b.games - a.games || a.name.localeCompare(b.name))[0] || null;
+}
+
+function leaderTile(title, mon, value) {
+  return '<button type="button" class="leader-tile" onclick="leaderGo(\'' + escapeHtml(String(mon.id)) + '\')">'
+    + '<div class="record-stat-title">' + title + '</div>'
+    + '<img src="' + escapeHtml(spriteUrlById(mon.id)) + '" data-mid="' + escapeHtml(String(mon.id)) + '" alt="">'
+    + '<div class="leader-tile-name">' + escapeHtml(mon.name) + '</div>'
+    + '<div class="leader-tile-value">' + escapeHtml(value) + '</div>'
+  + '</button>';
+}
+
+function leaderGo(id) {
+  const name = pokemonNameById(id);
+  $id('search').value = name;
+  doSearchById(id);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderLeaders() {
+  const qualified = _leagueMons.filter(x => x.games >= _leaderMin);
+  const tiles = [];
+  const win = topBy(qualified, x => x.winpct);
+  if (win) tiles.push(leaderTile('Best Win Rate', win, win.winpct.toFixed(1) + '%'));
+  const kos = topBy(_leagueMons, x => x.kills);
+  if (kos && kos.kills) tiles.push(leaderTile('Most KOs', kos, String(kos.kills)));
+  const kd = topBy(qualified, x => x.kd);
+  if (kd && kd.kills) tiles.push(leaderTile('Best K/F', kd, kd.kd.toFixed(2)));
+  const wh = topBy(_leagueMons, x => x.brought);
+  if (wh && wh.brought) tiles.push(leaderTile('Most Sets', wh, String(wh.brought)));
+  const jm = topBy(_leagueMons, x => x.teams);
+  if (jm && jm.teams > 1) tiles.push(leaderTile('Most Teams', jm, String(jm.teams)));
+  const pw = topBy(_leagueMons, x => x.potw);
+  if (pw && pw.potw) tiles.push(leaderTile('Most POTW', pw, String(pw.potw)));
+  const el = $id('leaders-tiles');
+  el.innerHTML = tiles.join('');
+  el.querySelectorAll('img[data-mid]').forEach(img => attachSpriteFallback(img, img.dataset.mid));
+  renderLeaderTable();
+}
+
+const LEADER_COLS = [
+  { key: 'name', label: 'Pokémon', num: false },
+  { key: 'brought', label: 'Sets', num: true },
+  { key: 'games', label: 'Games', num: true },
+  { key: 'record', label: 'Record', num: true },
+  { key: 'winpct', label: 'Win %', num: true },
+  { key: 'kills', label: 'KOs', num: true },
+  { key: 'deaths', label: 'Faints', num: true },
+  { key: 'kd', label: 'K/F', num: true },
+];
+
+function leaderSortBy(col) {
+  if (_leaderSort.col === col) _leaderSort.dir = _leaderSort.dir === 'asc' ? 'desc' : 'asc';
+  else _leaderSort = { col, dir: col === 'name' ? 'asc' : 'desc' };
+  renderLeaderTable();
+}
+
+function renderLeaderTable() {
+  const el = $id('leaders-table');
+  const qualified = _leagueMons.filter(x => x.games >= _leaderMin);
+  const col = _leaderSort.col, dir = _leaderSort.dir === 'asc' ? 1 : -1;
+  const val = x => col === 'name' ? x.name.toLowerCase() : (col === 'record' ? x.gw : x[col]);
+  const rows = qualified.slice().sort((a, b) => {
+    const va = val(a), vb = val(b);
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return b.games - a.games || a.name.localeCompare(b.name);
+  }).slice(0, 25);
+
+  const head = LEADER_COLS.map(c =>
+    '<th class="sortable' + (c.num ? ' num' : '') + '" onclick="leaderSortBy(\'' + c.key + '\')">' + c.label
+    + (_leaderSort.col === c.key ? '<span class="arrow">' + (_leaderSort.dir === 'asc' ? '▲' : '▼') + '</span>' : '') + '</th>').join('');
+  const body = rows.map((x, i) => '<tr>'
+    + '<td class="num">' + (i + 1) + '</td>'
+    + '<td><button type="button" class="leader-row-btn" onclick="leaderGo(\'' + escapeHtml(String(x.id)) + '\')">'
+      + '<img src="' + escapeHtml(iconUrl(x.id)) + '" data-mid="' + escapeHtml(String(x.id)) + '" alt=""><span>' + escapeHtml(x.name) + '</span></button></td>'
+    + '<td class="num">' + x.brought + '</td>'
+    + '<td class="num">' + x.games + '</td>'
+    + '<td class="num">' + escapeHtml(x.gw + '-' + x.gl) + '</td>'
+    + '<td class="num">' + x.winpct.toFixed(1) + '</td>'
+    + '<td class="num">' + x.kills + '</td>'
+    + '<td class="num">' + x.deaths + '</td>'
+    + '<td class="num">' + x.kd.toFixed(2) + '</td>'
+  + '</tr>').join('');
+
+  el.innerHTML = '<div class="leader-table-title">Top 25 Pokémon</div>'
+    + '<div class="table-wrap"><table class="stat-table"><thead><tr><th class="num">#</th>' + head + '</tr></thead>'
+    + '<tbody>' + body + '</tbody></table></div>';
+  el.querySelectorAll('img[data-mid]').forEach(img => attachIconFallback(img, img.dataset.mid));
 }
 
 // Cost shown against that season's draft budget (seasons.point_limit) — 80 pts
@@ -594,7 +826,7 @@ function renderResults(rows) {
     }
     list += createHistoryItem(r, pokemonName);
   });
-  el.innerHTML = sectionHtml('Ownership history', '<ul class="history-list">' + list + '</ul>');
+  el.innerHTML = sectionHtml('Ownership history', '<ul class="history-list">' + list + '</ul>', true);
   attachImageFallback(el);
 }
 
