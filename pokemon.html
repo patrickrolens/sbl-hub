@@ -83,6 +83,10 @@ details.record-section[open]>summary::before{transform:rotate(90deg)}
 .leader-row-btn img{width:28px;height:28px;image-rendering:pixelated;flex-shrink:0}
 details.leaders-fold{margin:0}
 .leader-table-title{font-size:1.05rem;font-weight:800;margin:22px 0 10px}
+.leader-controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:0 0 4px}
+.leader-controls label{color:var(--text2);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;font-weight:700}
+.leader-controls input{width:76px;padding:6px 8px}
+.leader-controls-note{color:var(--text2);font-size:12px}
 .stat-table th.sortable{cursor:pointer;user-select:none}
 .stat-table th.sortable:hover{color:var(--text)}
 .stat-table th.sortable:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;color:var(--text)}
@@ -118,6 +122,11 @@ details.leaders-fold{margin:0}
   <details class="record-section leaders-fold" open>
     <summary class="section-title card-heading">All-Time Leaders</summary>
     <div class="card-copy" id="leaders-copy">Across every season. Click any Pokémon to open its full history.</div>
+    <div class="leader-controls" id="leader-controls" hidden>
+      <label for="leader-min">Min Games</label>
+      <input id="leader-min" class="form-input" type="number" min="1" step="1" value="30">
+      <span class="leader-controls-note" id="leader-min-note"></span>
+    </div>
     <div id="leaders-tiles" class="leader-tiles"></div>
     <div id="leaders-table"></div>
   </details>
@@ -238,6 +247,13 @@ async function boot() {
   input.addEventListener('keydown', onInputKeyDown);
   input.addEventListener('blur', () => setTimeout(() => { $id('suggestions').hidden = true; suggestIndex = -1; }, 150));
   $id('load-more').addEventListener('click', loadMore);
+  // Live qualification floor for the leaders card (ignore empty/mid-typing values).
+  $id('leader-min').addEventListener('input', () => {
+    const v = parseInt($id('leader-min').value, 10);
+    if (!isFinite(v) || v < 1) return;
+    _leaderMin = v;
+    if (_leagueMons.length) renderLeaders();
+  });
 
   // Try to prefetch pokemon.json but tolerate failures.
   try {
@@ -633,10 +649,12 @@ async function loadLeagueLeaders() {
       };
     });
     if (!_leagueMons.length) { card.hidden = true; return; }
-    // Relax the qualifying floor for young leagues so the card never comes up empty.
+    // Relax the default qualifying floor for young leagues so the card never
+    // comes up empty; once loaded, the Min Games input owns the value.
     while (_leaderMin > 1 && _leagueMons.filter(x => x.games >= _leaderMin).length < 5) _leaderMin = _leaderMin > 5 ? 5 : 1;
-    $id('leaders-copy').textContent = 'Across every season. Win rate and K/F leaders need at least '
-      + _leaderMin + ' games played. Click any Pokémon to open its full history.';
+    $id('leader-min').value = _leaderMin;
+    $id('leader-controls').hidden = false;
+    $id('leaders-copy').textContent = 'Across every season. Click any Pokémon to open its full history.';
     renderLeaders();
   } catch (e) { console.error('league leaders load failed', e); card.hidden = true; }
 }
@@ -663,6 +681,9 @@ function leaderGo(id) {
 
 function renderLeaders() {
   const qualified = _leagueMons.filter(x => x.games >= _leaderMin);
+  const note = $id('leader-min-note');
+  if (note) note.textContent = qualified.length + ' of ' + _leagueMons.length
+    + ' Pokémon qualify for the Win Rate and K/F leaders and the Top 25.';
   const tiles = [];
   const win = topBy(qualified, x => x.winpct);
   if (win) tiles.push(leaderTile('Best Win Rate', win, win.winpct.toFixed(1) + '%'));
@@ -724,7 +745,9 @@ function renderLeaderTable() {
       + c.label
       + (active ? '<span class="arrow">' + (_leaderSort.dir === 'asc' ? '▲' : '▼') + '</span>' : '') + '</th>';
   }).join('');
-  const body = rows.map((x, i) => '<tr>'
+  const body = !rows.length
+    ? '<tr><td colspan="' + (LEADER_COLS.length + 1) + '"><div class="empty">No Pokémon meet the minimum games.</div></td></tr>'
+    : rows.map((x, i) => '<tr>'
     + '<td class="num">' + (i + 1) + '</td>'
     + '<td><button type="button" class="leader-row-btn" onclick="leaderGo(\'' + escapeHtml(String(x.id)) + '\')">'
       + '<img src="' + escapeHtml(iconUrl(x.id)) + '" data-mid="' + escapeHtml(String(x.id)) + '" alt=""><span>' + escapeHtml(x.name) + '</span></button></td>'
