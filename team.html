@@ -838,7 +838,9 @@ function renderIdentity() {
   logo.alt = team.name + ' logo';
   // Prefer the season-8 logo asset (filename matches the team slug); fall back to
   // any stored logo_url, then the Pokéball placeholder.
-  const slugLogo = team.slug ? '/assets/Logos/s8/' + encodeURIComponent(team.slug) + '.png' : '';
+  const slugLogo = (team.slug && season && season.slug)
+    ? '/assets/Logos/' + encodeURIComponent(season.slug) + '/' + encodeURIComponent(team.slug) + '.png'
+    : '';
   const fallbacks = [slugLogo, team.logo_url || ''].filter(Boolean);
   let fbIdx = 0;
   logo.src = fallbacks[0] || POKEBALL_FALLBACK;
@@ -1020,7 +1022,7 @@ function memberCard(row, opts) {
   spriteBlock.setAttribute('tabindex', '0');
   const imgUrl = spriteUrl(disp);
   spriteBlock.innerHTML =
-      '<img class="slot-sprite" src="' + imgUrl + '" alt="' + escapeHtml(disp.name) + '">'
+      '<img loading="lazy" class="slot-sprite" src="' + imgUrl + '" alt="' + escapeHtml(disp.name) + '">'
     + '<div class="sprite-pts' + (isTeraEntry ? ' tera-pts' : '') + '"' + (isTeraEntry ? ' title="Terastallized — Tera price ' + teraPrice + ' pts (base ' + tierCost[row.pokemon_id] + ')"' : '') + '>' + cost + '</div>'
     + '<div class="sprite-name ' + nameTier(disp.name) + '">' + escapeHtml(disp.name) + '</div>';
   const imgEl = spriteBlock.querySelector('.slot-sprite');
@@ -1265,8 +1267,8 @@ function renderTransactions() {
     const added   = pokemonById[t.added]   || { id: t.added,   name: t.added };
     const row = document.createElement('div');
     row.className = 'txn';
-    const di = '<img src="' + iconUrl(dropped) + '" alt="" title="' + escapeHtml(dropped.name) + '">';
-    const ai = '<img src="' + iconUrl(added)   + '" alt="" title="' + escapeHtml(added.name)   + '">';
+    const di = '<img loading="lazy" src="' + iconUrl(dropped) + '" alt="" title="' + escapeHtml(dropped.name) + '">';
+    const ai = '<img loading="lazy" src="' + iconUrl(added)   + '" alt="" title="' + escapeHtml(added.name)   + '">';
     row.innerHTML =
       '<div class="swap"><span class="drop">' + di + ' ' + escapeHtml(dropped.name) + '</span>'
       + '<span>⇄</span><span class="gain">' + ai + ' ' + escapeHtml(added.name) + '</span></div>'

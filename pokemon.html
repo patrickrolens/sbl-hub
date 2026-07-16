@@ -922,7 +922,7 @@ function seasonShortLabel(season) {
 
 function renderPokemonSprite(id, name) {
   const src = spriteUrlById(id) || POKEBALL_FALLBACK;
-  return '<img class="history-sprite" src="' + escapeHtml(src) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '">';
+  return '<img loading="lazy" class="history-sprite" src="' + escapeHtml(src) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '">';
 }
 
 // initialize

@@ -199,6 +199,11 @@ function parseSeasonNumberLabel(label) {
 // otherwise the stint active at that week, falling back to the most recent stint if
 // none is active there. Six pages (draft, matches, postseason, standings, statistics,
 // team) each hand-rolled this identically before it was pulled out here.
+/* Additional note following match attribution correction:
+Previously, we had the outgoing coach's end_wk as the incoming coach's start_wk - 1;
+however, this caused some problems with logical consistency.
+The changes make it such that the outgoing end_wk and incoming start_wk should be equal.
+Any real gaps between the real end of the outgoing coach's stint should just be handled as forfeits for the outgoing coach for any gap weeks. */
 function makeCoachAtWeek(ownersByTeam) {
   return function coachAtWeek(teamId, week) {
     const stints = ownersByTeam[teamId] || [];
