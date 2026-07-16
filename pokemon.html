@@ -478,25 +478,25 @@ async function loadMonStats(pokemonId) {
     const pct = decided ? ((w / decided) * 100).toFixed(1) : null;
     const gameDecided = gameW + gameL;
     const gamePct = gameDecided ? ((gameW / gameDecided) * 100).toFixed(1) : null;
+    // Win % rides as a sub-label under its record tile (players.html's
+    // record-stat-sub pattern) instead of being a separate tile.
+    const recCls = p => p != null ? (parseFloat(p) >= 50 ? 'positive' : 'negative') : '';
+    const recSub = p => p != null ? '<div class="record-stat-sub">' + escapeHtml(p + '% W') + '</div>' : '';
     let html = '<div class="record-stats-row">'
       + renderStatTile('Sets', String(mpRows.length))
-      + renderStatTile('Matches', escapeHtml(w + '-' + l + (d ? '-' + d : '')))
-      + (pct != null ? renderStatTile('Match Win %', escapeHtml(pct), parseFloat(pct) >= 50 ? 'positive' : 'negative') : '')
-      + renderStatTile('Games', escapeHtml(gameW + '-' + gameL))
-      + (gamePct != null ? renderStatTile('Game Win %', escapeHtml(gamePct), parseFloat(gamePct) >= 50 ? 'positive' : 'negative') : '')
-    + '</div>'
-    + '<div class="record-stats-row">'
+      + renderStatTile('Matches', escapeHtml(w + '-' + l + (d ? '-' + d : '')), recCls(pct), recSub(pct))
+      + renderStatTile('Games', escapeHtml(gameW + '-' + gameL), recCls(gamePct), recSub(gamePct))
       + renderStatTile('KOs', String(kills))
       + renderStatTile('Faints', String(deaths))
       + renderStatTile('K/F', (kills / Math.max(deaths, 1)).toFixed(2))
-      + renderStatTile('Current Streak', curType ? escapeHtml(curType + curLen) : '—', curType === 'W' ? 'positive' : (curType === 'L' ? 'negative' : ''))
-      + renderStatTile('Longest Win Streak', String(longestW))
     + '</div>'
     + '<div class="record-stats-row">'
-      + (bestSid ? renderStatTile('Best Season', escapeHtml(seasonShortLabel(_statsSeasonById[bestSid])), '',
-          '<div class="record-stat-sub">' + escapeHtml(bestAgg.w + '-' + bestAgg.l + (bestAgg.d ? '-' + bestAgg.d : '') + ' (' + Math.round(bestScore * 100) + '%)') + '</div>') : '')
+      + renderStatTile('Current Streak', curType ? escapeHtml(curType + curLen) : '—', curType === 'W' ? 'positive' : (curType === 'L' ? 'negative' : ''))
+      + renderStatTile('Longest Win Streak', String(longestW))
       + renderStatTile('Regular Season', escapeHtml(regW + '-' + regL))
       + (postAny ? renderStatTile('Postseason', escapeHtml(postW + '-' + postL)) : '')
+      + (bestSid ? renderStatTile('Best Season', escapeHtml(seasonShortLabel(_statsSeasonById[bestSid])), '',
+          '<div class="record-stat-sub">' + escapeHtml(bestAgg.w + '-' + bestAgg.l + (bestAgg.d ? '-' + bestAgg.d : '') + ' (' + Math.round(bestScore * 100) + '%)') + '</div>') : '')
       + (teamsOwned ? renderStatTile('Teams', String(teamsOwned)) : '')
     + '</div>';
 
@@ -550,7 +550,7 @@ async function loadMonStats(pokemonId) {
 
 // ----- League leaders (all-time, every Pokémon) -----
 // Loads once in the background after boot; the card stays hidden if it fails.
-let _leagueMons = [], _leaderSort = { col: 'winpct', dir: 'desc' }, _leaderMin = 20;
+let _leagueMons = [], _leaderSort = { col: 'winpct', dir: 'desc' }, _leaderMin = 30;
 
 async function loadLeagueLeaders() {
   const card = $id('leaders-card');
