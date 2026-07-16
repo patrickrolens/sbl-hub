@@ -92,12 +92,12 @@ details.leaders-fold{margin:0}
 <body>
 
 <script src="/nav.js?v=20260709"></script>
-<script src="/utils.js?v=20260709"></script>
+<script src="/utils.js?v=20260716"></script>
 
 <div class="page-wrap">
 <div class="card">
   <div class="card-heading">Pokémon History</div>
-  <div class="card-copy">Search for a Pokémon to see which teams owned it (across seasons).</div>
+  <div class="card-copy">Search for a Pokémon to see its all-time record, combat stats, draft history, and which teams owned it across seasons.</div>
 
   <div class="search-row form-row">
     <div class="form-row-inner">
@@ -333,11 +333,21 @@ async function doSearchById(pokemonId) {
   // reset paging
   pageOffset = 0; lastPokemonId = pokemonId; allRows = [];
   const name = pokemonNameById(pokemonId) || 'Pokémon';
+  // Keep the URL shareable: ?q=<name> round-trips through the boot deep-link.
+  try {
+    const sp = new URLSearchParams(location.search);
+    sp.set('q', name);
+    history.replaceState(null, '', location.pathname + '?' + sp.toString() + location.hash);
+  } catch (e) { /* history API unavailable — links just won't carry ?q */ }
+  const mon = pokemonList.find(x => String(x.id) === String(pokemonId));
+  const types = mon ? [mon.type1, mon.type2].filter(Boolean).join(' · ') : '';
   // Skeleton first: the ledger (loadPage) and the stats bundle (loadMonStats)
   // load in parallel and each fills its own container.
   $id('results').innerHTML = '<div class="history-card-header">'
     + renderPokemonSprite(pokemonId, name)
-    + '<div><div class="history-heading-text">' + escapeHtml(name) + '</div><div id="mon-badges"></div></div>'
+    + '<div><div class="history-heading-text">' + escapeHtml(name) + '</div>'
+    + (types ? '<div class="history-subtitle">' + escapeHtml(types) + '</div>' : '')
+    + '<div id="mon-badges"></div></div>'
     + '</div>'
     + '<div id="mon-stats"></div><div id="mon-draft"></div><div id="mon-ledger"></div>';
   attachImageFallback($id('results'));
@@ -382,19 +392,12 @@ async function loadMonStats(pokemonId) {
     owners.forEach(o => { if (o.team_id) (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push(o); });
     Object.values(ownersByTeam).forEach(list => list.sort((a, b) => (a.started_week || 1) - (b.started_week || 1)));
 
-    // Same played/draw semantics as players.html: winner → W/L, otherwise a
-    // draw only if the match actually has games on the board.
-    const resultFor = (m, teamId) => {
-      if (m.winner_team_id) return m.winner_team_id === teamId ? 'W' : 'L';
-      return ((m.team_a_score || 0) + (m.team_b_score || 0)) > 0 ? 'D' : null;
-    };
-
     let w = 0, l = 0, d = 0, kills = 0, deaths = 0;
     const bySeason = {}; // season_id -> { brought, w, l, d, kills, deaths }
     const byHandler = {}; // player_id -> { name, brought, w, l, d, kills }
     mpRows.forEach(r => {
       const m = matchById[r.match_id]; if (!m) return;
-      const res = resultFor(m, r.team_id);
+      const res = matchResultFor(m, r.team_id);
       const sAgg = bySeason[m.season_id] = bySeason[m.season_id] || { brought: 0, w: 0, l: 0, d: 0, kills: 0, deaths: 0 };
       sAgg.brought++;
       if (res === 'W') { w++; sAgg.w++; } else if (res === 'L') { l++; sAgg.l++; } else if (res === 'D') { d++; sAgg.d++; }
@@ -439,7 +442,7 @@ async function loadMonStats(pokemonId) {
     // Chronological order: season number, regular before postseason, then week.
     const seasonNumOf = m => parseSeasonNumberLabel(((_statsSeasonById[m.season_id] || {}).name) || ((_statsSeasonById[m.season_id] || {}).slug) || '');
     const chrono = mpRows
-      .map(r => { const m = matchById[r.match_id]; return m ? { m, res: resultFor(m, r.team_id) } : null; })
+      .map(r => { const m = matchById[r.match_id]; return m ? { m, res: matchResultFor(m, r.team_id) } : null; })
       .filter(x => x && x.res)
       .sort((a, b) => seasonNumOf(a.m) - seasonNumOf(b.m)
         || ((a.m.stage && a.m.stage !== 'regular') ? 1 : 0) - ((b.m.stage && b.m.stage !== 'regular') ? 1 : 0)
@@ -549,53 +552,93 @@ async function loadMonStats(pokemonId) {
 }
 
 // ----- League leaders (all-time, every Pokémon) -----
-// Loads once in the background after boot; the card stays hidden if it fails.
+// Loads once in the background after boot; the card hides again if it fails.
+// Data source, in order of preference: the pokemon_alltime_leaders view (one
+// query, aggregated server-side), else client-side aggregation over the raw
+// tables (~25 paginated requests). Either result is cached in sessionStorage
+// so revisits within the TTL skip the network entirely. Names are NOT cached —
+// they re-resolve from pokemon.json each load.
 let _leagueMons = [], _leaderSort = { col: 'winpct', dir: 'desc' }, _leaderMin = 30;
+const LEADERS_CACHE_KEY = 'sbl-leaders-v1', LEADERS_CACHE_TTL = 10 * 60 * 1000;
+
+function readLeadersCache() {
+  try {
+    const c = JSON.parse(sessionStorage.getItem(LEADERS_CACHE_KEY));
+    return (c && Array.isArray(c.rows) && Date.now() - c.t < LEADERS_CACHE_TTL) ? c.rows : null;
+  } catch (e) { return null; }
+}
+function writeLeadersCache(rows) {
+  try { sessionStorage.setItem(LEADERS_CACHE_KEY, JSON.stringify({ t: Date.now(), rows })); } catch (e) {}
+}
+
+async function fetchLeadersViaView() {
+  const rows = await paginate(() => sb.from('pokemon_alltime_leaders').select('*').order('pokemon_id'));
+  if (!rows.length) throw new Error('pokemon_alltime_leaders empty');
+  return rows.map(r => ({
+    id: r.pokemon_id, sets: r.sets || 0, games: r.games || 0,
+    gw: r.game_wins || 0, gl: r.game_losses || 0,
+    kills: r.kills || 0, faints: r.faints || 0,
+    teams: r.teams || 0, potw: r.potw || 0
+  }));
+}
+
+async function fetchLeadersViaTables() {
+  const [mpRows, gpsRows, games, tpRows, potwRows] = await Promise.all([
+    fetchAll('match_pokemon', 'pokemon_id'),
+    fetchAll('game_pokemon_stats', 'game_id,team_id,pokemon_id,kills,deaths'),
+    fetchAll('games', 'id,winner_team_id'),
+    fetchAll('team_pokemon', 'pokemon_id,team_id'),
+    fetchAll('potw', 'pokemon_id').catch(() => [])
+  ]);
+  const gameById = {}; games.forEach(g => gameById[g.id] = g);
+  const byMon = {};
+  const agg = id => byMon[id] = byMon[id] || { id, sets: 0, games: 0, gw: 0, gl: 0, kills: 0, faints: 0, teamSet: new Set(), potw: 0 };
+  mpRows.forEach(r => agg(r.pokemon_id).sets++);
+  // Game-level record: each game_pokemon_stats row is one game the mon actually
+  // played in, and games.winner_team_id decides it — no match-level bench credit.
+  gpsRows.forEach(r => {
+    const a = agg(r.pokemon_id);
+    a.games++; a.kills += r.kills || 0; a.faints += r.deaths || 0;
+    const g = gameById[r.game_id];
+    if (g && g.winner_team_id) { if (g.winner_team_id === r.team_id) a.gw++; else a.gl++; }
+  });
+  tpRows.forEach(r => { if (r.team_id) agg(r.pokemon_id).teamSet.add(r.team_id); });
+  potwRows.forEach(r => agg(r.pokemon_id).potw++);
+  return Object.values(byMon).map(a => ({
+    id: a.id, sets: a.sets, games: a.games, gw: a.gw, gl: a.gl,
+    kills: a.kills, faints: a.faints, teams: a.teamSet.size, potw: a.potw
+  }));
+}
 
 async function loadLeagueLeaders() {
   const card = $id('leaders-card');
   if (!card) return;
+  $id('leaders-copy').textContent = 'Loading all-time leaders…';
+  card.hidden = false;
   try {
-    const [mpRows, gpsRows, games, tpRows, potwRows] = await Promise.all([
-      fetchAll('match_pokemon', 'pokemon_id'),
-      fetchAll('game_pokemon_stats', 'game_id,team_id,pokemon_id,kills,deaths'),
-      fetchAll('games', 'id,winner_team_id'),
-      fetchAll('team_pokemon', 'pokemon_id,team_id'),
-      fetchAll('potw', 'pokemon_id').catch(() => [])
-    ]);
-    const gameById = {}; games.forEach(g => gameById[g.id] = g);
-    const byMon = {};
-    const agg = id => byMon[id] = byMon[id] || { id, brought: 0, games: 0, gw: 0, gl: 0, kills: 0, deaths: 0, teams: new Set(), potw: 0 };
-    mpRows.forEach(r => agg(r.pokemon_id).brought++);
-    // Game-level record: each game_pokemon_stats row is one game the mon actually
-    // played in, and games.winner_team_id decides it — no match-level bench credit.
-    gpsRows.forEach(r => {
-      const a = agg(r.pokemon_id);
-      a.games++; a.kills += r.kills || 0; a.deaths += r.deaths || 0;
-      const g = gameById[r.game_id];
-      if (g && g.winner_team_id) { if (g.winner_team_id === r.team_id) a.gw++; else a.gl++; }
-    });
-    tpRows.forEach(r => { if (r.team_id) agg(r.pokemon_id).teams.add(r.team_id); });
-    potwRows.forEach(r => agg(r.pokemon_id).potw++);
-
-    _leagueMons = Object.values(byMon).map(a => {
+    let rows = readLeadersCache();
+    if (!rows) {
+      try { rows = await fetchLeadersViaView(); }
+      catch (e) { rows = await fetchLeadersViaTables(); }
+      writeLeadersCache(rows);
+    }
+    _leagueMons = rows.map(a => {
       const dec = a.gw + a.gl;
       return {
         id: a.id, name: pokemonNameById(a.id),
-        brought: a.brought, games: a.games, gw: a.gw, gl: a.gl,
+        brought: a.sets, games: a.games, gw: a.gw, gl: a.gl,
         winpct: dec ? (a.gw / dec) * 100 : 0,
-        kills: a.kills, deaths: a.deaths, kd: a.kills / Math.max(a.deaths, 1),
-        teams: a.teams.size, potw: a.potw
+        kills: a.kills, deaths: a.faints, kd: a.kills / Math.max(a.faints, 1),
+        teams: a.teams, potw: a.potw
       };
     });
-    if (!_leagueMons.length) return;
+    if (!_leagueMons.length) { card.hidden = true; return; }
     // Relax the qualifying floor for young leagues so the card never comes up empty.
     while (_leaderMin > 1 && _leagueMons.filter(x => x.games >= _leaderMin).length < 5) _leaderMin = _leaderMin > 5 ? 5 : 1;
     $id('leaders-copy').textContent = 'Across every season. Win rate and K/F leaders need at least '
       + _leaderMin + ' games played. Click any Pokémon to open its full history.';
     renderLeaders();
-    card.hidden = false;
-  } catch (e) { console.error('league leaders load failed', e); }
+  } catch (e) { console.error('league leaders load failed', e); card.hidden = true; }
 }
 
 function topBy(list, score) {
@@ -830,11 +873,7 @@ function renderResults(rows) {
   attachImageFallback(el);
 }
 
-function parseSeasonNumberLabel(label) {
-  const match = String(label || '').match(/(\d+(?:[.\-]\d+)?)/);
-  if (!match) return 0;
-  return parseFloat(match[1].replace('-', '.'));
-}
+// parseSeasonNumberLabel comes from utils.js.
 function getSeasonNumber(team) {
   if (!team || !team.season) return 0;
   return parseSeasonNumberLabel(team.season.name || team.season.slug || '');

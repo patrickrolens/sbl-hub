@@ -132,6 +132,24 @@ async function resolveSeason() {
   return current.data;
 }
 
+// A team's result in a match: 'W'/'L' when a winner is recorded, 'D' when the
+// match has games on the board but no winner, null when it's an unplayed
+// schedule row. This rule was hand-copied in pokemon.html, players.html and
+// statistics-adjacent code before being pulled out here — the draw-denominator
+// drift between pages came from exactly that duplication.
+function matchResultFor(m, teamId) {
+  if (m.winner_team_id) return m.winner_team_id === teamId ? 'W' : 'L';
+  return ((m.team_a_score || 0) + (m.team_b_score || 0)) > 0 ? 'D' : null;
+}
+
+// "Season 4-5" / "S4.5" / "season-9" → 4.5 / 4.5 / 9 (0 when nothing numeric).
+// Used for chronological season ordering; previously duplicated per page.
+function parseSeasonNumberLabel(label) {
+  const match = String(label || '').match(/(\d+(?:[.\-]\d+)?)/);
+  if (!match) return 0;
+  return parseFloat(match[1].replace('-', '.'));
+}
+
 // Returns a coachAtWeek(teamId, week) function bound to `ownersByTeam` (a
 // team_id -> [{started_week, ended_week, name}] map, stints sorted by started_week).
 // week == null means "live" (today's owner, i.e. whichever stint has no ended_week);

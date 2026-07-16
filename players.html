@@ -127,7 +127,7 @@ a.sig-card:hover{border-color:var(--accent)}
 <body>
 
 <script src="/nav.js?v=20260709"></script>
-<script src="/utils.js?v=20260709"></script>
+<script src="/utils.js?v=20260716"></script>
 
 <div class="page-wrap">
 <datalist id="player-names"></datalist>
@@ -393,12 +393,7 @@ function getCareer(pid, league) {
   const teamIds = [...new Set(owners.map(o => o.team_id).filter(Boolean))];
   const sideOf = m => ownershipCoversMatch(owners, m.team_a_id, m) ? m.team_a_id
     : (ownershipCoversMatch(owners, m.team_b_id, m) ? m.team_b_id : null);
-  const resultOf = m => {
-    const side = sideOf(m);
-    if (!side) return null;
-    if (m.winner_team_id) return m.winner_team_id === side ? 'W' : 'L';
-    return ((m.team_a_score || 0) + (m.team_b_score || 0)) > 0 ? 'D' : null;
-  };
+  const resultOf = m => { const side = sideOf(m); return side ? matchResultFor(m, side) : null; };
   const matches = sortMatchesChronologically(league.allMatches.filter(m => sideOf(m) != null), league.seasonById);
   const rated = matches.filter(m => resultOf(m) != null);
   const career = { owners, teamIds, sideOf, resultOf, matches, rated };
@@ -715,11 +710,7 @@ async function showRecordClick(fromHash) {
   }
 }
 
-function parseSeasonNumberLabel(label) {
-  const match = String(label || '').match(/(\d+(?:[.\-]\d+)?)/);
-  if (!match) return 0;
-  return parseFloat(match[1].replace('-', '.'));
-}
+// parseSeasonNumberLabel comes from utils.js.
 
 function formatMatchWhen(m) {
   return (m.stage && m.stage !== 'regular') ? normalizeStage(m.stage) : ('Week ' + (m.week || '?'));
