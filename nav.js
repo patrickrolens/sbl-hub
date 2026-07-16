@@ -58,6 +58,11 @@
   //  current page → active tab key (admin checked by path, since /admin/ files vary)
   const path = location.pathname.toLowerCase();
   const FILE = path.split("/").pop() || "index.html";
+  // Admin pages (under /admin/) manage the season via their own in-page <select>,
+  // so they don't get the nav's Season selector: FILE drops the /admin/ directory,
+  // so a nav-built "/" + FILE + "?season=…" link would point at the site root and
+  // 404 (e.g. /admin-matches.html?season=s8 instead of /admin/admin-matches.html).
+  const IS_ADMIN_PAGE = path.indexOf("/admin/") !== -1;
   const VARIANT = LEAGUE_WIDE_PAGES.has(FILE) ? "league" : "season";
   const TABS = VARIANT === "league" ? TABS_LEAGUE : TABS_SEASON;
   function activeKey() {
@@ -216,7 +221,7 @@
       + `<div class="sbln-tabs">${TABS.map(tabHtml).join("")}</div>`
       + `<div class="sbln-right">`
       +   `<span class="sbln-extra" id="nav-extra"></span>`
-      +   `<button class="sbln-btn" id="sbln-season-btn">Season <span class="sbln-caret">▾</span></button>`
+      +   (IS_ADMIN_PAGE ? "" : `<button class="sbln-btn" id="sbln-season-btn">Season <span class="sbln-caret">▾</span></button>`)
       +   (showWeek ? `<button class="sbln-btn" id="sbln-week-btn" hidden>Week <span class="sbln-caret">▾</span></button>` : "")
       +   `<div class="sbln-admin-wrap" id="sbln-admin-wrap">`
       +     `<button class="sbln-btn${ACTIVE === "admin" ? " sbln-btn-accent" : ""}" id="sbln-admin-btn">Admin</button>`
@@ -241,12 +246,15 @@
       + `<div class="sbln-menu-foot"><span class="sbln-foot-email" id="sbln-email"></span><button class="sbln-btn sbln-logout-btn" id="sbln-logout">Log out</button></div>`;
     document.body.appendChild(adminMenu);
 
-    // Season dropdown (both variants) + Week dropdown (season-scoped, gated pages only).
-    const seasonMenu = document.createElement("div");
-    seasonMenu.className = "sbln-menu"; seasonMenu.id = "sbln-season-menu"; seasonMenu.hidden = true;
-    seasonMenu.style.width = "220px";
-    seasonMenu.innerHTML = `<div class="sbln-menu-list" id="sbln-season-list"></div>`;
-    document.body.appendChild(seasonMenu);
+    // Season dropdown (both variants except admin pages, which pick the season via
+    // their own in-page control) + Week dropdown (season-scoped, gated pages only).
+    if (!IS_ADMIN_PAGE) {
+      const seasonMenu = document.createElement("div");
+      seasonMenu.className = "sbln-menu"; seasonMenu.id = "sbln-season-menu"; seasonMenu.hidden = true;
+      seasonMenu.style.width = "220px";
+      seasonMenu.innerHTML = `<div class="sbln-menu-list" id="sbln-season-list"></div>`;
+      document.body.appendChild(seasonMenu);
+    }
 
     if (showWeek) {
       const weekMenu = document.createElement("div");
@@ -322,11 +330,13 @@
     document.getElementById("sbln-admin-btn").addEventListener("click", onAdminClick);
 
     const seasonBtn = document.getElementById("sbln-season-btn");
-    seasonBtn.addEventListener("click", e => {
-      e.stopPropagation();
-      const menu = document.getElementById("sbln-season-menu");
-      if (menu.hidden) openSimpleMenu(menu, seasonBtn); else closeMenus();
-    });
+    if (seasonBtn) {
+      seasonBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        const menu = document.getElementById("sbln-season-menu");
+        if (menu.hidden) openSimpleMenu(menu, seasonBtn); else closeMenus();
+      });
+    }
     const weekBtn = document.getElementById("sbln-week-btn");
     if (weekBtn) {
       weekBtn.addEventListener("click", e => {
