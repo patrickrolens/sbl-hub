@@ -500,7 +500,7 @@ async function loadMonStats(pokemonId) {
     // Win % rides as a sub-label under its record tile (players.html's
     // record-stat-sub pattern) instead of being a separate tile.
     const recCls = p => p != null ? (parseFloat(p) >= 50 ? 'positive' : 'negative') : '';
-    const recSub = p => p != null ? '<div class="record-stat-sub">' + escapeHtml(p + '% W') + '</div>' : '';
+    const recSub = p => p != null ? '<div class="record-stat-sub">' + escapeHtml(p + '% WR') + '</div>' : '';
     let html = '<div class="record-stats-row">'
       + renderStatTile('Sets', String(mpRows.length))
       + renderStatTile('Matches', escapeHtml(w + '-' + l + (d ? '-' + d : '')), recCls(pct), recSub(pct))

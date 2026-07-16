@@ -792,7 +792,7 @@ function renderSignatureSection(career, mpRows, gameStats) {
   const cards = top.map(s => {
     const nm = pokemonNameById(s.pid);
     const decided = s.gw + s.gl;
-    const pct = decided ? Math.round((s.gw / decided) * 100) + '% W' : '';
+    const pct = decided ? Math.round((s.gw / decided) * 100) + '% WR' : '';
     const meta = 'Games ' + s.games + ' · Sets ' + s.brought + (pct ? ' · ' + pct : '')
       + (s.games ? ' · ' + s.kills + ' KOs / ' + s.deaths + ' faints' : '');
     return '<a class="sig-card" href="pokemon.html?q=' + encodeURIComponent(nm) + '"><img src="' + spriteUrl(s.pid) + '" data-pid="' + escapeHtml(String(s.pid)) + '" alt="' + escapeHtml(nm) + '">'
@@ -937,7 +937,7 @@ function rivalryTile(cls, icon, label, r) {
   return '<a class="rivalry-tile ' + cls + '" href="#' + slug + '">'
     + '<div class="rivalry-label">' + icon + ' ' + label + '</div>'
     + '<div class="rivalry-name">' + escapeHtml(r.name) + '</div>'
-    + '<div class="rivalry-rec">' + r.w + '-' + r.l + (r.d ? '-' + r.d : '') + ' · ' + pct + '% W</div>'
+    + '<div class="rivalry-rec">' + r.w + '-' + r.l + (r.d ? '-' + r.d : '') + ' · ' + pct + '% WR</div>'
   + '</a>';
 }
 
