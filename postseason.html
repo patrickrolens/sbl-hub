@@ -283,7 +283,7 @@ function monogram(team) {
 }
 function logoHtml(team) {
   if (team && team.logo_url)
-    return '<span class="bx-logo"><img class="bx-logo-img" data-team="' + escapeHtml(team.id) + '" src="' + escapeHtml(team.logo_url) + '" alt=""></span>';
+    return '<span class="bx-logo"><img loading="lazy" class="bx-logo-img" data-team="' + escapeHtml(team.id) + '" src="' + escapeHtml(team.logo_url) + '" alt=""></span>';
   return '<span class="bx-logo"><span class="bx-logo-mono">' + monogram(team) + '</span></span>';
 }
 
@@ -417,7 +417,7 @@ function rosterStripHtml(teamId, week, matchId) {
   if (!ordered.length) return '<div class="bx-roster"></div>';
   return '<div class="bx-roster">' + ordered.map(id => {
     const dim = (brought.size && !brought.has(id)) ? ' dim' : '';
-    return '<img class="bx-mon' + dim + '" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" title="' + escapeHtml(monName(id)) + '" alt="">';
+    return '<img loading="lazy" class="bx-mon' + dim + '" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" title="' + escapeHtml(monName(id)) + '" alt="">';
   }).join('') + '</div>';
 }
 function headHtml(team, score, win) {
@@ -598,7 +598,7 @@ function broughtIconsHtml(ids) {
   let h = '';
   for (let i = 0; i < 6; i++) {
     const id = ids[i];
-    if (id) h += '<img class="bi" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="' + escapeHtml(monName(id)) + '" title="' + escapeHtml(monName(id)) + '">';
+    if (id) h += '<img loading="lazy" class="bi" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="' + escapeHtml(monName(id)) + '" title="' + escapeHtml(monName(id)) + '">';
     else h += '<img class="bi ball" src="' + POKEBALL_FALLBACK + '" alt="">';
   }
   return h;
@@ -609,7 +609,7 @@ function statListHtml(matchId, teamId, d) {
   return ids.map(id => {
     let k = 0, dd = 0;
     d.stats.filter(s => s.team_id === teamId && s.pokemon_id === id).forEach(s => { k += s.kills || 0; dd += s.deaths || 0; });
-    return '<div class="stat-row"><img class="si" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="">'
+    return '<div class="stat-row"><img loading="lazy" class="si" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '" alt="">'
       + '<span class="sn">' + escapeHtml(monName(id)) + '</span>'
       + '<span class="sk">' + k + ' K</span><span class="sf">' + dd + ' F</span></div>';
   }).join('');
@@ -623,7 +623,7 @@ function gameHtml(m, g, d) {
     const rows = d.stats.filter(s => s.game_id === g.id && s.team_id === teamId);
     if (!rows.length) return '<div class="dm-empty">-</div>';
     return rows.map(s => '<div class="game-mon' + ((s.deaths || 0) > 0 ? ' fainted' : '') + '">'
-      + '<img src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
+      + '<img loading="lazy" src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
       + '<span class="gmn">' + escapeHtml(monName(s.pokemon_id)) + '</span></div>').join('');
   };
   return '<div class="dm-game"><div class="dm-game-head">' + head + '</div>'

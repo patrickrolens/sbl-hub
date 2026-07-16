@@ -200,7 +200,7 @@ function renderSpriteSet(pids) {
   const max = 6; const list = pids || [];
   const arr = list.slice(0, max);
   let out = '';
-  arr.forEach(pid => { const name = pokemonNameById(pid) || pid; out += '<img src="' + spriteUrl(pid) + '" data-pid="' + escapeHtml(String(pid)) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '" class="sprite">'; });
+  arr.forEach(pid => { const name = pokemonNameById(pid) || pid; out += '<img loading="lazy" src="' + spriteUrl(pid) + '" data-pid="' + escapeHtml(String(pid)) + '" title="' + escapeHtml(name) + '" alt="' + escapeHtml(name) + '" class="sprite">'; });
   if (list.length > max) {
     const hidden = list.slice(max).map(pokemonNameById).filter(Boolean).join(', ');
     const more = list.length - max;
@@ -792,7 +792,7 @@ function renderSignatureSection(career, mpRows, gameStats) {
     const decided = s.w + s.l;
     const pct = decided ? Math.round((s.w / decided) * 100) + '% W' : '';
     const meta = 'Brought ' + s.brought + (pct ? ' · ' + pct : '') + (s.games ? ' · ' + s.kills + ' KOs / ' + s.deaths + ' faints' : '');
-    return '<a class="sig-card" href="pokemon.html?q=' + encodeURIComponent(nm) + '"><img src="' + spriteUrl(s.pid) + '" data-pid="' + escapeHtml(String(s.pid)) + '" alt="' + escapeHtml(nm) + '">'
+    return '<a class="sig-card" href="pokemon.html?q=' + encodeURIComponent(nm) + '"><img loading="lazy" src="' + spriteUrl(s.pid) + '" data-pid="' + escapeHtml(String(s.pid)) + '" alt="' + escapeHtml(nm) + '">'
       + '<div><div class="sig-name">' + escapeHtml(nm) + '</div><div class="sig-meta">' + escapeHtml(meta) + '</div></div></a>';
   }).join('');
   return sectionHtml('Signature Pokémon',

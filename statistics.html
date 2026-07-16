@@ -602,7 +602,7 @@ function renderTable() {
     rows.forEach(r => {
       const mon = monFor(r.pokemon_id);
       html += '<tr>'
-        + '<td><div class="mon-cell"><img src="' + iconUrl(mon) + '" alt="" data-mid="' + escapeHtml(r.pokemon_id) + '"><span>' + escapeHtml(r.name) + '</span></div></td>'
+        + '<td><div class="mon-cell"><img loading="lazy" src="' + iconUrl(mon) + '" alt="" data-mid="' + escapeHtml(r.pokemon_id) + '"><span>' + escapeHtml(r.name) + '</span></div></td>'
         + '<td>' + teamLabelHtml(r.team_id) + (r.active ? '' : '<span class="inactive-tag">Inactive</span>') + '</td>'
         + '<td class="num">' + r.kos + '</td>'
         + '<td class="num">' + r.faints + '</td>'

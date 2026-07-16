@@ -499,7 +499,7 @@ function broughtIconsHtml(ids, stats) {
     let cls = 'bi';
     if (o.played) cls += (topKos > 0 && o.kos === topKos) ? ' top-ko' : ' played';
     const tip = 'KOs ' + o.kos + ' · Faints ' + o.faints;
-    h += '<img class="' + cls + '" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '"'
+    h += '<img loading="lazy" class="' + cls + '" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '"'
       + ' alt="' + escapeHtml(monName(id)) + '"'
       + ' data-tip-title="' + escapeHtml(monName(id)) + '" data-tip="' + escapeHtml(tip) + '">';
   }
@@ -523,7 +523,7 @@ function gameHtml(m, g, d) {
       const fainted = (s.deaths || 0) > 0;
       const band = i % 2 === 1 ? ' band' : '';
       gh += '<div class="gg-mon' + (fainted ? ' fainted' : '') + band + '">'
-        + '<img src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
+        + '<img loading="lazy" src="' + iconUrl(s.pokemon_id) + '" data-mon="' + escapeHtml(s.pokemon_id) + '" alt="">'
         + '<span class="gmn">' + escapeHtml(monName(s.pokemon_id)) + '</span></div>'
         + '<div class="gg-num gg-k' + band + '">' + (s.kills || 0) + '</div>'
         + '<div class="gg-num' + band + '">' + (s.deaths || 0) + '</div>';
