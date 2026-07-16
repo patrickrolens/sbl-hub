@@ -642,7 +642,7 @@ function renderLeaderBoard(elId, metricLabel, valueFn, sorter, opts) {
     const dim = opts.gate && r.gp <= 4 ? ' dim' : '';
     html += '<tr class="' + dim.trim() + '">'
       + '<td class="rank">' + (i + 1) + '</td>'
-      + '<td><div class="lead-mon"><img src="' + iconUrl(mon) + '" alt="" data-mid="' + escapeHtml(r.pokemon_id) + '"><span>' + escapeHtml(mon.name) + '</span></div></td>'
+      + '<td><div class="lead-mon"><img loading="lazy" src="' + iconUrl(mon) + '" alt="" data-mid="' + escapeHtml(r.pokemon_id) + '"><span>' + escapeHtml(mon.name) + '</span></div></td>'
       + '<td class="team-cell">' + feedTeamHtml(r.team_id, { link: true }) + '</td>'
       + '<td class="num">' + valueFn(r) + '</td>'
       + '<td class="num">' + r.mp + '</td>'
@@ -713,7 +713,7 @@ function broughtIconsHtml(matchId, teamId) {
   }
   if (!seen.length) return '';
   return '<div class="brought">' + seen.slice(0, 6).map(pid =>
-    '<img src="' + iconUrl(monFor(pid)) + '" alt="" title="' + escapeHtml(monName(pid)) + '" data-mid="' + escapeHtml(pid) + '">').join('') + '</div>';
+    '<img loading="lazy" src="' + iconUrl(monFor(pid)) + '" alt="" title="' + escapeHtml(monName(pid)) + '" data-mid="' + escapeHtml(pid) + '">').join('') + '</div>';
 }
 
 function renderCompleted() {
@@ -770,14 +770,14 @@ function renderTransactions() {
       const dropped = monFor(t.dropped), added = monFor(t.added);
       row.innerHTML =
         '<div class="with">' + teamLabelHtml(t.teams[0], { link: true }) + ' · Free Agency</div>'
-        + '<div class="swap"><span class="drop"><img src="' + iconUrl(dropped) + '" data-mid="' + escapeHtml(t.dropped) + '"> ' + escapeHtml(dropped.name) + '</span>'
-        + '<span>⇄</span><span class="gain"><img src="' + iconUrl(added) + '" data-mid="' + escapeHtml(t.added) + '"> ' + escapeHtml(added.name) + '</span></div>';
+        + '<div class="swap"><span class="drop"><img loading="lazy" src="' + iconUrl(dropped) + '" data-mid="' + escapeHtml(t.dropped) + '"> ' + escapeHtml(dropped.name) + '</span>'
+        + '<span>⇄</span><span class="gain"><img loading="lazy" src="' + iconUrl(added) + '" data-mid="' + escapeHtml(t.added) + '"> ' + escapeHtml(added.name) + '</span></div>';
     } else {
       const aMon = monFor(t.aMon), bMon = monFor(t.bMon);
       row.innerHTML =
         '<div class="with">' + teamLabelHtml(t.aTeam, { link: true }) + ' ⇄ ' + teamLabelHtml(t.bTeam, { link: true }) + '</div>'
-        + '<div class="swap"><span class="gain"><img src="' + iconUrl(aMon) + '" data-mid="' + escapeHtml(t.aMon) + '"> ' + escapeHtml(aMon.name) + '</span>'
-        + '<span>⇄</span><span class="gain"><img src="' + iconUrl(bMon) + '" data-mid="' + escapeHtml(t.bMon) + '"> ' + escapeHtml(bMon.name) + '</span></div>';
+        + '<div class="swap"><span class="gain"><img loading="lazy" src="' + iconUrl(aMon) + '" data-mid="' + escapeHtml(t.aMon) + '"> ' + escapeHtml(aMon.name) + '</span>'
+        + '<span>⇄</span><span class="gain"><img loading="lazy" src="' + iconUrl(bMon) + '" data-mid="' + escapeHtml(t.bMon) + '"> ' + escapeHtml(bMon.name) + '</span></div>';
     }
     list.appendChild(row);
   });

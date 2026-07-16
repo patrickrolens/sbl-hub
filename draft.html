@@ -1128,7 +1128,7 @@ function onPoolDblClick(mon, card) {
     openModal(
       '<h3>Draft this Pok\u00e9mon?</h3>'
       + '<div class="modal-mon">'
-      +   '<img src="' + iconUrl(mon) + '" alt="">'
+      +   '<img loading="lazy" src="' + iconUrl(mon) + '" alt="">'
       +   '<div><div class="mm-name">' + escapeHtml(mon.name) + '</div>'
       +   '<div class="mm-cost" id="confirm-cost">' + v.cost + ' pts' + (isTera && canTera ? ' \u00b7 Tera' : '') + '</div></div>'
       + '</div>'
@@ -1360,7 +1360,7 @@ function renderSearchResults() {
     const cost = tierCost[m.id] + ' pts';
     const sub = [m.type1, m.type2].filter(Boolean).join(' / ');
     return '<div class="sr-item' + (drafted ? ' drafted-r' : '') + '" data-idx="' + i + '" onmousedown="event.preventDefault();pickSearchResult(' + i + ')">'
-      + '<img class="sr-sprite" src="' + spriteUrl(m) + '" alt="" onerror="this.onerror=null;this.src=this.src.replace(\'/sprites/\',\'/icons/\')">'
+      + '<img loading="lazy" class="sr-sprite" src="' + spriteUrl(m) + '" alt="" onerror="this.onerror=null;this.src=this.src.replace(\'/sprites/\',\'/icons/\')">'
       + '<div><div class="sr-name">' + escapeHtml(m.name) + (drafted ? ' <span style="color:var(--red);font-size:10px">· drafted</span>' : '') + '</div>'
       + '<div class="sr-sub">' + escapeHtml(sub) + '</div></div>'
       + '<span class="sr-pts" style="color:var(--accent)">' + cost + '</span>'
@@ -1594,7 +1594,7 @@ function logTeamHtml(teamId, week) {
 }
 function logMonHtml(id, cls, prefix) {
   const m = pokemonById[id];
-  return '<span class="li-mon ' + (cls || '') + '"><img src="' + iconUrl(m) + '" data-monid="' + escapeHtml(id) + '" alt="">'
+  return '<span class="li-mon ' + (cls || '') + '"><img loading="lazy" src="' + iconUrl(m) + '" data-monid="' + escapeHtml(id) + '" alt="">'
     + '<span class="nm">' + (prefix || '') + escapeHtml(monNm(id)) + '</span></span>';
 }
 
