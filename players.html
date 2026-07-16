@@ -115,7 +115,7 @@ a.lb-row:hover{background:var(--bg3)}
 .rivalry-tile.bad .rivalry-name{color:#f87171}
 .rivalry-rec{color:var(--text2);font-size:12px;font-variant-numeric:tabular-nums}
 
-.sig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.sig-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .sig-card{display:flex;gap:10px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;color:inherit;text-decoration:none}
 a.sig-card:hover{border-color:var(--accent)}
 .sig-card img{width:44px;height:44px;object-fit:contain;flex:none}
@@ -127,7 +127,7 @@ a.sig-card:hover{border-color:var(--accent)}
 <body>
 
 <script src="/nav.js?v=20260709"></script>
-<script src="/utils.js?v=20260709"></script>
+<script src="/utils.js?v=20260716"></script>
 
 <div class="page-wrap">
 <datalist id="player-names"></datalist>
@@ -174,18 +174,8 @@ const LEADERBOARD_MIN_MATCHES = 10;
 // flagged as a nemesis / favorite matchup — keeps one-off results out.
 const RIVALRY_MIN_MATCHES = 2;
 
-// Duplicated from pokemon.html (small, deliberate - matches this codebase's existing
-// per-page-inline-script convention rather than sharing a module).
+// pokemonNameById (utils.js) reads this page-owned list as a bare global.
 let pokemonList = [];
-// Exact id first — the numeric fallback (leading-zero/number-vs-string ids)
-// must only apply to all-digit ids, otherwise a suffixed form ("892-r",
-// Urshifu-RS) parseInts to its base form ("892") and shows the wrong name.
-function pokemonNameById(id) {
-  const s = String(id);
-  let p = pokemonList.find(x => String(x.id) === s);
-  if (!p && /^\d+$/.test(s)) p = pokemonList.find(x => String(x.id) === String(parseInt(s, 10)));
-  return p ? p.name : s;
-}
 
 function normalizeStage(stage) {
   if (!stage) return '';
@@ -219,7 +209,7 @@ function $id(id) { return document.getElementById(id); }
 
 // ----- Hash routing (#name for a record, #name1-vs-name2 for a matchup) -----
 let lastAppliedHash = '';
-function slugifyName(s) { return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+// slugifyName comes from utils.js.
 function resolvePlayerBySlug(slug, allPlayers) {
   slug = slugifyName(slug);
   if (!slug) return null;
@@ -331,27 +321,46 @@ function findPlayerByName(allPlayers, name) {
 // every ownership stint, not just the queried player's (see
 // calculatePlayerRatingHistory). Caching the promise (not the result) also
 // dedupes concurrent clicks; a failed fetch clears it so retries work.
+// The raw arrays are additionally cached in sessionStorage (same pattern as
+// pokemon.html's leaders card) so revisits within the TTL render the
+// leaderboard without waiting on ~7 paginated requests.
 let leagueDataPromise = null;
+const LEAGUE_CACHE_KEY = 'sbl-league-v1', LEAGUE_CACHE_TTL = 10 * 60 * 1000;
+
+function buildLeague([allPlayers, allOwners, allMatches, seasons, teams]) {
+  const seasonById = {}; seasons.forEach(s => seasonById[s.id] = s);
+  const teamById = {}; teams.forEach(t => teamById[t.id] = t);
+  const playerById = {}; allPlayers.forEach(p => playerById[p.id] = p);
+  const ownersByTeam = {};
+  allOwners.forEach(o => {
+    if (!o.team_id) return;
+    (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push(o);
+  });
+  Object.values(ownersByTeam).forEach(list => list.sort((a, b) => (a.started_week || 1) - (b.started_week || 1)));
+  return { allPlayers, allOwners, allMatches, seasonById, teamById, playerById, ownersByTeam };
+}
+
 function getLeagueData() {
   if (!leagueDataPromise) {
-    leagueDataPromise = Promise.all([
-      fetchAll('players', 'id,display_name'),
-      fetchAll('team_owners', 'player_id,team_id,started_week,ended_week'),
-      fetchAll('matches', 'id,season_id,stage,week,postseason_round,team_a_id,team_b_id,team_a_score,team_b_score,match_date,winner_team_id'),
-      fetchAll('seasons', 'id,name,slug'),
-      fetchAll('teams', 'id,name,slug,season_id')
-    ]).then(([allPlayers, allOwners, allMatches, seasons, teams]) => {
-      const seasonById = {}; seasons.forEach(s => seasonById[s.id] = s);
-      const teamById = {}; teams.forEach(t => teamById[t.id] = t);
-      const playerById = {}; allPlayers.forEach(p => playerById[p.id] = p);
-      const ownersByTeam = {};
-      allOwners.forEach(o => {
-        if (!o.team_id) return;
-        (ownersByTeam[o.team_id] = ownersByTeam[o.team_id] || []).push(o);
-      });
-      Object.values(ownersByTeam).forEach(list => list.sort((a, b) => (a.started_week || 1) - (b.started_week || 1)));
-      return { allPlayers, allOwners, allMatches, seasonById, teamById, playerById, ownersByTeam };
-    }).catch(e => { leagueDataPromise = null; throw e; });
+    let cached = null;
+    try {
+      const c = JSON.parse(sessionStorage.getItem(LEAGUE_CACHE_KEY));
+      if (c && Array.isArray(c.arrs) && c.arrs.length === 5 && Date.now() - c.t < LEAGUE_CACHE_TTL) cached = c.arrs;
+    } catch (e) { /* corrupt cache — refetch */ }
+    if (cached) {
+      leagueDataPromise = Promise.resolve(buildLeague(cached));
+    } else {
+      leagueDataPromise = Promise.all([
+        fetchAll('players', 'id,display_name'),
+        fetchAll('team_owners', 'player_id,team_id,started_week,ended_week'),
+        fetchAll('matches', 'id,season_id,stage,week,postseason_round,team_a_id,team_b_id,team_a_score,team_b_score,match_date,winner_team_id'),
+        fetchAll('seasons', 'id,name,slug'),
+        fetchAll('teams', 'id,name,slug,season_id')
+      ]).then(arrs => {
+        try { sessionStorage.setItem(LEAGUE_CACHE_KEY, JSON.stringify({ t: Date.now(), arrs })); } catch (e) {}
+        return buildLeague(arrs);
+      }).catch(e => { leagueDataPromise = null; throw e; });
+    }
   }
   return leagueDataPromise;
 }
@@ -370,18 +379,9 @@ function ownershipCoversMatch(owners, teamId, m) {
   });
 }
 
-// Who owned this team when the match was played (for the head-to-head table).
-// Same week semantics as ownershipCoversMatch, with makeCoachAtWeek's fallback
-// for data gaps. The ELO sim's ownerAtMatch stays strict on purpose: an
-// unresolved side there must rate as an untracked 1500, not a guessed owner.
-function ownerStintAtMatch(ownersByTeam, teamId, m) {
-  const stints = ownersByTeam[teamId] || [];
-  if (!stints.length) return null;
-  const week = (m.stage && m.stage !== 'regular') ? null : m.week;
-  if (week == null) return stints.find(x => x.ended_week == null) || stints[stints.length - 1];
-  return stints.find(x => (x.started_week || 1) <= week && (x.ended_week == null || x.ended_week > week))
-    || stints.find(x => x.ended_week == null) || stints[0];
-}
+// ownerStintAtMatch comes from utils.js (used for the head-to-head table).
+// The ELO sim's ownerAtMatch stays strict on purpose: an unresolved side there
+// must rate as an untracked 1500, not a guessed owner.
 
 // ----- Per-player career (computed once per page load from league data) -----
 // resultOf distinguishes unplayed from drawn: schedules are bulk-inserted before
@@ -393,12 +393,7 @@ function getCareer(pid, league) {
   const teamIds = [...new Set(owners.map(o => o.team_id).filter(Boolean))];
   const sideOf = m => ownershipCoversMatch(owners, m.team_a_id, m) ? m.team_a_id
     : (ownershipCoversMatch(owners, m.team_b_id, m) ? m.team_b_id : null);
-  const resultOf = m => {
-    const side = sideOf(m);
-    if (!side) return null;
-    if (m.winner_team_id) return m.winner_team_id === side ? 'W' : 'L';
-    return ((m.team_a_score || 0) + (m.team_b_score || 0)) > 0 ? 'D' : null;
-  };
+  const resultOf = m => { const side = sideOf(m); return side ? matchResultFor(m, side) : null; };
   const matches = sortMatchesChronologically(league.allMatches.filter(m => sideOf(m) != null), league.seasonById);
   const rated = matches.filter(m => resultOf(m) != null);
   const career = { owners, teamIds, sideOf, resultOf, matches, rated };
@@ -506,16 +501,30 @@ async function fetchBrought(matchIds) {
 }
 async function fetchGameStats(matchIds) {
   try {
-    const games = matchIds.length ? await fetchAllIn('games', 'id,match_id', 'match_id', matchIds) : [];
+    const games = matchIds.length ? await fetchAllIn('games', 'id,match_id,winner_team_id', 'match_id', matchIds) : [];
     const gameIds = games.map(g => g.id);
     const stats = gameIds.length ? await fetchAllIn('game_pokemon_stats', 'game_id,team_id,pokemon_id,kills,deaths', 'game_id', gameIds) : [];
     const gameToMatch = {}; games.forEach(g => gameToMatch[g.id] = g.match_id);
-    return { stats, gameToMatch };
-  } catch (e) { console.warn('game stats load failed', e); return { stats: [], gameToMatch: {} }; }
+    const gameWinner = {}; games.forEach(g => gameWinner[g.id] = g.winner_team_id);
+    return { stats, gameToMatch, gameWinner };
+  } catch (e) { console.warn('game stats load failed', e); return { stats: [], gameToMatch: {}, gameWinner: {} }; }
 }
 async function fetchPotw(playerId) {
   const r = await sb.from('potw').select('season_id,week,pokemon_id').eq('player_id', playerId);
   return (r && !r.error && r.data) ? r.data : [];
+}
+
+// Per-player bundle of the three record-view fetches, cached as a promise so
+// re-viewing a player (or bouncing between two via H2H links) skips the
+// network. Keyed by player id; a failed load evicts itself so retries work.
+const recordExtrasCache = new Map();
+function getRecordExtras(playerId, matchIds) {
+  if (!recordExtrasCache.has(playerId)) {
+    const p = Promise.all([fetchBrought(matchIds), fetchGameStats(matchIds), fetchPotw(playerId)])
+      .catch(e => { recordExtrasCache.delete(playerId); throw e; });
+    recordExtrasCache.set(playerId, p);
+  }
+  return recordExtrasCache.get(playerId);
 }
 
 async function showMatchesClick(fromHash) {
@@ -612,11 +621,7 @@ async function showRecordClick(fromHash) {
     if (!career.matches.length) { out.innerHTML = '<div class="empty">No matches found for this player.</div>'; return; }
 
     const matchIds = career.matches.map(m => m.id);
-    const [mpRows, gameStats, potwRows] = await Promise.all([
-      fetchBrought(matchIds),
-      fetchGameStats(matchIds),
-      fetchPotw(player.id)
-    ]);
+    const [mpRows, gameStats, potwRows] = await getRecordExtras(player.id, matchIds);
 
     // Core record (career.rated already excludes scheduled-but-unplayed rows)
     let matchWins = 0, matchLosses = 0, draws = 0, gameWins = 0, gameLosses = 0;
@@ -714,11 +719,7 @@ async function showRecordClick(fromHash) {
   }
 }
 
-function parseSeasonNumberLabel(label) {
-  const match = String(label || '').match(/(\d+(?:[.\-]\d+)?)/);
-  if (!match) return 0;
-  return parseFloat(match[1].replace('-', '.'));
-}
+// parseSeasonNumberLabel comes from utils.js.
 
 function formatMatchWhen(m) {
   return (m.stage && m.stage !== 'regular') ? normalizeStage(m.stage) : ('Week ' + (m.week || '?'));
@@ -767,36 +768,38 @@ function renderAccolades(career, potwRows, league) {
 
 function renderSignatureSection(career, mpRows, gameStats) {
   const matchSide = {}; career.matches.forEach(m => { matchSide[m.id] = career.sideOf(m); });
-  const matchRes = {}; career.rated.forEach(m => { matchRes[m.id] = career.resultOf(m); });
-  const agg = {}; // pokemon_id -> { brought, w, l, kills, deaths, games }
+  const agg = {}; // pokemon_id -> { brought, gw, gl, kills, deaths, games }
+  const aggFor = pid => agg[pid] = agg[pid] || { brought: 0, gw: 0, gl: 0, kills: 0, deaths: 0, games: 0 };
   mpRows.forEach(r => {
     if (matchSide[r.match_id] !== r.team_id) return;
-    const a = agg[r.pokemon_id] = agg[r.pokemon_id] || { brought: 0, w: 0, l: 0, kills: 0, deaths: 0, games: 0 };
-    a.brought++;
-    const res = matchRes[r.match_id];
-    if (res === 'W') a.w++; else if (res === 'L') a.l++;
+    aggFor(r.pokemon_id).brought++;
   });
+  // Game-based usage and record: a stats row = one game the mon actually played
+  // in, decided by games.winner_team_id (same basis as pokemon.html's leaders).
   gameStats.stats.forEach(r => {
     const mid = gameStats.gameToMatch[r.game_id];
     if (!mid || matchSide[mid] !== r.team_id) return;
-    const a = agg[r.pokemon_id] = agg[r.pokemon_id] || { brought: 0, w: 0, l: 0, kills: 0, deaths: 0, games: 0 };
+    const a = aggFor(r.pokemon_id);
     a.kills += r.kills || 0; a.deaths += r.deaths || 0; a.games++;
+    const wt = gameStats.gameWinner[r.game_id];
+    if (wt) { if (wt === r.team_id) a.gw++; else a.gl++; }
   });
   const top = Object.entries(agg)
     .map(([pid, a]) => Object.assign({ pid }, a))
-    .sort((x, y) => y.brought - x.brought || y.kills - x.kills)
+    .sort((x, y) => y.games - x.games || y.kills - x.kills)
     .slice(0, 8);
   if (!top.length) return '';
   const cards = top.map(s => {
     const nm = pokemonNameById(s.pid);
-    const decided = s.w + s.l;
-    const pct = decided ? Math.round((s.w / decided) * 100) + '% W' : '';
-    const meta = 'Brought ' + s.brought + (pct ? ' · ' + pct : '') + (s.games ? ' · ' + s.kills + ' KOs / ' + s.deaths + ' faints' : '');
+    const decided = s.gw + s.gl;
+    const pct = decided ? Math.round((s.gw / decided) * 100) + '% WR' : '';
+    const meta = 'Games ' + s.games + ' · Sets ' + s.brought + (pct ? ' · ' + pct : '')
+      + (s.games ? ' · ' + s.kills + ' KOs / ' + s.deaths + ' faints' : '');
     return '<a class="sig-card" href="pokemon.html?q=' + encodeURIComponent(nm) + '"><img loading="lazy" src="' + spriteUrl(s.pid) + '" data-pid="' + escapeHtml(String(s.pid)) + '" alt="' + escapeHtml(nm) + '">'
       + '<div><div class="sig-name">' + escapeHtml(nm) + '</div><div class="sig-meta">' + escapeHtml(meta) + '</div></div></a>';
   }).join('');
   return sectionHtml('Signature Pokémon',
-    'Most-brought Pokémon across this player\'s matches, with kills/faints while they were at the helm.',
+    'The Pokémon this player used in the most games, with game win rate and KOs/faints while they were at the helm.',
     '<div class="sig-grid">' + cards + '</div>');
 }
 
@@ -934,7 +937,7 @@ function rivalryTile(cls, icon, label, r) {
   return '<a class="rivalry-tile ' + cls + '" href="#' + slug + '">'
     + '<div class="rivalry-label">' + icon + ' ' + label + '</div>'
     + '<div class="rivalry-name">' + escapeHtml(r.name) + '</div>'
-    + '<div class="rivalry-rec">' + r.w + '-' + r.l + (r.d ? '-' + r.d : '') + ' · ' + pct + '% W</div>'
+    + '<div class="rivalry-rec">' + r.w + '-' + r.l + (r.d ? '-' + r.d : '') + ' · ' + pct + '% WR</div>'
   + '</a>';
 }
 

@@ -252,7 +252,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
               <option value="faints">Faints</option>
               <option value="kf">K/F Ratio</option>
               <option value="kfd">KF Δ</option>
-              <option value="mb">Matches Brought</option>
+              <option value="mb">Sets Brought</option>
               <option value="mp">Match Participation</option>
               <option value="gp">Game Participation</option>
             </select>
@@ -276,7 +276,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
               <option value="kpg">KOs / Game</option>
               <option value="kfd">KF Δ</option>
               <option value="kf">K/F Ratio</option>
-              <option value="mb">Matches Brought</option>
+              <option value="mb">Sets Brought</option>
               <option value="mp">Match Participation</option>
               <option value="gp">Game Participation</option>
             </select>
@@ -311,7 +311,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
             <select id="pack-metric" onchange="renderPack()">
               <option value="kpg" selected>KOs / Game</option>
               <option value="kos">KOs</option>
-              <option value="mb">Matches Brought</option>
+              <option value="mb">Sets Brought</option>
               <option value="mp">Match Participation</option>
               <option value="gp">Game Participation</option>
             </select>
@@ -827,7 +827,7 @@ const HIST_META = {
   faints: { label: 'Faints',              get: r => r.faints,  dec: 0 },
   kf:     { label: 'K/F Ratio',           get: r => (r.faints > 0 ? r.kos / r.faints : r.kos), dec: 2 },
   kfd:    { label: 'KF Δ',                get: r => r.kfDelta, dec: 0 },
-  mb:     { label: 'Matches Brought',     get: r => r.mbCount, dec: 0 },
+  mb:     { label: 'Sets Brought',        get: r => r.mbCount, dec: 0 },
   mp:     { label: 'Match Participation', get: r => r.mpCount, dec: 0 },
   gp:     { label: 'Game Participation',  get: r => r.gpCount, dec: 0 },
 };
@@ -1042,7 +1042,7 @@ function teamLabelShort(tid) {
 //    Both levels are packed so circles never overlap (front-chain packing).
 const PACK_META = {
   kpg: { label: 'KOs / Game', get: r => r.kpg }, kos: { label: 'KOs', get: r => r.kos },
-  mb: { label: 'Matches Brought', get: r => r.mbCount }, mp: { label: 'Match Participation', get: r => r.mpCount },
+  mb: { label: 'Sets Brought', get: r => r.mbCount }, mp: { label: 'Match Participation', get: r => r.mpCount },
   gp: { label: 'Game Participation', get: r => r.gpCount },
 };
 let packTeamTips = [];

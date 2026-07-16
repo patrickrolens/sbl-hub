@@ -132,6 +132,67 @@ async function resolveSeason() {
   return current.data;
 }
 
+// ── Pokémon name lookup ─────────────────────────────────────────────────────
+// Pages that use these declare `let pokemonList = []` and fill it from
+// pokemon.json; like ASSET_BASE, the list stays page-owned and is referenced
+// here as a bare global at call time. The Map index makes lookups O(1) —
+// pokemonNameById gets called in loops (leader tables, suggestion filtering)
+// where a linear scan of ~1000 entries adds up. Rebuilt automatically when the
+// page swaps in a new array.
+let _pokemonIndex = null, _pokemonIndexSrc = null;
+function pokemonEntryById(id) {
+  if (_pokemonIndexSrc !== pokemonList) {
+    _pokemonIndexSrc = pokemonList;
+    _pokemonIndex = new Map();
+    pokemonList.forEach(p => _pokemonIndex.set(String(p.id), p));
+  }
+  const s = String(id);
+  // Exact id first — the numeric fallback (leading-zero/number-vs-string ids)
+  // must only apply to all-digit ids, otherwise a suffixed form ("892-r",
+  // Urshifu-RS) parseInts to its base form ("892") and shows the wrong name.
+  let p = _pokemonIndex.get(s);
+  if (!p && /^\d+$/.test(s)) p = _pokemonIndex.get(String(parseInt(s, 10)));
+  return p || null;
+}
+function pokemonNameById(id) {
+  const p = pokemonEntryById(id);
+  return p ? p.name : String(id);
+}
+
+function slugifyName(s) { return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+
+// Who owned this team when a match was played — ended_week is the week the
+// successor takes over; postseason week numbers don't line up with stints, so
+// those go to the open stint. `ownersByTeam` is team_id -> stints sorted by
+// started_week. (Identical copies previously lived in pokemon.html and
+// players.html.)
+function ownerStintAtMatch(ownersByTeam, teamId, m) {
+  const stints = ownersByTeam[teamId] || [];
+  if (!stints.length) return null;
+  const week = (m.stage && m.stage !== 'regular') ? null : m.week;
+  if (week == null) return stints.find(x => x.ended_week == null) || stints[stints.length - 1];
+  return stints.find(x => (x.started_week || 1) <= week && (x.ended_week == null || x.ended_week > week))
+    || stints.find(x => x.ended_week == null) || stints[0];
+}
+
+// A team's result in a match: 'W'/'L' when a winner is recorded, 'D' when the
+// match has games on the board but no winner, null when it's an unplayed
+// schedule row. This rule was hand-copied in pokemon.html, players.html and
+// statistics-adjacent code before being pulled out here — the draw-denominator
+// drift between pages came from exactly that duplication.
+function matchResultFor(m, teamId) {
+  if (m.winner_team_id) return m.winner_team_id === teamId ? 'W' : 'L';
+  return ((m.team_a_score || 0) + (m.team_b_score || 0)) > 0 ? 'D' : null;
+}
+
+// "Season 4-5" / "S4.5" / "season-9" → 4.5 / 4.5 / 9 (0 when nothing numeric).
+// Used for chronological season ordering; previously duplicated per page.
+function parseSeasonNumberLabel(label) {
+  const match = String(label || '').match(/(\d+(?:[.\-]\d+)?)/);
+  if (!match) return 0;
+  return parseFloat(match[1].replace('-', '.'));
+}
+
 // Returns a coachAtWeek(teamId, week) function bound to `ownersByTeam` (a
 // team_id -> [{started_week, ended_week, name}] map, stints sorted by started_week).
 // week == null means "live" (today's owner, i.e. whichever stint has no ended_week);
