@@ -683,7 +683,7 @@ function renderLeaders() {
   const qualified = _leagueMons.filter(x => x.games >= _leaderMin);
   const note = $id('leader-min-note');
   if (note) note.textContent = qualified.length + ' of ' + _leagueMons.length
-    + ' Pokémon qualify for the Win Rate and K/F leaders and the Top 25.';
+    + ' Pokémon';
   const tiles = [];
   const win = topBy(qualified, x => x.winpct);
   if (win) tiles.push(leaderTile('Best Win Rate', win, win.winpct.toFixed(1) + '%'));
