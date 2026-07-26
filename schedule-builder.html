@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SBL Hub — Schedule Builder (Stage 1)</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#0f1117; --bg2:#1a1d27; --bg3:#22263a; --border:#2e3248;
+  --text:#e8eaf6; --text2:#9095b8; --text3:#5a5f80;
+  --accent:#7c6ff7; --red:#e05555; --green:#4caf7d; --blue:#60a5fa; --yellow:#f0c060;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); font-size:13px; padding:20px 16px 60px; }
+.wrap { max-width:1100px; margin:0 auto; }
+h1 { font-size:20px; margin-bottom:4px; }
+.sub { color:var(--text2); margin-bottom:20px; line-height:1.5; }
+.section { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; }
+.section-title { font-size:12px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--text2); margin-bottom:12px; }
+.controls { display:flex; flex-wrap:wrap; align-items:center; gap:14px; }
+.group { display:flex; align-items:center; gap:8px; }
+label { font-size:11px; font-weight:700; letter-spacing:.5px; color:var(--text3); text-transform:uppercase; }
+select, input[type=number] { background:var(--bg3); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:13px; font-family:inherit; padding:7px 10px; outline:none; }
+select:focus, input:focus { border-color:var(--accent); }
+input[type=range] { width:220px; accent-color:var(--accent); }
+.btn { background:var(--bg3); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-weight:600; padding:8px 15px; cursor:pointer; font-family:inherit; }
+.btn:hover { border-color:var(--accent); }
+.btn-accent { background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn:disabled { opacity:.5; cursor:default; }
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+.stat { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+.stat .k { font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--text3); }
+.stat .v { font-size:20px; font-weight:800; margin-top:2px; }
+.stat .v.good { color:var(--green); } .stat .v.warn { color:var(--yellow); } .stat .v.bad { color:var(--red); }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
+th { font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--text3); font-weight:700; }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.dev-pos { color:var(--blue); } .dev-neg { color:var(--yellow); }
+.wk { display:inline-block; background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:2px 7px; margin:2px; font-size:11px; }
+.wk.rematch { border-color:var(--yellow); color:var(--yellow); }
+.wk.bye { border-color:var(--text3); color:var(--text3); font-style:italic; }
+.log { font-family:ui-monospace,Menlo,monospace; font-size:11px; line-height:1.6; color:var(--text2); white-space:pre-wrap; }
+.banner { border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:12px; }
+.banner.err { background:rgba(224,85,85,.12); border:1px solid var(--red); color:#ff9c9c; }
+.banner.info { background:rgba(96,165,250,.1); border:1px solid var(--blue); color:var(--blue); }
+.muted { color:var(--text3); }
+.slider-val { font-weight:700; color:var(--accent); min-width:36px; display:inline-block; }
+.week-col { display:flex; flex-wrap:wrap; gap:14px; }
+.week-block { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px; min-width:230px; }
+.week-block h4 { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text3); margin-bottom:8px; }
+.match-line { font-size:12px; padding:3px 0; }
+.match-line .vs { color:var(--text3); margin:0 5px; }
+.match-line.rematch { color:var(--yellow); }
+
+/* interactive grid */
+.match-row { display:flex; align-items:center; gap:4px; padding:4px 6px; margin:2px 0; border-radius:6px; border:1px solid transparent; font-size:12px; }
+.match-row.freshness-blue { background:rgba(96,165,250,.08); border-color:rgba(96,165,250,.28); }
+.match-row.freshness-white { background:transparent; }
+.match-row.freshness-yellow { background:rgba(240,192,96,.08); border-color:rgba(240,192,96,.30); }
+.match-row.freshness-red { background:rgba(224,85,85,.08); border-color:rgba(224,85,85,.32); }
+.match-row.locked { box-shadow:inset 2px 0 0 var(--accent); }
+.player-chip { cursor:pointer; padding:2px 6px; border-radius:5px; border:1px solid transparent; user-select:none; white-space:nowrap; }
+.player-chip:hover { background:var(--bg2); border-color:var(--border); }
+.player-chip.selected { background:var(--accent); color:#fff; border-color:var(--accent); }
+.match-row .vs { color:var(--text3); font-size:11px; }
+.match-row .spacer { flex:1; }
+.match-mark { font-size:11px; }
+.match-mark.blue { color:var(--blue); } .match-mark.yellow { color:var(--yellow); } .match-mark.red { color:var(--red); }
+.lock-btn { cursor:pointer; font-size:12px; opacity:.4; padding:1px 4px; border-radius:4px; border:1px solid transparent; }
+.lock-btn:hover { opacity:.9; border-color:var(--border); }
+.lock-btn.on { opacity:1; color:var(--accent); }
+.bye-row { font-size:12px; color:var(--text3); font-style:italic; padding:4px 6px; }
+.legend { display:flex; flex-wrap:wrap; gap:14px; align-items:center; font-size:11px; color:var(--text2); margin-bottom:10px; }
+.legend .swatch { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:-1px; border:1px solid var(--border); }
+.legend .sw-blue { background:rgba(96,165,250,.5); border-color:var(--blue); }
+.legend .sw-white { background:var(--bg3); }
+.legend .sw-yellow { background:rgba(240,192,96,.5); border-color:var(--yellow); }
+.legend .sw-red { background:rgba(224,85,85,.5); border-color:var(--red); }
+.edit-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px; padding:10px 12px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; }
+.edit-hint { color:var(--text2); font-size:12px; }
+.warn-inline { color:var(--red); font-size:11px; font-weight:600; }
+.roster-panel { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; }
+.roster-table { width:100%; }
+.roster-table td, .roster-table th { padding:6px 10px; }
+.roster-table th { text-align:left; }
+/* fixed columns so each header sits directly above its content */
+.roster-table th.rc-computed, .roster-table td.rc-computed { width:120px; text-align:left; font-variant-numeric:tabular-nums; }
+.roster-table th.rc-override, .roster-table td.rc-override { width:100px; text-align:left; }
+.roster-table th.rc-clear, .roster-table td.rc-clear { width:36px; text-align:left; }
+/* computed ELO is normal white text; only dims when an override is in effect */
+.roster-table td.rc-computed.rcomputed { color:var(--text3); }
+.roster-table input.rover { width:72px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:12px; padding:4px 6px; text-align:right; }
+.roster-table input.rover.set { border-color:var(--accent); color:var(--accent); font-weight:700; }
+.newbie { font-size:10px; color:var(--yellow); border:1px solid var(--yellow); border-radius:4px; padding:0 4px; margin-left:4px; }
+.roster-clear { cursor:pointer; color:var(--text3); font-size:14px; padding:0 3px; }
+.roster-clear:hover { color:var(--red); }
+.div-cols { display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; }
+.div-col { flex:1; min-width:260px; background:var(--bg3); border:1px solid var(--border); border-radius:9px; padding:12px; }
+.div-col h4 { font-size:12px; font-weight:800; margin-bottom:4px; }
+.div-meta { font-size:11px; color:var(--text2); margin-bottom:8px; font-variant-numeric:tabular-nums; }
+.div-player { display:flex; align-items:center; gap:8px; padding:3px 6px; border-radius:5px; font-size:12px; }
+.div-player:hover { background:var(--bg2); }
+.div-player .dp-name { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.div-player .dp-elo { color:var(--text); font-variant-numeric:tabular-nums; }
+.div-player .dp-move { cursor:pointer; color:var(--text3); font-size:12px; padding:0 4px; border-radius:4px; }
+.div-player .dp-move:hover { color:var(--accent); background:var(--bg); }
+.div-balance { margin-top:10px; font-size:12px; }
+.div-balance .gap-good { color:var(--green); font-weight:700; }
+.div-balance .gap-warn { color:var(--yellow); font-weight:700; }
+.div-balance .gap-bad { color:var(--red); font-weight:700; }
+.div-tag { font-size:9px; font-weight:700; color:var(--text3); border:1px solid var(--border); border-radius:4px; padding:0 4px; margin-left:5px; letter-spacing:.3px; }
+.div-tag.cross { color:var(--accent); border-color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Schedule Builder <span class="muted" style="font-size:13px;font-weight:400">— Stage 1 validation</span></h1>
+  <div class="sub">Loads a season's roster, computes current ELO from full match history (mirrors player.html), weights prior meetings by recency, and generates a balanced, rematch-avoiding schedule. This stage focuses on validating the math — the polished editable grid comes next.</div>
+
+  <div id="boot" class="banner info">Loading seasons…</div>
+
+  <div class="section" id="ctl" hidden>
+    <div class="section-title">Inputs</div>
+    <div class="controls">
+      <div class="group">
+        <label for="mode">Mode</label>
+        <select id="mode">
+          <option value="generate">Generate new schedule</option>
+          <option value="assess">Assess past season</option>
+        </select>
+      </div>
+      <div class="group">
+        <label for="season">Season</label>
+        <select id="season"></select>
+      </div>
+      <div class="group">
+        <label for="weeks">Weeks</label>
+        <input type="number" id="weeks" min="1" max="20" value="9" style="width:64px">
+      </div>
+      <div class="group">
+        <label for="eloModel">ELO model</label>
+        <select id="eloModel">
+          <option value="coupled">True (coupled)</option>
+          <option value="ulico">Ulico (1500-opp)</option>
+        </select>
+      </div>
+      <div class="group">
+        <label for="seed">Seed</label>
+        <input type="number" id="seed" value="42" style="width:80px">
+      </div>
+      <button class="btn" id="reroll">🎲 Re-roll seed</button>
+      <button class="btn" id="loadRoster">Load roster / ELOs</button>
+      <button class="btn btn-accent" id="build">Build schedule</button>
+    </div>
+    <div class="controls" style="margin-top:14px">
+      <div class="group">
+        <label for="slider">Balance ↔ Novelty</label>
+        <input type="range" id="slider" min="0" max="100" value="50">
+        <span class="slider-val" id="sliderVal">50</span>
+      </div>
+      <span class="muted">Left = prioritize balanced schedule strength · Right = prioritize fresh matchups</span>
+    </div>
+  </div>
+
+  <div id="rosterPanel"></div>
+  <div id="out"></div>
+</div>
+
+<script src="scheduler-core.js"></script>
+<script>
+// ── connection (self-contained, mirrors utils.js dbClient) ──────────────────
+const SUPABASE_URL      = "https://arypbyzeppbpbursmzcs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_U8J3pV_KgomrWhbgoGBSUg_ttQ4d46m";
+const sb = window.sb || supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// paginators (mirror utils.js — page past the 1000-row cap)
+async function paginate(qf){const P=1000,out=[];for(let f=0;;f+=P){const{data,error}=await qf().range(f,f+P-1);if(error)throw error;if(data&&data.length)out.push(...data);if(!data||data.length<P)break;}return out;}
+async function fetchAll(t,c){return paginate(()=>sb.from(t).select(c).order('id'));}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ELO — verbatim mirror of player.html's implementation. KEEP IN SYNC.
+// Opponent is treated as fixed 1500 (per-player independent career walk).
+// ─────────────────────────────────────────────────────────────────────────────
+function parseSeasonNumberLabel(label){const m=String(label||'').match(/(\d+(?:[.\-]\d+)?)/);if(!m)return 0;return parseFloat(m[1].replace('-','.'));}
+function sortMatchesChronologically(matches, seasonById){
+  return (matches||[]).slice().sort((a,b)=>{
+    const sa=parseSeasonNumberLabel((seasonById[a.season_id]||{}).name||(seasonById[a.season_id]||{}).slug||'');
+    const sb2=parseSeasonNumberLabel((seasonById[b.season_id]||{}).name||(seasonById[b.season_id]||{}).slug||'');
+    if(sa!==sb2)return sa-sb2;
+    const aw=a.week==null?Infinity:a.week, bw=b.week==null?Infinity:b.week;
+    if(aw!==bw)return aw-bw;
+    if(a.match_date&&b.match_date)return String(a.match_date).localeCompare(String(b.match_date));
+    return 0;
+  });
+}
+function calculatePlayerRatingHistory(matches, playerTeamIds, seasonById){
+  const sorted=sortMatchesChronologically(matches, seasonById);
+  let rating=1500; const K=24; const hist=[];
+  sorted.forEach(m=>{
+    const isA=playerTeamIds.includes(m.team_a_id), isB=playerTeamIds.includes(m.team_b_id);
+    if(!isA&&!isB)return;
+    const myTeam=isA?m.team_a_id:m.team_b_id;
+    const result=m.winner_team_id==null?0.5:(m.winner_team_id===myTeam?1:0);
+    const expected=1/(1+Math.pow(10,(1500-rating)/400));
+    rating+=K*(result-expected);
+    hist.push(Math.round(rating));
+  });
+  return hist;
+}
+
+// ── ownership scoping (mirror of player.html ownershipCoversMatch) ──────────
+function ownershipCoversMatch(owners, teamId, m){
+  const week=(m.stage&&m.stage!=='regular')?null:m.week;
+  return (owners||[]).some(o=>{
+    if(o.team_id!==teamId)return false;
+    if(week==null)return o.ended_week==null;
+    return (o.started_week||1)<=week&&(o.ended_week==null||o.ended_week>week);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA LOADING
+// ─────────────────────────────────────────────────────────────────────────────
+let SEASONS=[], ALL_MATCHES=[], SEASON_BY_ID={}, TEAM_BY_ID={}, OWNERS_ALL=[];
+let DIVISIONS=[], DIVISION_BY_ID={}, DIVISIONS_BY_SEASON={};
+
+async function loadGlobal(){
+  // Everything cross-season, once. Paginated.
+  const [seasons, teams, owners, matches, divisions] = await Promise.all([
+    fetchAll('seasons','id,name,slug,is_current'),
+    fetchAll('teams','id,name,slug,season_id,initial_seed,division_id'),
+    fetchAll('team_owners','team_id,player_id,started_week,ended_week'),
+    fetchAll('matches','id,season_id,stage,week,team_a_id,team_b_id,winner_team_id,match_date'),
+    fetchAll('divisions','id,season_id,name').catch(()=>[]), // tolerate absence
+  ]);
+  SEASONS=seasons.sort((a,b)=>parseSeasonNumberLabel(b.name||b.slug)-parseSeasonNumberLabel(a.name||a.slug));
+  seasons.forEach(s=>SEASON_BY_ID[s.id]=s);
+  teams.forEach(t=>TEAM_BY_ID[t.id]=t);
+  OWNERS_ALL=owners;
+  ALL_MATCHES=matches;
+  DIVISIONS=divisions||[];
+  DIVISION_BY_ID={}; DIVISIONS_BY_SEASON={};
+  DIVISIONS.forEach(d=>{
+    DIVISION_BY_ID[d.id]=d;
+    (DIVISIONS_BY_SEASON[d.season_id]=DIVISIONS_BY_SEASON[d.season_id]||[]).push(d);
+  });
+}
+
+// Player list for a target season = the players who own a team in that season.
+// Returns [{ id(player), name, teamId, seed }].
+async function rosterForSeason(seasonId){
+  const teams = Object.values(TEAM_BY_ID).filter(t=>t.season_id===seasonId);
+  const teamIds = new Set(teams.map(t=>t.id));
+  // owner of each season-team = the open stint (or the one active earliest). Roster
+  // is defined at draft time, so we take each team's owning player.
+  const ownerOfTeam={};
+  OWNERS_ALL.filter(o=>teamIds.has(o.team_id)).forEach(o=>{
+    // prefer the stint that started earliest (the drafter); fall back to any.
+    const cur=ownerOfTeam[o.team_id];
+    if(!cur || (o.started_week||1) < (cur.started_week||1)) ownerOfTeam[o.team_id]=o;
+  });
+  // resolve player display names
+  const pids=[...new Set(Object.values(ownerOfTeam).map(o=>o.player_id))];
+  const pRes = pids.length ? await sb.from('players').select('id,display_name').in('id',pids) : {data:[]};
+  const nameById={}; (pRes.data||[]).forEach(p=>nameById[p.id]=p.display_name);
+  return teams.map(t=>{
+    const o=ownerOfTeam[t.id];
+    return o ? { id:o.player_id, name:nameById[o.player_id]||('player '+o.player_id), teamId:t.id, seed:t.initial_seed, divisionId:t.division_id||null } : null;
+  }).filter(Boolean);
+}
+
+// ELO for each player in the roster. If beforeSeasonNum is given, only matches
+// from seasons STRICTLY BEFORE that number count — reconstructing each player's
+// rating as it stood going INTO that season (pre-season ELO). If null, uses all
+// history (current ELO). Result on p.eloUlico.
+function computeElos(roster, beforeSeasonNum){
+  // player -> all team_ids they ever owned
+  const teamsByPlayer={};
+  OWNERS_ALL.forEach(o=>{(teamsByPlayer[o.player_id]=teamsByPlayer[o.player_id]||[]).push(o.team_id);});
+  const ownersByPlayer={};
+  OWNERS_ALL.forEach(o=>{(ownersByPlayer[o.player_id]=ownersByPlayer[o.player_id]||[]).push(o);});
+  roster.forEach(p=>{
+    const myTeams=teamsByPlayer[p.id]||[];
+    const myTeamSet=new Set(myTeams);
+    // matches where one of my teams played, scoped to my ownership stint windows
+    const mine=ALL_MATCHES.filter(m=>{
+      if(beforeSeasonNum!=null){
+        const sn=parseSeasonNumberLabel((SEASON_BY_ID[m.season_id]||{}).name||(SEASON_BY_ID[m.season_id]||{}).slug||'');
+        if(sn>=beforeSeasonNum)return false; // exclude target season and later
+      }
+      const meA=myTeamSet.has(m.team_a_id)&&ownershipCoversMatch(ownersByPlayer[p.id],m.team_a_id,m);
+      const meB=myTeamSet.has(m.team_b_id)&&ownershipCoversMatch(ownersByPlayer[p.id],m.team_b_id,m);
+      return meA||meB;
+    });
+    const h=calculatePlayerRatingHistory(mine, myTeams, SEASON_BY_ID);
+    p.eloUlico = h.length ? h[h.length-1] : 1500;
+    p.games = h.length;
+  });
+}
+
+// ── shared resolver: which player owned `teamId` at the moment of match `m` ──
+// (postseason scopes to the open stint, matching ownershipCoversMatch semantics)
+let OWNERS_BY_TEAM=null;
+function ownerAt(teamId, m){
+  if(!OWNERS_BY_TEAM){
+    OWNERS_BY_TEAM={};
+    OWNERS_ALL.forEach(o=>{(OWNERS_BY_TEAM[o.team_id]=OWNERS_BY_TEAM[o.team_id]||[]).push(o);});
+  }
+  const week=(m.stage&&m.stage!=='regular')?null:m.week;
+  const st=(OWNERS_BY_TEAM[teamId]||[]).find(o=>{
+    if(week==null)return o.ended_week==null;
+    return (o.started_week||1)<=week&&(o.ended_week==null||o.ended_week>week);
+  });
+  return st?st.player_id:null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUPLED ("true") ELO — one global chronological pass over ALL league matches,
+// updating BOTH participants using each other's live rating. Everyone enters at
+// 1500, K=24, null winner = draw. Unlike the Ulico mirror (opponent fixed at
+// 1500, per-player independent), this couples every player through shared match
+// history. Computed once for the whole league; roster reads its slice.
+// ─────────────────────────────────────────────────────────────────────────────
+// Coupled ELO computed up to (but excluding) beforeSeasonNum, or all history if
+// null. Cached per-cutoff since the assess mode reuses the same cutoff repeatedly.
+const COUPLED_CACHE=new Map(); // cutoffKey -> Map(player->rating)
+function computeCoupledEloAll(beforeSeasonNum){
+  const key = beforeSeasonNum==null ? 'ALL' : String(beforeSeasonNum);
+  if(COUPLED_CACHE.has(key)) return COUPLED_CACHE.get(key);
+  const K=24; const rating=new Map();
+  const get=p=>rating.has(p)?rating.get(p):1500;
+  const sorted=sortMatchesChronologically(ALL_MATCHES, SEASON_BY_ID);
+  sorted.forEach(m=>{
+    if(beforeSeasonNum!=null){
+      const sn=parseSeasonNumberLabel((SEASON_BY_ID[m.season_id]||{}).name||(SEASON_BY_ID[m.season_id]||{}).slug||'');
+      if(sn>=beforeSeasonNum)return; // exclude target season and later
+    }
+    const pa=ownerAt(m.team_a_id,m), pb=ownerAt(m.team_b_id,m);
+    if(!pa||!pb)return;
+    const ra=get(pa), rb=get(pb);
+    const ea=1/(1+Math.pow(10,(rb-ra)/400));
+    const eb=1/(1+Math.pow(10,(ra-rb)/400));
+    let sa,sbv;
+    if(m.winner_team_id==null){sa=0.5;sbv=0.5;}
+    else if(m.winner_team_id===m.team_a_id){sa=1;sbv=0;}
+    else {sa=0;sbv=1;}
+    rating.set(pa, ra+K*(sa-ea));
+    rating.set(pb, rb+K*(sbv-eb));
+  });
+  const out=new Map(); rating.forEach((v,k)=>out.set(k,Math.round(v)));
+  COUPLED_CACHE.set(key,out);
+  return out;
+}
+
+// Manual ELO overrides: playerId -> number. Feeds all downstream computation
+// (balance target, scheduling, division assignment) but never touches the DB.
+// Primary use: giving a newcomer a rating other than the 1500 default.
+const ELO_OVERRIDES=new Map();
+
+// Assign p.elo from the chosen model, optionally as-of a season boundary.
+// A manual override, if present for a player, wins — but we keep the computed
+// value on p.eloComputed so the UI can show what's being overridden.
+function applyEloModel(roster, model, beforeSeasonNum){
+  const coupledMap = model==='coupled' ? computeCoupledEloAll(beforeSeasonNum) : null;
+  roster.forEach(p=>{
+    let computed;
+    if(model==='coupled'){
+      computed = coupledMap.has(p.id)?coupledMap.get(p.id):1500;
+    } else {
+      computed = p.eloUlico;
+    }
+    p.eloComputed = computed;
+    if(ELO_OVERRIDES.has(p.id)){ p.elo = ELO_OVERRIDES.get(p.id); p.eloOverridden = true; }
+    else { p.elo = computed; p.eloOverridden = false; }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DIVISIONS
+// Three-way branch (per spec):
+//   1. Season has no divisions          → single pool, no division handling.
+//   2. Divisions exist AND teams assigned → use the stored assignment as-is.
+//   3. Divisions exist, teams unassigned  → propose an ELO-balanced split.
+// Read-only: nothing here writes division_id back to the database.
+// ─────────────────────────────────────────────────────────────────────────────
+const DIVSTATE = { mode:'none', divisions:[], assign:new Map(), source:'', gapTol:3, seed:1 };
+
+function seasonDivisions(seasonId){ return (DIVISIONS_BY_SEASON[seasonId]||[]).slice(); }
+
+// Snake (serpentine) draft by ELO: sort desc, then deal 1,2,2,1,1,2,2,1...
+// This balances both the MEAN and the SPREAD across divisions far better than
+// simple alternation, which would stack all the odd ranks in one division.
+function snakeAssign(roster, divisions){
+  const D=divisions.length;
+  if(D<2) return new Map();
+  const sorted=roster.slice().sort((a,b)=>b.elo-a.elo);
+  const out=new Map();
+  let dir=1, d=0;
+  sorted.forEach(p=>{
+    out.set(p.id, divisions[d].id);
+    // serpentine walk
+    if(dir===1){ if(d===D-1){ dir=-1; } else { d++; } }
+    else { if(d===0){ dir=1; } else { d--; } }
+  });
+  return out;
+}
+
+// Per-player LSR for an assignment: for each player, how many of their
+// last-season opponents share their division (= a guaranteed round-robin
+// rematch). Returns { max, total } where total counts each rematch pair once.
+function assignmentLSR(assign, roster, lastSeason){
+  const byId={}; roster.forEach(p=>byId[p.id]=p);
+  // build per-player last-season opponent sets from the lastSeason pair keys
+  const oppOf={}; roster.forEach(p=>oppOf[p.id]=[]);
+  lastSeason.forEach(k=>{
+    const [a,b]=k.split('|');
+    if(oppOf[a]&&oppOf[b]){ oppOf[a].push(b); oppOf[b].push(a); }
+  });
+  let max=0, total=0;
+  roster.forEach(p=>{
+    let c=0;
+    (oppOf[p.id]||[]).forEach(o=>{ if(assign.get(o)===assign.get(p.id)) c++; });
+    if(c>max) max=c; total+=c;
+  });
+  return { max, total: total/2 };
+}
+
+function divGap(assign, roster, divisions){
+  const sums={}, counts={};
+  divisions.forEach(d=>{sums[d.id]=0;counts[d.id]=0;});
+  roster.forEach(p=>{ const d=assign.get(p.id); if(d!=null&&sums[d]!=null){ sums[d]+=p.elo; counts[d]++; } });
+  const avgs=divisions.map(d=>counts[d.id]?sums[d.id]/counts[d.id]:0);
+  return Math.max(...avgs)-Math.min(...avgs);
+}
+function divSizesOk(assign, roster, divisions){
+  const counts={}; divisions.forEach(d=>counts[d.id]=0);
+  roster.forEach(p=>{ const d=assign.get(p.id); if(counts[d]!=null) counts[d]++; });
+  const vals=Object.values(counts);
+  return Math.max(...vals)-Math.min(...vals)<=1; // balanced sizes (even split, or ±1 when odd)
+}
+
+// Best-of-N division assignment: keep ELO gap under `gapTol`, then minimize
+// max-LSR (primary) and total-LSR (secondary). Starts from the snake and
+// explores balance-neutral swaps. seed makes the search reproducible / reshuffleable.
+function assignDivisionsBest(roster, divisions, lastSeason, gapTol, seed){
+  if(divisions.length<2) return new Map();
+  let a=seed||1; const rnd=()=>{a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};
+  const ids=roster.map(p=>p.id);
+  const base=snakeAssign(roster,divisions);
+
+  function score(assign){
+    const gap=divGap(assign,roster,divisions);
+    if(!divSizesOk(assign,roster,divisions)) return null;
+    if(gap>gapTol) return null;
+    const lsr=assignmentLSR(assign,roster,lastSeason);
+    return { gap, lsr, key: lsr.max*100000 + lsr.total*100 + gap };
+  }
+
+  // seed candidate: the snake itself (may or may not pass the gap cap — snake gap
+  // is ~0 so it passes any sane tolerance)
+  let best=null;
+  const consider=(assign)=>{ const s=score(assign); if(s&&(!best||s.key<best.key)) best={assign:new Map(assign),...s}; };
+  consider(base);
+
+  // explore: from the snake, apply random balance-neutral cross-division swaps.
+  const TRIES=4000;
+  for(let t=0;t<TRIES;t++){
+    const cand=new Map(base);
+    const nSwaps=1+Math.floor(rnd()*4);
+    for(let s=0;s<nSwaps;s++){
+      const i=ids[Math.floor(rnd()*ids.length)], j=ids[Math.floor(rnd()*ids.length)];
+      if(cand.get(i)!==cand.get(j)){ const tmp=cand.get(i); cand.set(i,cand.get(j)); cand.set(j,tmp); }
+    }
+    consider(cand);
+  }
+  return best?best.assign:base;
+}
+
+// Resolve divisions for a season, applying the three-way branch.
+function resolveDivisions(seasonId, roster){
+  const divs=seasonDivisions(seasonId);
+  if(!divs.length){
+    DIVSTATE.mode='none'; DIVSTATE.divisions=[]; DIVSTATE.assign=new Map(); DIVSTATE.source='';
+    return DIVSTATE;
+  }
+  // are teams already assigned? (every rostered player has a divisionId that
+  // matches one of this season's divisions)
+  const validIds=new Set(divs.map(d=>d.id));
+  const assigned=roster.filter(p=>p.divisionId&&validIds.has(p.divisionId));
+  if(assigned.length===roster.length && roster.length>0){
+    DIVSTATE.mode='stored'; DIVSTATE.divisions=divs;
+    DIVSTATE.assign=new Map(roster.map(p=>[p.id,p.divisionId]));
+    DIVSTATE.source='from database ('+assigned.length+' of '+roster.length+' teams assigned)';
+  } else {
+    DIVSTATE.mode='proposed'; DIVSTATE.divisions=divs;
+    const ls=(ROSTER_CACHE&&ROSTER_CACHE.lastSeason)||new Set();
+    DIVSTATE.assign=assignDivisionsBest(roster, divs, ls, DIVSTATE.gapTol, DIVSTATE.seed);
+    DIVSTATE.source = assigned.length
+      ? 'database has only '+assigned.length+' of '+roster.length+' teams assigned'
+      : 'no teams assigned in database yet';
+  }
+  return DIVSTATE;
+}
+
+// Per-division balance stats for the current assignment.
+function divisionStats(roster){
+  const byDiv=new Map();
+  DIVSTATE.divisions.forEach(d=>byDiv.set(d.id,[]));
+  roster.forEach(p=>{
+    const d=DIVSTATE.assign.get(p.id);
+    if(d&&byDiv.has(d)) byDiv.get(d).push(p);
+  });
+  const rows=[];
+  byDiv.forEach((players,divId)=>{
+    const elos=players.map(p=>p.elo);
+    const n=elos.length;
+    const avg=n?elos.reduce((s,x)=>s+x,0)/n:0;
+    const min=n?Math.min(...elos):0, max=n?Math.max(...elos):0;
+    const sd=n?Math.sqrt(elos.reduce((s,x)=>s+(x-avg)*(x-avg),0)/n):0;
+    rows.push({divId, name:(DIVISION_BY_ID[divId]||{}).name||'Division', players, n, avg, min, max, spread:max-min, sd});
+  });
+  rows.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  return rows;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// ASSESS MODE — read a past season's ACTUAL regular-season schedule and shape it
+// exactly like a solver result, so the identical report() machinery scores it.
+// Balance is judged on PRE-SEASON ELO (already applied to players before this),
+// and rematch history counts only PRIOR seasons (same as generation).
+// ─────────────────────────────────────────────────────────────────────────────
+function actualScheduleResult(seasonId, roster, players, history, avgTarget){
+  const byPlayer={}; players.forEach(p=>byPlayer[p.id]=p);
+  const inRoster=new Set(players.map(p=>p.id));
+
+  // Assess the schedule against the season's STARTING coach for each team, not
+  // whoever coached a given week. A mid-season substitution (e.g. Fury taking
+  // over Shrug's team) doesn't change what the schedule WAS — those weeks still
+  // belong to the drafted slot. roster entries carry {id: startingCoach, teamId},
+  // so this map resolves any team in this season to its starting coach.
+  // (Rematch history for PRIOR seasons still uses ownerAt — who truly played —
+  //  and is computed separately in buildRematchHistory.)
+  const teamToStarter={}; roster.forEach(p=>{ if(p.teamId) teamToStarter[p.teamId]=p.id; });
+
+  const seasonMatches=ALL_MATCHES.filter(m=>m.season_id===seasonId && (!m.stage||m.stage==='regular'));
+  const weekMap=new Map(); // week -> [[pa,pb],...]
+  seasonMatches.forEach(m=>{
+    const pa=teamToStarter[m.team_a_id], pb=teamToStarter[m.team_b_id];
+    if(!pa||!pb) return;
+    if(!inRoster.has(pa)||!inRoster.has(pb)) return;
+    const w=m.week||0;
+    if(!weekMap.has(w)) weekMap.set(w,[]);
+    weekMap.get(w).push([pa,pb]);
+  });
+  const weeks=[...weekMap.keys()].sort((a,b)=>a-b);
+
+  // reconstruct the same `state` shape report() expects
+  const state={ avgTarget, history, sum:{}, cnt:{}, byes:{}, played:new Set() };
+  players.forEach(p=>{ state.sum[p.id]=0; state.cnt[p.id]=0; state.byes[p.id]=0; });
+
+  const schedule=[];
+  weeks.forEach(w=>{
+    const pairs=weekMap.get(w);
+    const playing=new Set();
+    pairs.forEach(([a,b])=>{
+      state.sum[a]+=byPlayer[b].elo; state.cnt[a]+=1;
+      state.sum[b]+=byPlayer[a].elo; state.cnt[b]+=1;
+      state.played.add(SBLScheduler.pairKey(a,b));
+      playing.add(a); playing.add(b);
+    });
+    // whoever didn't play this week took a bye (there can be more than one in
+    // real historical schedules — Season 4.5 had byes — so we record all of them)
+    const byes=players.map(p=>p.id).filter(id=>!playing.has(id));
+    byes.forEach(id=>state.byes[id]+=1);
+    schedule.push({ week:w, pairs, bye: byes.length===1?byes[0]:null, byes });
+  });
+
+  return { schedule, state, avgTarget, problems:[], weeks:weeks.length };
+}
+
+// ── recency-weighted cross-season rematch history ──────────────────────────
+// For each pair of players in the roster, sum a weight over every prior meeting:
+//   weight(meeting) = decay^(seasonsAgo)   with a steep decay so "last season" ≫ older.
+// seasonsAgo is measured from the target season's number. The steep cliff makes
+// "didn't play last season" rank close to "never played" (your stated rule).
+// Returns { history: Map(pairKey->weight), lastSeason: Set(pairKey) }.
+// lastSeason = pairs of roster players who met in the immediately-preceding
+// season (the highest season number strictly below the target). We track this
+// separately so the UI can report per-player last-season rematch counts — the
+// aggregate can look fine while one player gets a lopsided share of them.
+function buildRematchHistory(roster, targetSeasonNum){
+  const inRoster=new Set(roster.map(p=>p.id));
+  const DECAY=0.35; // last season weight 1, two seasons ago 0.35, three ~0.12 ...
+  const hist=new Map();
+  const lastSeason=new Set();
+  const career=new Map(); // pairKey -> { count, mostRecentSeasonsAgo }
+
+  // "last season" = the greatest season number that is strictly less than target.
+  // (Handles gaps and 4.5-style fractional seasons: whatever actually precedes.)
+  const priorNums=SEASONS.map(s=>parseSeasonNumberLabel(s.name||s.slug)).filter(n=>n<targetSeasonNum);
+  const lastSeasonNum=priorNums.length?Math.max(...priorNums):null;
+
+  ALL_MATCHES.forEach(m=>{
+    // Postseason meetings are consequences of both players advancing in a bracket,
+    // not scheduling decisions — so they must NOT count toward rematch history.
+    // (ELO is unaffected: both ELO models still include postseason results.)
+    if(m.stage && m.stage!=='regular') return;
+    const pa=ownerAt(m.team_a_id,m), pb=ownerAt(m.team_b_id,m);
+    if(!pa||!pb)return;
+    if(!inRoster.has(pa)||!inRoster.has(pb))return;
+    const sNum=parseSeasonNumberLabel((SEASON_BY_ID[m.season_id]||{}).name||(SEASON_BY_ID[m.season_id]||{}).slug||'');
+    if(sNum>=targetSeasonNum)return; // only prior seasons feed rematch history
+    const seasonsAgo=Math.max(0, targetSeasonNum - sNum);
+    const w=Math.pow(DECAY, Math.max(0, seasonsAgo-1));
+    const key=SBLScheduler.pairKey(pa,pb);
+    hist.set(key,(hist.get(key)||0)+w);
+    if(lastSeasonNum!=null && sNum===lastSeasonNum) lastSeason.add(key);
+    // raw career tally: total meetings + most recent (smallest seasonsAgo)
+    const c=career.get(key)||{count:0,mostRecentSeasonsAgo:Infinity};
+    c.count+=1; c.mostRecentSeasonsAgo=Math.min(c.mostRecentSeasonsAgo, seasonsAgo);
+    career.set(key,c);
+  });
+  return { history:hist, lastSeason, career };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI
+// ─────────────────────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+$('slider').addEventListener('input',()=>$('sliderVal').textContent=$('slider').value);
+$('reroll').addEventListener('click',()=>{$('seed').value=Math.floor(Math.random()*1e6);});
+$('build').addEventListener('click',run);
+$('loadRoster').addEventListener('click',loadRosterPanel);
+$('mode').addEventListener('change',()=>{
+  const assess=$('mode').value==='assess';
+  // In assess mode, weeks come from the actual schedule; seed/reroll only affect
+  // the generated comparison. Dim the weeks input to signal it's ignored.
+  $('weeks').disabled=assess;
+  $('weeks').style.opacity=assess?'0.4':'1';
+  $('build').textContent=assess?'Assess season':'Build schedule';
+});
+
+function fmt(n,d=1){return Number(n).toFixed(d);}
+
+// Load the selected season's roster and show per-player computed ELO with an
+// editable override field. Overrides are set BEFORE building and feed the
+// scheduler (and, later, the division assigner). New players (no prior games)
+// are marked, since they're the primary override case.
+let ROSTER_CACHE=null;
+async function loadRosterPanel(){
+  const panel=$('rosterPanel');
+  panel.innerHTML='<div class="banner info">Loading roster…</div>';
+  try{
+    const seasonId=$('season').value;
+    const eloModel=$('eloModel').value;
+    const mode=$('mode').value;
+    const targetNum=parseSeasonNumberLabel((SEASON_BY_ID[seasonId]||{}).name||(SEASON_BY_ID[seasonId]||{}).slug||'');
+    const roster=await rosterForSeason(seasonId);
+    if(!roster.length){ panel.innerHTML='<div class="banner err">No rostered players found for this season.</div>'; return; }
+    // compute ELO (pre-season cutoff in assess mode, current in generate)
+    const cutoff = mode==='assess' ? targetNum : null;
+    computeElos(roster, cutoff);
+    applyEloModel(roster, eloModel, cutoff);
+    // last-season / history data, so the division assigner can minimize LSR at
+    // assignment time (before any build). Same definition the scheduler uses.
+    const { history, lastSeason }=buildRematchHistory(roster, targetNum);
+    ROSTER_CACHE={seasonId,roster,history,lastSeason,targetNum};
+
+    let html='<div class="roster-panel"><div class="section-title">Roster &amp; ELO overrides — '+esc((SEASON_BY_ID[seasonId]||{}).name||'')+'</div>';
+    html+='<div class="muted" style="font-size:12px;margin-bottom:10px">Type a value in Override to set a player above or below their computed ELO (e.g. a new player). When an override is set, the computed value dims to show it\'s no longer in effect. Overrides feed the scheduler and division breakdown but are not saved to the database.</div>';
+    html+='<table class="roster-table"><thead><tr>'
+      +'<th>Player</th><th class="rc-computed">Computed ELO</th><th class="rc-override">Override</th><th class="rc-clear"></th></tr></thead><tbody>';
+    roster.slice().sort((a,b)=>b.elo-a.elo).forEach(p=>{
+      const isNew=(p.games||0)===0;
+      const ov=ELO_OVERRIDES.has(p.id)?ELO_OVERRIDES.get(p.id):'';
+      const overridden=ov!=='';
+      html+='<tr>'
+        +'<td>'+esc(p.name)+(isNew?' <span class="newbie" title="No prior games — enters at 1500 unless overridden">NEW</span>':'')+'</td>'
+        +'<td class="rc-computed'+(overridden?' rcomputed':'')+'">'+p.eloComputed+'</td>'
+        +'<td class="rc-override"><input class="rover'+(overridden?' set':'')+'" type="number" placeholder="—" value="'+ov+'" data-pid="'+esc(p.id)+'" oninput="onOverrideInput(this)"></td>'
+        +'<td class="rc-clear"><span class="roster-clear" title="Clear override" onclick="clearOverride(\''+esc(p.id)+'\')">✕</span></td>'
+        +'</tr>';
+    });
+    html+='</tbody></table></div>';
+    panel.innerHTML=html+renderDivisionsPanel(roster);
+  }catch(e){
+    console.error(e);
+    panel.innerHTML='<div class="banner err">Error loading roster: '+(e.message||e)+'</div>';
+  }
+}
+function onOverrideInput(el){
+  const pid=el.getAttribute('data-pid');
+  const v=el.value.trim();
+  if(v===''){ ELO_OVERRIDES.delete(pid); el.classList.remove('set'); }
+  else{ const n=parseInt(v,10); if(!isNaN(n)){ ELO_OVERRIDES.set(pid,n); el.classList.add('set'); } }
+}
+function clearOverride(pid){
+  ELO_OVERRIDES.delete(pid);
+  loadRosterPanel();
+}
+window.onOverrideInput=onOverrideInput; window.clearOverride=clearOverride;
+
+// ── divisions panel ─────────────────────────────────────────────────────────
+// Shows the ELO breakdown of each division and lets you move players between
+// them by hand. Read-only with respect to the database: this is a planning view
+// of what two divisions look like, not a write path.
+function renderDivisionsPanel(roster){
+  resolveDivisions(ROSTER_CACHE.seasonId, roster);
+  return divisionsPanelBody(roster);
+}
+
+// Pure renderer — assumes DIVSTATE is already populated.
+function divisionsPanelBody(roster){
+  if(DIVSTATE.mode==='none'){
+    return '<div class="roster-panel"><div class="section-title">Divisions</div>'
+      +'<div class="muted" style="font-size:12px">This season has no divisions defined, so the schedule will be built from a single pool.</div></div>';
+  }
+  const rows=divisionStats(roster);
+  const avgs=rows.map(r=>r.avg);
+  const gap=avgs.length>1?Math.max(...avgs)-Math.min(...avgs):0;
+  const gapCls=gap<10?'gap-good':gap<30?'gap-warn':'gap-bad';
+  const counts=rows.map(r=>r.n);
+  const uneven=counts.length>1&&(Math.max(...counts)!==Math.min(...counts));
+
+  let html='<div class="roster-panel"><div class="section-title">Divisions — '
+    +(DIVSTATE.mode==='stored'?'from database':'proposed (ELO-balanced)')+'</div>';
+  html+='<div class="muted" style="font-size:12px">'+esc(DIVSTATE.source)
+    +(DIVSTATE.mode==='proposed'?' · Snake-drafted by ELO so both divisions have comparable strength. Use ⇄ to move a player; nothing is saved to the database.':' · Use ⇄ to try a different split; nothing is saved to the database.')
+    +'</div>';
+
+  html+='<div class="div-cols">';
+  rows.forEach(r=>{
+    html+='<div class="div-col"><h4>'+esc(r.name)+'</h4>';
+    html+='<div class="div-meta">'+r.n+' players · avg ELO '+fmt(r.avg)+' · range '+r.min+'–'+r.max+' · sd '+fmt(r.sd)+'</div>';
+    r.players.slice().sort((a,b)=>b.elo-a.elo).forEach(p=>{
+      html+='<div class="div-player">'
+        +'<span class="dp-name" title="'+esc(p.name)+'">'+esc(p.name)+'</span>'
+        +'<span class="dp-elo">'+p.elo+(p.eloOverridden?'*':'')+'</span>'
+        +'<span class="dp-move" title="Move to the other division" onclick="moveDivision(\''+esc(p.id)+'\')">⇄</span>'
+        +'</div>';
+    });
+    html+='</div>';
+  });
+  html+='</div>';
+
+  // LSR metrics for the current assignment (guaranteed round-robin rematches)
+  const ls=(ROSTER_CACHE&&ROSTER_CACHE.lastSeason)||new Set();
+  const lsr=assignmentLSR(DIVSTATE.assign, roster, ls);
+  const maxCls=lsr.max<=2?'gap-good':lsr.max<=4?'gap-warn':'gap-bad';
+
+  html+='<div class="div-balance">Average-ELO gap: <span class="'+gapCls+'">'+fmt(gap)+'</span>'
+    +'  ·  Max last-season rematches / player: <span class="'+maxCls+'">'+lsr.max+'</span>'
+    +'  ·  Total: <span>'+lsr.total+'</span>'
+    +(uneven?' <br><span class="warn-inline">uneven sizes ('+counts.join(' / ')+') — an odd roster forces this; the smaller division will need byes</span>':'')
+    +'</div>';
+  html+='<div class="div-balance" style="color:var(--text3)">Every intra-division pair plays (full round robin), so a last-season opponent in your division is a guaranteed rematch. The assigner keeps the ELO gap under the tolerance, then minimizes the worst player\'s rematch count.</div>';
+
+  if(DIVSTATE.mode!=='stored'){
+    html+='<div class="edit-bar" style="margin-top:10px">'
+      +'<label style="font-size:11px">Max ELO gap</label>'
+      +'<input type="number" id="gapTol" value="'+DIVSTATE.gapTol+'" min="0" max="200" style="width:64px" oninput="onGapTol(this)">'
+      +'<button class="btn" onclick="reShuffle()">🎲 Re-shuffle (balanced)</button>'
+      +'<span class="edit-hint">Lower gap = tighter balance. Re-shuffle draws a new balanced split minimizing rematches; ⇄ moves a single player.</span>'
+      +'</div>';
+  }
+  html+='</div>';
+  return html;
+}
+function onGapTol(el){
+  const v=parseInt(el.value,10);
+  if(!isNaN(v)) DIVSTATE.gapTol=v;
+}
+function moveDivision(pid){
+  if(DIVSTATE.divisions.length<2) return;
+  const cur=DIVSTATE.assign.get(pid);
+  const idx=DIVSTATE.divisions.findIndex(d=>d.id===cur);
+  const next=DIVSTATE.divisions[(idx+1)%DIVSTATE.divisions.length];
+  DIVSTATE.assign.set(pid,next.id);
+  DIVSTATE.mode='proposed';
+  DIVSTATE.source='manually adjusted';
+  refreshDivisions();
+}
+function reShuffle(){
+  if(!ROSTER_CACHE) return;
+  DIVSTATE.seed=Math.floor(Math.random()*1e6);
+  const ls=ROSTER_CACHE.lastSeason||new Set();
+  DIVSTATE.assign=assignDivisionsBest(ROSTER_CACHE.roster, DIVSTATE.divisions, ls, DIVSTATE.gapTol, DIVSTATE.seed);
+  DIVSTATE.mode='proposed';
+  DIVSTATE.source='balanced split (ELO gap ≤ '+DIVSTATE.gapTol+', minimized rematches)';
+  refreshDivisions();
+}
+// Re-render only the divisions panel (assignment already mutated in DIVSTATE).
+function refreshDivisions(){
+  if(!ROSTER_CACHE) return;
+  const panels=$('rosterPanel').querySelectorAll('.roster-panel');
+  if(panels.length>=2) panels[1].outerHTML=divisionsPanelBody(ROSTER_CACHE.roster);
+  else loadRosterPanel();
+}
+window.moveDivision=moveDivision; window.reShuffle=reShuffle; window.onGapTol=onGapTol;
+
+async function run(){
+  const out=$('out'); out.innerHTML='<div class="banner info">Computing…</div>';
+  try{
+    const seasonId=$('season').value;
+    const weeks=parseInt($('weeks').value,10)||9;
+    const seed=parseInt($('seed').value,10)||42;
+    const sliderPct=parseInt($('slider').value,10); // 0..100
+    const eloModel=$('eloModel').value; // 'ulico' | 'coupled'
+    const mode=$('mode').value; // 'generate' | 'assess'
+
+    const roster=await rosterForSeason(seasonId);
+    if(roster.length<2){out.innerHTML='<div class="banner err">Season has fewer than 2 rostered players.</div>';return;}
+    const targetNum=parseSeasonNumberLabel((SEASON_BY_ID[seasonId]||{}).name||(SEASON_BY_ID[seasonId]||{}).slug||'');
+    const { history, lastSeason, career }=buildRematchHistory(roster, targetNum);
+    window._career=career;
+
+    if(mode==='assess'){
+      // PRE-SEASON ELO: reconstruct ratings as they stood going INTO this season.
+      computeElos(roster, targetNum);            // pre-season Ulico
+      applyEloModel(roster, eloModel, targetNum); // pre-season coupled if selected
+      const players=roster.map(p=>({id:p.id,name:p.name,elo:p.elo,eloComputed:p.eloComputed,eloOverridden:p.eloOverridden}));
+      window._players=players;
+      const avgTarget=players.reduce((s,p)=>s+p.elo,0)/players.length;
+      const actual=actualScheduleResult(seasonId, roster, players, history, avgTarget);
+      if(!actual.schedule.length){out.innerHTML='<div class="banner err">No regular-season matches found for this season to assess.</div>';return;}
+      const rep=SBLScheduler.report(players, actual);
+      EDITOR.active=false;
+      renderReport(roster,actual,rep,history,lastSeason,null,eloModel,{assess:true});
+      // optionally generate a comparison on the SAME inputs
+      const cmpPlayers=roster.map(p=>({id:p.id,name:p.name,elo:p.elo}));
+      const rematchWeight=2+(sliderPct/100)*(sliderPct/100)*400;
+      const picked=SBLScheduler.buildScheduleBest(cmpPlayers,history,{weeks:actual.weeks,seed,rematchWeight,balanceWeight:1,tries:6});
+      renderComparison(roster,actual,rep,picked,history,lastSeason);
+      return;
+    }
+
+    // GENERATE mode — current ELO
+    computeElos(roster);            // fills p.eloUlico (current)
+    applyEloModel(roster, eloModel); // sets p.elo from chosen model (current)
+
+    // slider → weights. Balance weight stays 1; rematch weight scales with novelty.
+    const rematchWeight = 2 + (sliderPct/100)*(sliderPct/100)*400;
+
+    const players=roster.map(p=>({id:p.id,name:p.name,elo:p.elo,eloComputed:p.eloComputed,eloOverridden:p.eloOverridden}));
+
+    // Does this season use divisions? Resolve if the roster panel hasn't already.
+    resolveDivisions(seasonId, roster);
+    const useDivisions = DIVSTATE.mode!=='none' && DIVSTATE.divisions.length>=2;
+
+    let result, rep;
+    if(useDivisions){
+      const divisionOf=new Map(DIVSTATE.assign);
+      result=SBLScheduler.buildDivisionalSchedule(players,history,divisionOf,
+        {weeks,seed,rematchWeight,balanceWeight:1});
+      rep=SBLScheduler.report(players,result);
+      window._divisionOf=divisionOf;
+    } else {
+      const picked=SBLScheduler.buildScheduleBest(players,history,{weeks,seed,rematchWeight,balanceWeight:1,tries:6});
+      result=picked.result; rep=picked.report;
+      $('seed').value=picked.seed;
+      window._divisionOf=null;
+    }
+
+    window._eloModel=eloModel;
+    window._players=players;
+    EDITOR.init(roster, players, result, history, lastSeason, {rematchWeight,balanceWeight:1});
+    EDITOR.render();
+  }catch(e){
+    console.error(e);
+    out.innerHTML='<div class="banner err">Error: '+(e.message||e)+'</div>';
+  }
+}
+
+function renderReport(roster,result,rep,history,lastSeason,rematchWeight,eloModel,opts){
+  opts=opts||{};
+  const nameById={}; roster.forEach(p=>nameById[p.id]=p.name);
+  const rmsClass = rep.rms<20?'good':rep.rms<40?'warn':'bad';
+
+  // scheduled rematches, weighted; also tally per-player LAST-SEASON rematches.
+  let usedPairs=[];
+  const lsPerPlayer={}; roster.forEach(p=>lsPerPlayer[p.id]=0);
+  let lsTotal=0;
+  result.schedule.forEach(wk=>wk.pairs.forEach(([a,b])=>{
+    const k=SBLScheduler.pairKey(a,b);
+    const h=history.get(k)||0;
+    const isLS=lastSeason.has(k);
+    if(h>0) usedPairs.push({a,b,w:h,ls:isLS});
+    if(isLS){ lsPerPlayer[a]++; lsPerPlayer[b]++; lsTotal++; }
+  }));
+  usedPairs.sort((x,y)=>y.w-x.w);
+  const maxLS=Math.max(0,...Object.values(lsPerPlayer));
+
+  // four-color freshness counts across the schedule
+  let cBlue=0,cWhite=0,cYellow=0,cRed=0;
+  result.schedule.forEach(wk=>wk.pairs.forEach(([a,b])=>{
+    const f=freshnessOf(a,b,history,lastSeason);
+    if(f==='blue')cBlue++; else if(f==='white')cWhite++; else if(f==='yellow')cYellow++; else cRed++;
+  }));
+
+  let html='';
+  if(opts.assess){
+    html+='<div class="banner info">Assessing the <b>actual</b> schedule from this season, scored on <b>pre-season ELO</b> (ratings as they stood going into the season) and rematch history from prior seasons only. A generated comparison on the same roster appears below.</div>';
+  }
+  html+='<div class="section"><div class="section-title">'+(opts.assess?'Health — your actual schedule':'Health')+'</div><div class="stat-grid">'
+    +stat('Players',roster.length)
+    +stat('Weeks',result.weeks)
+    +stat('ELO model', eloModel==='coupled'?'True (coupled)':'Ulico (1500-opp)')
+    +stat('Balance RMS',fmt(rep.rms)+'',rmsClass,'avg-opp-ELO deviation')
+    +stat('Balance spread',fmt(rep.spread)+'','','max−min across players')
+    +stat('Same-season repeats',rep.sameSeasonRepeats,rep.sameSeasonRepeats===0?'good':'bad')
+    +stat('Fresh matchups',cBlue,cBlue>0?'good':'','never met before')
+    +stat('Last-season rematches',lsTotal,lsTotal===0?'good':'warn','met last season, reused')
+    +stat('Max LS / player',maxLS,maxLS<=1?'good':maxLS<=2?'warn':'bad','worst single player')
+    +'</div></div>';
+
+  // ── schedule grid (interactive when editable) ──────────────────────────────
+  html+='<div class="section"><div class="section-title">Schedule</div>';
+  html+='<div class="legend">'
+    +'<span><span class="swatch sw-blue"></span>Never met (★)</span>'
+    +'<span><span class="swatch sw-white"></span>Some history</span>'
+    +'<span><span class="swatch sw-yellow"></span>Plays a lot (↻)</span>'
+    +'<span><span class="swatch sw-red"></span>Met last season (↻!)</span>'
+    +'</div>';
+  if(opts.editable){
+    const dupes=EDITOR.repeats();
+    html+='<div class="edit-bar">'
+      +'<button class="btn" onclick="EDITOR.reoptimize()">Re-optimize unlocked</button>'
+      +'<span class="edit-hint">Click a player, then another in the <b>same week</b> to swap their opponents. Lock 🔒 a match to freeze it.</span>'
+      +(dupes.length?'<span class="warn-inline">⚠ '+dupes.length+' same-season repeat'+(dupes.length>1?'s':'')+' — a pairing appears twice. Fix before exporting.</span>':'')
+      +'</div>';
+    if(EDITOR._problems && EDITOR._problems.length){
+      html+='<div class="banner err" style="margin-bottom:10px">'+EDITOR._problems.map(esc).join('<br>')+'</div>';
+      EDITOR._problems=null;
+    }
+  }
+  html+='<div class="week-col">';
+  const divOf=window._divisionOf||null;
+  const divShort=(id)=>{ const d=DIVISION_BY_ID[id]; if(!d)return '?'; const nm=d.name||''; const m=nm.match(/([A-Za-z0-9])$/); return m?m[1].toUpperCase():nm.slice(0,1).toUpperCase(); };
+  const divTag=(a,b)=>{
+    if(!divOf) return '';
+    const da=divOf.get(a), db=divOf.get(b);
+    if(da&&db&&da===db) return '<span class="div-tag" title="'+esc((DIVISION_BY_ID[da]||{}).name||'')+'">'+esc(divShort(da))+'</span>';
+    return '<span class="div-tag cross" title="Cross-division">✕-div</span>';
+  };
+  (opts.editable?EDITOR.schedule:result.schedule).forEach(wk=>{
+    html+='<div class="week-block"><h4>Week '+wk.week+'</h4>';
+    wk.pairs.forEach(([a,b])=>{
+      const k=SBLScheduler.pairKey(a,b);
+      const f=freshnessOf(a,b,history,lastSeason);
+      const locked=opts.editable&&EDITOR.locks.has(k);
+      if(opts.editable){
+        const selA=EDITOR.sel&&EDITOR.sel.week===wk.week&&EDITOR.sel.id===a;
+        const selB=EDITOR.sel&&EDITOR.sel.week===wk.week&&EDITOR.sel.id===b;
+        html+='<div class="match-row freshness-'+f+(locked?' locked':'')+'">'
+          +'<span class="player-chip'+(selA?' selected':'')+'" onclick="EDITOR.clickPlayer('+wk.week+',\''+esc(a)+'\')">'+esc(nameById[a])+'</span>'
+          +'<span class="vs">v</span>'
+          +'<span class="player-chip'+(selB?' selected':'')+'" onclick="EDITOR.clickPlayer('+wk.week+',\''+esc(b)+'\')">'+esc(nameById[b])+'</span>'
+          +freshnessMark(f)+divTag(a,b)
+          +'<span class="spacer"></span>'
+          +'<span class="lock-btn'+(locked?' on':'')+'" title="'+(locked?'Unlock':'Lock')+'" onclick="EDITOR.toggleLock('+wk.week+',\''+esc(k)+'\')">'+(locked?'🔒':'🔓')+'</span>'
+          +'</div>';
+      } else {
+        html+='<div class="match-row freshness-'+f+'">'
+          +'<span>'+esc(nameById[a])+'</span><span class="vs"> v </span><span>'+esc(nameById[b])+'</span>'+freshnessMark(f)+divTag(a,b)+'</div>';
+      }
+    });
+    const byeList = wk.byes || (wk.bye?[wk.bye]:[]);
+    byeList.forEach(id=>{ html+='<div class="bye-row">'+esc(nameById[id])+' — bye</div>'; });
+    html+='</div>';
+  });
+  html+='</div></div>';
+
+  // per-player table — now includes LS (last-season rematch) count, flagged if >1
+  const rows=[...rep.rows].sort((a,b)=>b.elo-a.elo);
+  html+='<div class="section"><div class="section-title">Per-player balance</div><table><thead><tr>'
+    +'<th>Player</th><th class="num">ELO</th><th class="num">Games</th><th class="num">Byes</th><th class="num">Avg opp ELO</th><th class="num">Deviation</th><th class="num">LS rematch</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const dc=r.dev>=0?'dev-pos':'dev-neg';
+    const ls=lsPerPlayer[r.id]||0;
+    const lsCell = ls===0 ? '<span class="muted">0</span>' : '<span style="color:'+(ls>1?'var(--red)':'var(--yellow)')+';font-weight:700">'+ls+'</span>';
+    const pObj=(EDITOR.active?EDITOR.players:(window._players||[])).find(p=>p.id===r.id);
+    const eloCell = (pObj&&pObj.eloOverridden)
+      ? '<span style="color:var(--accent);font-weight:700" title="Manual override (computed: '+(pObj.eloComputed)+')">'+r.elo+'*</span>'
+      : String(r.elo);
+    html+='<tr><td>'+esc(r.name)+'</td><td class="num">'+eloCell+'</td><td class="num">'+r.games+'</td><td class="num">'+r.byes+'</td>'
+      +'<td class="num">'+fmt(r.avgOpp)+'</td><td class="num '+dc+'">'+(r.dev>=0?'+':'')+fmt(r.dev)+'</td><td class="num">'+lsCell+'</td></tr>';
+  });
+  html+='</tbody></table><div class="muted" style="margin-top:8px">LS rematch = opponents this player faced last season who appear again on this schedule. Red = more than one; watch for a single player absorbing a disproportionate share.</div></div>';
+
+  // rematch detail
+  if(usedPairs.length){
+    const career=window._career||new Map();
+    html+='<div class="section"><div class="section-title">Reused matchups (staleness weight — higher = met more recently)</div><table><thead><tr>'
+      +'<th>Pairing</th><th class="num">Recency weight</th><th class="num">Career meetings</th></tr></thead><tbody>';
+    usedPairs.forEach(p=>{
+      const tag=p.ls?' <span style="color:var(--red);font-weight:700">last season</span>':'';
+      const c=career.get(SBLScheduler.pairKey(p.a,p.b));
+      let careerCell='—';
+      if(c){
+        const ago=c.mostRecentSeasonsAgo;
+        const agoTxt = ago<=1?'last season':(ago+' seasons ago');
+        careerCell=c.count+' <span class="muted">(last: '+agoTxt+')</span>';
+      }
+      html+='<tr><td>'+esc(nameById[p.a])+' ↻ '+esc(nameById[p.b])+tag+'</td><td class="num">'+fmt(p.w,2)+'</td><td class="num">'+careerCell+'</td></tr>';
+    });
+    html+='</tbody></table><div class="muted" style="margin-top:8px">Weight ≈1.0 means they met last season; lower means older meetings only. Career meetings shows raw total across all prior regular seasons — use it to tell a genuinely over-connected pair (met many times, recently) from one with only old, sparse history.</div></div>';
+  }
+
+  if(result.problems.length){
+    html+='<div class="banner err">'+result.problems.map(esc).join('<br>')+'</div>';
+  }
+
+  $('out').innerHTML=html;
+}
+
+function stat(k,v,cls,sub){return '<div class="stat"><div class="k">'+esc(k)+'</div><div class="v '+(cls||'')+'">'+esc(String(v))+'</div>'+(sub?'<div class="k" style="margin-top:2px">'+esc(sub)+'</div>':'')+'</div>';}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// ── freshness classification (four-color scale) ─────────────────────────────
+// Priority: RED (met last season) always wins, then YELLOW (weighted history
+// ≥0.50, not last season), then WHITE (some history <0.50), then BLUE (never met).
+function freshnessOf(a, b, history, lastSeason){
+  const k=SBLScheduler.pairKey(a,b);
+  if(lastSeason.has(k)) return 'red';
+  const w=history.get(k)||0;
+  if(w===0) return 'blue';
+  if(w>=0.50) return 'yellow';
+  return 'white';
+}
+function freshnessMark(f){
+  if(f==='red') return '<span class="match-mark red">↻!</span>';
+  if(f==='yellow') return '<span class="match-mark yellow">↻</span>';
+  if(f==='blue') return '<span class="match-mark blue">★</span>';
+  return '';
+}
+
+// ── interactive editor (generate mode only) ─────────────────────────────────
+// Owns a mutable copy of the schedule and re-renders on every edit. Swap = pick
+// a player, pick another in the SAME week, they trade opponents. Lock = freeze a
+// match. Re-optimize = re-solve unlocked matches around locks. All annotations
+// recompute live. Assess mode stays static (you don't edit history).
+const EDITOR = {
+  active:false, players:[], nameById:{}, history:null, lastSeason:null,
+  schedule:[], locks:new Set(), sel:null, cfg:null, roster:null,
+
+  init(roster, players, result, history, lastSeason, cfg){
+    this.active=true; this.roster=roster; this.players=players;
+    this.nameById={}; players.forEach(p=>this.nameById[p.id]=p.name);
+    this.history=history; this.lastSeason=lastSeason; this.cfg=cfg;
+    // deep-ish copy of schedule (pairs are [a,b] id arrays)
+    this.schedule=result.schedule.map(wk=>({week:wk.week,
+      pairs:wk.pairs.map(p=>[p[0],p[1]]),
+      bye:wk.bye, byes:(wk.byes||(wk.bye?[wk.bye]:[])).slice()}));
+    this.locks=new Set(); this.sel=null;
+  },
+
+  // rebuild a solver-shaped result from current mutable schedule, for report()
+  toResult(){
+    const avgTarget=this.players.reduce((s,p)=>s+p.elo,0)/this.players.length;
+    const byId={}; this.players.forEach(p=>byId[p.id]=p);
+    const state={avgTarget,history:this.history,sum:{},cnt:{},byes:{},played:new Set()};
+    this.players.forEach(p=>{state.sum[p.id]=0;state.cnt[p.id]=0;state.byes[p.id]=0;});
+    this.schedule.forEach(wk=>{
+      wk.pairs.forEach(([a,b])=>{
+        state.sum[a]+=byId[b].elo; state.cnt[a]++;
+        state.sum[b]+=byId[a].elo; state.cnt[b]++;
+        state.played.add(SBLScheduler.pairKey(a,b));
+      });
+      (wk.byes||[]).forEach(id=>state.byes[id]++);
+    });
+    return {schedule:this.schedule,state,avgTarget,problems:[],weeks:this.schedule.length};
+  },
+
+  // click a player chip: first click selects, second click (same week) swaps
+  clickPlayer(week, id){
+    if(!this.sel){ this.sel={week,id}; this.render(); return; }
+    if(this.sel.id===id){ this.sel=null; this.render(); return; } // deselect
+    if(this.sel.week!==week){ // different week — move selection instead of swap
+      this.sel={week,id}; this.render(); return;
+    }
+    this.swap(week, this.sel.id, id);
+    this.sel=null; this.render();
+  },
+
+  // swap: a and b trade opponents within the week
+  swap(week, aId, bId){
+    const wk=this.schedule.find(w=>w.week===week);
+    if(!wk) return;
+    // find the matches containing a and b
+    let ai=-1, bi=-1, aSide, bSide;
+    wk.pairs.forEach((p,i)=>{
+      if(p[0]===aId){ai=i;aSide=0;} else if(p[1]===aId){ai=i;aSide=1;}
+      if(p[0]===bId){bi=i;bSide=0;} else if(p[1]===bId){bi=i;bSide=1;}
+    });
+    if(ai<0||bi<0||ai===bi) return; // same match or not found — nothing to swap
+    // don't allow editing a locked match
+    if(this.locks.has(SBLScheduler.pairKey(...wk.pairs[ai])) ||
+       this.locks.has(SBLScheduler.pairKey(...wk.pairs[bi]))){
+      this._flash='Cannot swap a locked match — unlock it first.'; return;
+    }
+    // a's partner and b's partner
+    const aPartner=wk.pairs[ai][1-aSide];
+    const bPartner=wk.pairs[bi][1-bSide];
+    // new matches: a vs bPartner, b vs aPartner  (a and b trade opponents)
+    wk.pairs[ai]=[aId,bPartner];
+    wk.pairs[bi]=[bId,aPartner];
+  },
+
+  toggleLock(week, pairKey){
+    if(this.locks.has(pairKey)) this.locks.delete(pairKey);
+    else this.locks.add(pairKey);
+    this.render();
+  },
+
+  reoptimize(){
+    const seed=Math.floor(Math.random()*1e6);
+    const re=SBLScheduler.reoptimizeAroundLocks(this.players,this.history,this.schedule,this.locks,
+      Object.assign({},this.cfg,{seed}));
+    this.schedule=re.schedule.map(wk=>({week:wk.week,pairs:wk.pairs.map(p=>[p[0],p[1]]),
+      bye:wk.bye,byes:(wk.byes||[]).slice()}));
+    this._problems=re.problems;
+    this.render();
+  },
+
+  // detect same-season repeats in current schedule (the one hard constraint)
+  repeats(){
+    const seen=new Set(), dupes=[];
+    this.schedule.forEach(wk=>wk.pairs.forEach(([a,b])=>{
+      const k=SBLScheduler.pairKey(a,b);
+      if(seen.has(k)) dupes.push(k); seen.add(k);
+    }));
+    return dupes;
+  },
+
+  render(){
+    const result=this.toResult();
+    const rep=SBLScheduler.report(this.players,result);
+    renderReport(this.roster,result,rep,this.history,this.lastSeason,null,
+      window._eloModel||'coupled',{assess:false,editable:true});
+  }
+};
+window.EDITOR = EDITOR; // inline onclick handlers resolve against global scope
+
+// Side-by-side of the ACTUAL past schedule vs a solver schedule on identical
+// inputs (same roster, same pre-season ELO, same prior-season history). Appended
+// below the actual-schedule report.
+function renderComparison(roster,actual,actualRep,picked,history,lastSeason){
+  const nameById={}; roster.forEach(p=>nameById[p.id]=p.name);
+  const gen=picked.result, genRep=picked.report;
+
+  // last-season tallies for each schedule
+  function lsMax(res){
+    const per={}; roster.forEach(p=>per[p.id]=0);
+    res.schedule.forEach(wk=>wk.pairs.forEach(([a,b])=>{ if(lastSeason.has(SBLScheduler.pairKey(a,b))){per[a]++;per[b]++;} }));
+    return Math.max(0,...Object.values(per));
+  }
+  function reuse(res){
+    let n=0; res.schedule.forEach(wk=>wk.pairs.forEach(([a,b])=>{ if((history.get(SBLScheduler.pairKey(a,b))||0)>0) n++; })); return n;
+  }
+  const rows=[
+    ['Balance RMS', fmt(actualRep.rms), fmt(genRep.rms), 'lower is tighter balance'],
+    ['Balance spread', fmt(actualRep.spread), fmt(genRep.spread), 'max−min deviation'],
+    ['Same-season repeats', actualRep.sameSeasonRepeats, genRep.sameSeasonRepeats, 'should be 0'],
+    ['Prior-meeting reuses', reuse(actual), reuse(gen), 'pairings that had met before'],
+    ['Max LS / player', lsMax(actual), lsMax(gen), 'worst single player'],
+  ];
+  function better(label,a,g){
+    const av=parseFloat(a), gv=parseFloat(g);
+    if(isNaN(av)||isNaN(gv)||av===gv) return '';
+    // for all these metrics, lower is better
+    return gv<av ? 'tool' : 'actual';
+  }
+
+  let html='<div class="section"><div class="section-title">Comparison — your actual schedule vs the tool</div>';
+  html+='<div class="muted" style="margin-bottom:12px">Same roster, same pre-season ELO, same prior-season rematch history. This isolates the scheduling method. Note the tool optimizes ELO-balance directly, which your manual method did not have access to — so a balance edge for the tool is expected; the more telling comparison is rematch handling, where your manual "who hasn\'t played recently" instinct competes directly.</div>';
+  html+='<table><thead><tr><th>Metric</th><th class="num">Your actual</th><th class="num">Tool</th><th></th></tr></thead><tbody>';
+  rows.forEach(([label,a,g,sub])=>{
+    const win=better(label,a,g);
+    const aCls=win==='actual'?'style="color:var(--green);font-weight:700"':'';
+    const gCls=win==='tool'?'style="color:var(--green);font-weight:700"':'';
+    html+='<tr><td>'+esc(label)+'<div class="muted" style="font-size:11px">'+esc(sub)+'</div></td>'
+      +'<td class="num" '+aCls+'>'+esc(String(a))+'</td>'
+      +'<td class="num" '+gCls+'>'+esc(String(g))+'</td>'
+      +'<td class="muted" style="font-size:11px">'+(win==='tool'?'tool tighter':win==='actual'?'actual tighter':'tie')+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+
+  $('out').innerHTML += html;
+}
+
+// ── boot ──
+(async function(){
+  try{
+    await loadGlobal();
+    const sel=$('season');
+    SEASONS.forEach(s=>{
+      const o=document.createElement('option');
+      o.value=s.id; o.textContent=(s.name||s.slug)+(s.is_current?' (current)':'');
+      sel.appendChild(o);
+    });
+    // default to current season if present
+    const cur=SEASONS.find(s=>s.is_current);
+    if(cur) sel.value=cur.id;
+    $('boot').hidden=true; $('ctl').hidden=false;
+  }catch(e){
+    console.error(e);
+    $('boot').className='banner err';
+    $('boot').textContent='Could not load: '+(e.message||e);
+  }
+})();
+</script>
+</body>
+</html>
