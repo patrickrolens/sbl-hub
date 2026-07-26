@@ -4,28 +4,11 @@
 <script>
   (function () {
     var slug = new URLSearchParams(location.search).get('season');
-    if (!slug) return;                                  // no param → this IS the current rules
-    if (/^[a-z0-9-]+$/.test(slug) === false) return;    // ignore junk slugs
-    if (location.pathname.indexOf('/rules/') !== -1) return;  // already archived → no loop
-
-    // Hide the page until we know whether an archived rules page exists, so a hit
-    // redirects cleanly with no flash of the current rules.
-    var hide = document.createElement('style');
-    hide.textContent = 'html{visibility:hidden}';
-    document.documentElement.appendChild(hide);
-
-    function reveal() { hide.remove(); }
-
-    fetch('/rules/' + slug + '.html', { method: 'HEAD' })
-      .then(function (r) {
-        if (r.ok) { location.replace('/rules/' + slug + '.html'); return; }
-        reveal();
-        window.__rulesFallback = true;   // picked up after DOM is ready to show the notice
-      })
-      .catch(function () {
-        reveal();
-        window.__rulesFallback = true;
-      });
+    if (!slug) return;                          // no param → this IS the current rules
+    if (/^[a-z0-9-]+$/.test(slug) === false) return;  // ignore junk slugs
+    // Guard against redirect loops: only redirect if we're not already on the archived path.
+    if (location.pathname.indexOf('/rules/') !== -1) return;
+    location.replace('/rules/' + slug + '.html');
   })();
 </script>
 <meta charset="utf-8">
@@ -131,14 +114,14 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
   <div class="upper">
     <div class="page-head">
-      <div class="eyebrow">Springfield Battle League · Season 8</div>
+      <div class="eyebrow">Springfield Battle League · Season 10</div>
       <h1>Rules &amp; Resources</h1>
       <div class="sub">Everything you need to draft, battle, and compete this season.</div>
     </div>
 
     <div class="intro">
-      <p>The Springfield Battle League is a VGC Draft League (4v4 doubles) played in Pokémon Showdown and Pokémon Scarlet and Violet. Each player drafts a team from a shared pool and plays one match per week across a ten-week regular season, followed by a postseason bracket.</p>
-      <p class="fmt">Format: <span class="ic">[Gen 9] VGC 2024 Reg G</span> - select this when building your team and challenging your opponent. Matches are reported by <b>11:59&nbsp;pm Sunday</b> each week.</p>
+      <p>The Springfield Battle League is a VGC Draft League (4v4 doubles) played in Pokémon Champions. Each player drafts a team from a shared pool and plays one match per week across an eleven-week regular season, followed by a postseason bracket.</p>
+      <p class="fmt">Format: <span class="ic">[Gen 9 Champions] VGC 2026 Reg M-B</span> - select this when building your team and challenging your opponent. Matches are reported by <b>11:59&nbsp;pm Sunday</b> each week.</p>
       <p><b>Signups:</b> The league begins with signups! Interested players should post in the signups channel in the Discord or DM <span class="ic">jdawgin13</span> to be added to the roster.</p>
     </div>
 
@@ -150,7 +133,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
       <a href="#battle">In-Match Rules</a>
       <a href="#transactions">Trades &amp; Free Agency</a>
       <a href="#standings">Standings &amp; Playoffs</a>
-      <a href="#allstar">All-Star &amp; Awards</a>
+      <a href="#allstar">Awards</a>
       <a href="#integrity">Competitive Integrity</a>
       <a href="#resources">Resources</a>
     </nav>
@@ -167,7 +150,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
           <div class="fmt-cell"><div class="ph">Playoffs</div><div class="bo">Best of 5</div></div>
           <div class="fmt-cell"><div class="ph">Grand Finals</div><div class="bo">Best of 7</div></div>
         </div>
-        <p>Matches are played on Pokémon Showdown. Playoff finals are played on cart in Pokémon Scarlet &amp; Violet.</p>
+        <p>Matches are played on Pokémon Champions. Showdown can be used in emergencies, but Champions is the primary choice for all matches. Players should coordinate with the Commissioner before opting to use Showdown.</p>
       </div>
     </div>
 
@@ -176,7 +159,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
       <div class="sec-head"><span class="num">02</span><span class="title">Seeding &amp; Schedule</span><span class="sec-arrow">▾</span></div>
       <div class="sec-body">
         <p>Once the roster is finalized, players are seeded based on performance in past SBL seasons. Where data on a player is limited, the commissioner determines seeding from the available information.</p>
-        <p>Seeding is used to build the schedule. Because of the number of entrants, not everyone plays everyone - instead, seeding gives every player a roughly equally challenging season. Each player plays <b>one match per week over ten weeks</b>, facing ten different opponents. Schedules can be viewed in the Schedule &amp; Results tab.</p>
+        <p>Seeding is used to build the schedule. This season every player will play every other player in their own division. The divisions have been balanced based on player ELOs with approval from the SBL admin panel. Each player plays <b>one match per week over eleven weeks</b>, facing eleven different opponents. Schedules can be viewed in the Matches page as well as in each individual team's page.</p>
       </div>
     </div>
 
@@ -184,7 +167,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
     <div class="card" id="draft">
       <div class="sec-head"><span class="num">03</span><span class="title">The Draft</span><span class="sec-arrow">▾</span></div>
       <div class="sec-body">
-        <p>After seeding is set, the draft order is decided randomly and announced. All players draft from the same pool, and the draft runs <b>snake-style</b>: picks go down the order, then reverse at the end and come back up, repeating until every player has a full team of <b>ten Pokémon</b>.</p>
+        <p>After seeding is set, the draft order is decided randomly and announced. Each division drafts from a separate pool of all available Pokémon in Regulation M-B. The draft runs <b>snake-style</b>: picks go down the order, then reverse at the end and come back up, repeating until every player has a full team of <b>ten Pokémon</b>.</p>
 
         <div class="lead">Draft order &amp; swaps</div>
         <ul>
@@ -198,14 +181,8 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
           <li>If a player who agreed to attend is absent, they automatically draft the highest-usage Pokémon (per Pikalytics) from the highest tier they still have open.</li>
         </ul>
 
-        <div class="lead">Draft timer</div>
-        <ul>
-          <li>Any player may request a turn timer at any point during a match - <b>2 minutes per turn</b> by default.</li>
-          <li>Players may agree to a different time; if they can't agree, the 2-minute default applies.</li>
-          <li>The timer is kept by a third party (preferably jdawg or Shrug), displayed if possible, otherwise announced regularly.</li>
-        </ul>
-
         <div class="note"><span class="k">Opening swap window:</span> For the first 24–48 hours after the draft (the exact length is announced), players may make unlimited trades and Free Agency swaps. These are processed effective <b>Week 1</b>, so anything picked up in this window is available immediately.</div>
+        <div class="note"><span class="k">Pokémon Procurement Assistance</span> Players in the League can help each other obtain their drafted team in Pokémon Champions once their finalized Week 1 drafts are determined. We intend to help anyone who wishes to remain Free-to-Play in Champions.</div>
       </div>
     </div>
 
@@ -213,20 +190,8 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
     <div class="card" id="tiers">
       <div class="sec-head"><span class="num">04</span><span class="title">Tiers &amp; Budget</span><span class="sec-arrow">▾</span></div>
       <div class="sec-body">
-        <p>Pokémon are divided into tiers (see the Tiers tab), each with a point value. Every player drafts within a budget of <b>215 points</b>.</p>
-        <div class="tier-grid">
-          <div class="tier" style="--tc:#e05555"><div class="tname">S+</div><div class="tpts"><b>70</b> pts</div></div>
-          <div class="tier" style="--tc:#ef7044"><div class="tname">S−</div><div class="tpts"><b>60</b> pts</div></div>
-          <div class="tier" style="--tc:#f0992f"><div class="tname">A+</div><div class="tpts"><b>50</b> pts</div></div>
-          <div class="tier" style="--tc:#f0c060"><div class="tname">A−</div><div class="tpts"><b>40</b> pts</div></div>
-          <div class="tier" style="--tc:#c9d04f"><div class="tname">B+</div><div class="tpts"><b>30</b> pts</div></div>
-          <div class="tier" style="--tc:#8fc85a"><div class="tname">B−</div><div class="tpts"><b>25</b> pts</div></div>
-          <div class="tier" style="--tc:#4caf7d"><div class="tname">C+</div><div class="tpts"><b>20</b> pts</div></div>
-          <div class="tier" style="--tc:#3fae9c"><div class="tname">C−</div><div class="tpts"><b>15</b> pts</div></div>
-          <div class="tier" style="--tc:#60a5fa"><div class="tname">D</div><div class="tpts"><b>10</b> pts</div></div>
-          <div class="tier" style="--tc:#7c6ff7"><div class="tname">E</div><div class="tpts"><b>5</b> pts</div></div>
-        </div>
-        <div class="note">A team's total drafted points may not exceed <b>215</b>. Any transaction that would push a player over budget is invalid.</div>
+        <p>Pokémon are divided into tiers (see the Draft Pool page), each with a point value. Every player drafts within a budget of <b>110 points</b>. Point values range from 1 to 20 points depending on the strength of a given Pokémon.</p>
+        <div class="note">A team's total drafted points may not exceed <b>110</b>. Any transaction that would push a player over budget is invalid.</div>
       </div>
     </div>
 
@@ -243,14 +208,13 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
         <div class="lead">Banned moves, abilities &amp; items</div>
         <ul>
-          <li>Moves that exclusively raise evasion or lower accuracy - Sand Attack, Double Team, Minimize, and similar - are banned (including items like Bright Powder and Mud Slap).</li>
-          <li>No Commander, Moody, or Booster Energy.</li>
+          <li>Moves that exclusively raise evasion or lower accuracy - Sand Attack, Double Team, Minimize, and similar - are banned (including items like Bright Powder and moves like Mud Slap).</li>
           <li>Duplicate items are not allowed.</li>
         </ul>
 
         <div class="lead">Forfeits</div>
         <ul>
-          <li>A forfeited match results in a <b>−2 game differential</b> and a <b>−4 K/F</b> for the forfeiting player.</li>
+          <li>A forfeited match results in a <b>−2 game differential</b> and a <b>−4 K/D</b> for the forfeiting player.</li>
         </ul>
       </div>
     </div>
@@ -266,7 +230,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
           <li>All transactions are processed <b>effective the week after they're announced</b> - e.g. a pickup announced in Week 3 is usable in Week 4. This gives opponents time to prepare.</li>
           <li>Announce all swaps and trades in the <span class="ic">#sbl-transactions</span> channel on Discord.</li>
         </ul>
-        <p class="muted">(The opening 24–48 hour window after the draft is the exception - those are unlimited and effective Week 1. See <a href="#draft" style="color:var(--accent);text-decoration:none">The Draft</a>.)</p>
+        <p>When a player drops a Pokemon to Free Agency, that Pokemon will be placed on a waiver. During the next 24 hours, players can claim the Pokemon using their waiver. At the end of the 24 hours, the player with the highest-ranked waiver (so lowest number) is allowed to make the Free Agency transaction. This player then gets sent to the botton of the waiver order.
+        
+          Waiver order is the reverse of the draft order. 12th pick starts at 1st, 11th at 2nd and so on.</p>
+        <p class="muted">(The opening 24–48 hour window after the draft is the exception - those are unlimited and effective Week 1. The Waivers system does not apply during this period.)</p>
       </div>
     </div>
 
@@ -277,19 +244,18 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
         <p>Players are ranked on the Standings sheet by the following factors, in order of importance:</p>
         <div class="steps">
           <div class="step"><span class="n">1</span><span class="lab">Matches Won</span></div>
-          <div class="step"><span class="n">2</span><span class="lab">Game Differential</span></div>
-          <div class="step"><span class="n">3</span><span class="lab">K/F</span></div>
+          <div class="step"><span class="n">2</span><span class="lab">Opponents' Win % (OW%)</span><span class="desc">Average win rate of opponents faced</span></div>
+          <div class="step"><span class="n">3</span><span class="lab">Game Differential</span></div>
+          <div class="step"><span class="n">4</span><span class="lab">K/D</span></div>
         </div>
-        <p>After the regular season, the <b>top 10 records</b> advance to the Top Cut bracket and the <b>bottom 10</b> play in the Amateur Cup. Finals are played on cart in Pokémon Scarlet &amp; Violet.</p>
+        <p>After the regular season, the <b>top x records from each division</b> advance to the Top Cut bracket and the remaining players play in the Amateur Cup.</p>
       </div>
     </div>
 
     <!-- 8 · ALL-STAR & AWARDS -->
     <div class="card" id="allstar">
-      <div class="sec-head"><span class="num">08</span><span class="title">All-Star Match &amp; Awards</span><span class="sec-arrow">▾</span></div>
+      <div class="sec-head"><span class="num">08</span><span class="title">Awards</span><span class="sec-arrow">▾</span></div>
       <div class="sec-body">
-        <div class="lead">All-Star Match</div>
-        <p>An optional, for-fun side event. Players vote on the season's true All-Star Pokémon, which are split into two groups led by chosen team captains. Players present in Discord are picked schoolyard-style onto each team, given time to build, and face off in a best-of-five set. Pokémon can be swapped each game, but their movesets, stats, and so on cannot change. It's entirely optional but very much worth joining.</p>
 
         <div class="lead">Awards</div>
         <p>The commissioner releases a poll for season awards in these categories:</p>
@@ -314,7 +280,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
         <ul>
           <li>Sabotage of matches - match fixing, intentionally losing, or otherwise undermining the league's competitive integrity - is not allowed.</li>
           <li>Spectators are welcome but should avoid giving advice or information, intentionally or accidentally, to players in <b>ongoing</b> matches.</li>
-          <li>Helping players prepare for upcoming matches is fine - but don't build a complete Poképaste for another player. The sharing restriction applies specifically to ongoing matches.</li>
+          <li>Helping players prepare for upcoming matches is fine, but don't build a complete Poképaste for another player. The sharing restriction applies specifically to ongoing matches.</li>
         </ul>
         <p>Violations are punished based on their nature and the commissioner's judgment, ranging from a warning to removal from the league. Anything not covered here is resolved case-by-case. Reach out to the commissioner for clarification on any rule.</p>
       </div>
@@ -325,10 +291,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
       <div class="sec-head"><span class="num">10</span><span class="title">Resources</span><span class="sec-arrow">▾</span></div>
       <div class="sec-body">
         <div class="res">
-          <div class="r"><div class="rn">Pokémon Showdown</div><div class="rd">The battle simulator used for matches, with a teambuilder and an online ladder for testing your team.</div></div>
-          <div class="r"><div class="rn">Draft Planner</div><div class="rd">Shrug's tool for planning your draft - it collects and displays stats, typing, and key utility moves for the Pokémon you're considering.</div></div>
-          <div class="r"><div class="rn">Pikalytics</div><div class="rd">Usage and meta information for VGC Pokémon, helpful both for drafting and for weekly match prep.</div></div>
-          <div class="r"><div class="rn">Damage Calculator</div><div class="rd">For team prep and checking damage calculations mid-game.</div></div>
+           <div class="r"><div class="rn"><a href="https://planner.springfieldbattleleague.com">Draft Planner</a></div><div class="rd">Shrug's tool for planning your draft - it collects and displays stats, typing, and key utility moves for the Pokémon you're considering.</div></div>
+          <div class="r"><div class="rn"><a href="https://www.pikalytics.com/">Pikalytics</a></div><div class="rd">Usage and meta information for VGC Pokémon, helpful both for drafting and for weekly match prep.</div></div>
+          <div class="r"><div class="rn"><a href="https://nerd-of-now.github.io/NCP-VGC-Damage-Calculator/">Damage Calculator</a></div></div><div class="rd">For team prep and checking damage calculations mid-game.</div></div>
+          <div class="r"><div class="rn"><a href="https://pokemon-arena-simulator--sterlingaipaco.replit.app/">Battle Sandbox</a></div></div><div class="rd">A webapp developed by SBL's own Wyki that can be used to simulate different board states and theorycraft lead matchups.</div></div>
         </div>
       </div>
     </div>
@@ -336,7 +302,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
   <div class="foot">
     Questions or edge cases not covered here are resolved by the commissioner.<br>
-    Springfield Battle League · Season 8
+    Springfield Battle League · Season 10
   </div>
 
 </div>
@@ -357,18 +323,6 @@ document.querySelectorAll('.toc a').forEach(a => {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 });
-
-// If the redirect probe fell back to the current rules, show a soft notice.
-if (window.__rulesFallback) {
-  var wrap = document.querySelector('.wrap');
-  if (wrap) {
-    var n = document.createElement('div');
-    n.className = 'note';
-    n.style.cssText = 'max-width:860px;margin:0 auto 14px;display:flex;align-items:center;gap:10px';
-    n.innerHTML = '<span class="k">Heads up:</span> That season doesn’t have its own archived rules page yet — showing the current rules below.';
-    wrap.insertBefore(n, wrap.firstChild);
-  }
-}
 </script>
 
 </body>
