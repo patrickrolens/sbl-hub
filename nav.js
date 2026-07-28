@@ -124,6 +124,11 @@
     const m = /^s(\d+(?:-\d+)?)$/.exec(s.slug);
     return m ? "Season " + m[1].replace("-", ".") : (s.name || s.slug);
   }
+  function seasonNumber(s) {
+    const value = String(s.slug || s.name || "");
+    const m = /^s(\d+(?:-\d+)?)$/.exec(value) || value.match(/(\d+(?:[.\-]\d+)?)/);
+    return m ? parseFloat(m[1].replace("-", ".")) : 0;
+  }
 
   function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -528,7 +533,13 @@
       // below, needed on both nav variants.
       const seasonsListRes = await sb.from("seasons").select("id, name, slug, is_current").order("slug", { ascending: false });
       allSeasons = seasonsListRes.data || [];
-
+      allSeasons.sort((a, b) => {
+        const diff = seasonNumber(b) - seasonNumber(a);
+        if (diff !== 0) return diff;
+        const aLabel = String(a.slug || a.name || "");
+        const bLabel = String(b.slug || b.name || "");
+        return bLabel.localeCompare(aLabel);
+      });
       // Resolve the active season: by slug if the URL carried one, else current.
       let s = null;
       if (seasonSlug) {
