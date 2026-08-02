@@ -528,7 +528,7 @@ async function loadSeasonData(seasonId) {
 
   const [matchRes, rosterRows] = await Promise.all([
     sb.from('matches')
-      .select('id, week, stage, postseason_round, bracket_position, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id')
+      .select('id, week, stage, postseason_round, bracket_position, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id, is_motw')
       .eq('season_id', seasonId).in('stage', ['regular', 'playoffs', 'cup']),
     teamIdList.length
       ? fetchAllIn('team_pokemon', 'team_id, pokemon_id, acquired_week, released_week', 'team_id', teamIdList)
@@ -1182,7 +1182,7 @@ async function createPendingPostseasonMatches() {
   const rows = [...pendingMatchRowsForStage('playoffs'), ...pendingMatchRowsForStage('cup')];
   if (!rows.length) return 0;
   const { data, error } = await sb.from('matches').insert(rows).select(
-    'id, week, stage, postseason_round, bracket_position, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id');
+    'id, week, stage, postseason_round, bracket_position, team_a_id, team_b_id, team_a_score, team_b_score, series_length, match_date, winner_team_id, is_motw');
   if (error) throw error;
   const created = data || [];
   created.forEach(m => { matches.push(m); });
@@ -1574,6 +1574,23 @@ function parsePasteIntoModel(text, leftIsA) {
 }
 
 function buildMatchBody(body, m, model) {
+  // Match of the Week: a plain per-match flag, no per-week limit (double headers are
+  // intentional), so it's just a checkbox rather than a pick-one-per-week control.
+  const mr = document.createElement('div');
+  mr.className = 'md-series-row';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.id = 'motw-' + m.id;
+  cb.checked = !!m.is_motw;
+  cb.onchange = () => updateMotw(m.id, cb.checked, cb);
+  const lb = document.createElement('label');
+  lb.setAttribute('for', cb.id);
+  lb.textContent = '★ Match of the Week';
+  lb.style.cursor = 'pointer';
+  mr.appendChild(cb);
+  mr.appendChild(lb);
+  body.appendChild(mr);
+
   // Postseason matches carry a per-match series length (Bo5/Bo7 vary by round and season).
   if (m.stage && m.stage !== 'regular') {
     const sr = document.createElement('div');
@@ -2232,6 +2249,23 @@ async function updateMatchDate(matchId, rawValue) {
   } catch (err) {
     console.error(err);
     showToast('Could not update date: ' + (err.message || err), 'err');
+  }
+}
+
+// Persist the Match of the Week flag. No re-render: the checkbox is the only thing
+// on this page that reflects the flag, and re-rendering would collapse the open card.
+// On failure the checkbox is rolled back so it can't disagree with the database.
+async function updateMotw(matchId, on, cb) {
+  try {
+    const { error } = await sb.from('matches').update({ is_motw: on }).eq('id', matchId);
+    if (error) throw error;
+    const mm = matches.find(x => x.id === matchId);
+    if (mm) mm.is_motw = on;
+    showToast(on ? 'Marked as Match of the Week.' : 'Removed Match of the Week.', 'ok');
+  } catch (err) {
+    console.error(err);
+    if (cb) cb.checked = !on;
+    showToast('Could not update Match of the Week: ' + (err.message || err), 'err');
   }
 }
 

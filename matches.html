@@ -53,6 +53,9 @@ a { color: inherit; }
 .match-line .vs { color: var(--text3); margin: 0 3px; }
 .match-line .pl { color: var(--text2); }
 .match-line .ml-stage { display: inline-block; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text3); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: middle; }
+/* Match of the Week: an accent rail on the row plus a star badge on the matchup. */
+.match-line.motw { box-shadow: inset 2px 0 0 var(--accent); }
+.motw-tag { display: inline-block; font-size: 8px; font-weight: 800; letter-spacing: .3px; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: middle; white-space: nowrap; flex-shrink: 0; }
 
 .empty-state { color: var(--text3); font-size: 13px; font-style: italic; padding: 28px 4px; }
 
@@ -126,6 +129,7 @@ a { color: inherit; }
 .chrono-row .vs { color: var(--text3); margin: 0 3px; }
 .chrono-row .pl { color: var(--text2); }
 .chrono-row .cup { font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--text3); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+.chrono-row.motw { border-color: var(--accent); }
 /* All-matches labels: Team (Coach) on wide, coach only on narrow */
 .mu-narrow { display: none; }
 @media (max-width: 900px) { .mu-wide { display: none; } .mu-narrow { display: inline; } }
@@ -199,6 +203,13 @@ const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.js
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
 const POKEBALL_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%23e05555' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M1.1 20 A19 19 0 0 0 38.9 20 Z' fill='%23fff'/%3E%3Crect x='1' y='18' width='38' height='4' fill='%23333'/%3E%3Ccircle cx='20' cy='20' r='7' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Ccircle cx='20' cy='20' r='3.5' fill='%23e8eaf6' stroke='%23333' stroke-width='1'/%3E%3C/svg%3E";
 
+// ── MATCH OF THE WEEK ──
+// Featured matches are flagged per-row by matches.is_motw (set from
+// admin-matches.html). A week can carry more than one, so nothing here assumes
+// at most one per week.
+const isMotw = m => !!m.is_motw;
+const MOTW_TAG = '<span class="motw-tag" title="Match of the Week">★ MOTW</span>';
+
 // ── STATE ──
 let season = null;
 let teams = [], teamById = {}, ownersByTeam = {}, coachAtWeek = () => null;
@@ -264,7 +275,7 @@ async function init() {
 
     const [teamsRes, matchRes] = await Promise.all([
       sb.from('teams').select('id, name, slug, initial_seed').eq('season_id', season.id),
-      sb.from('matches').select('id, stage, week, postseason_round, series_length, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id').eq('season_id', season.id),
+      sb.from('matches').select('id, stage, week, postseason_round, series_length, team_a_id, team_b_id, team_a_score, team_b_score, match_date, winner_team_id, is_motw').eq('season_id', season.id),
     ]);
     for (const r of [teamsRes, matchRes]) if (r.error) throw r.error;
     // team_owners spans all seasons and is unfiltered → paginate past the 1000-row cap.
@@ -430,9 +441,10 @@ function weekBlockHtml(label, week, mlist, cw, grouped) {
     // In a combined postseason block, tag each line with its stage so Playoffs/Cup
     // remain distinguishable.
     const tag = grouped ? '<span class="ml-stage">' + escapeHtml(stageLabel(m.stage)) + '</span>' : '';
-    return '<div class="match-line' + sel + '" data-id="' + m.id + '">'
+    const motw = isMotw(m) ? MOTW_TAG : '';
+    return '<div class="match-line' + sel + (isMotw(m) ? ' motw' : '') + '" data-id="' + m.id + '">'
       + '<span class="sc ' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
-      + '<span class="mu">' + matchupCoachHtml(m) + tag + '</span>'
+      + '<span class="mu">' + matchupCoachHtml(m) + tag + motw + '</span>'
       + '<span class="sc ' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>';
   }).join('');
   return '<div class="week-block' + (week === cw ? ' current' : '') + '"><h3>' + escapeHtml(label) + '</h3>' + lines + '</div>';
@@ -451,7 +463,10 @@ function renderDetail() {
   }
   back.style.visibility = 'visible';
   const m = matchById[selectedMatchId];
-  title.textContent = teamName(m.team_a_id) + ' vs ' + teamName(m.team_b_id);
+  // innerHTML (not textContent) so a featured match can carry its badge here too —
+  // both team names are escaped.
+  title.innerHTML = escapeHtml(teamName(m.team_a_id)) + ' vs ' + escapeHtml(teamName(m.team_b_id))
+    + (isMotw(m) ? MOTW_TAG : '');
 
   if (!matchDetailCache[selectedMatchId]) {
     body.innerHTML = '<div class="dm-loading">Loading match\u2026</div>';
@@ -585,9 +600,9 @@ function renderChrono(body) {
       lastKey = key;
     }
     const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
-    h += '<div class="chrono-row" data-id="' + m.id + '">'
+    h += '<div class="chrono-row' + (isMotw(m) ? ' motw' : '') + '" data-id="' + m.id + '">'
       + '<span class="csc ' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span>'
-      + '<span class="cmu">' + matchupChronoHtml(m) + '</span>'
+      + '<span class="cmu">' + matchupChronoHtml(m) + (isMotw(m) ? MOTW_TAG : '') + '</span>'
       + '<span class="csc ' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span>'
       + (matchHasResults(m) ? '' : '<span class="cup">upcoming</span>')
       + '</div>';

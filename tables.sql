@@ -149,6 +149,10 @@ CREATE TABLE public.matches(
     team_a_score integer not null default 0,
     team_b_score integer not null default 0,
     match_date timestamptz,
+    -- Featured "Match of the Week": badged on matches.html, toggled from
+    -- admin-matches.html. Deliberately not unique per (season, week) — a week can
+    -- carry two featured matches (double header).
+    is_motw boolean not null default false,
     -- The admin's schema dump rendered this as a plain DEFAULT (its export tool's
     -- generic representation for computed columns), but GENERATED...STORED is very
     -- likely still correct: admin-matches.html only ever writes team_a_score/
@@ -167,6 +171,8 @@ CREATE TABLE public.matches(
 CREATE INDEX idx_matches_season_id ON public.matches(season_id);
 CREATE INDEX idx_matches_team_a_id ON public.matches(team_a_id);
 CREATE INDEX idx_matches_team_b_id ON public.matches(team_b_id);
+-- Partial: the featured matches are a tiny slice, and that's the only slice read.
+CREATE INDEX idx_matches_is_motw ON public.matches(season_id) WHERE is_motw;
 
 -- The roster a team actually brought to a match (as opposed to team_pokemon, which
 -- is a team's full season-long roster). Distinct from game_pokemon_stats: a mon can
