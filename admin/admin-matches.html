@@ -2315,7 +2315,9 @@ function openTeamsheetDetails(m, model, side, id) {
     '<datalist id="td-ab">' + opts(abilities) + '</datalist>' +
     '<datalist id="td-it">' + opts(items) + '</datalist>' +
     '<datalist id="td-mv">' + opts(moves) + '</datalist>' +
-    '<div style="display:flex;flex-direction:column;gap:6px;">' +
+    // margin-bottom because .modal-actions carries no top margin — the other
+    // modals end in a <p> whose own margin supplies the gap, this one does not.
+    '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">' +
       '<input id="td-nick" placeholder="nickname" value="' + val(cur.nickname) + '">' +
       '<input id="td-ability" list="td-ab" placeholder="ability" value="' + val(cur.ability) + '">' +
       '<input id="td-item" list="td-it" placeholder="item" value="' + val(cur.item) + '">' +
