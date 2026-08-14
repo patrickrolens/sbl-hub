@@ -230,6 +230,16 @@ select:focus, input:focus { border-color: var(--accent); }
 
 <script src="/nav.js?v=20260709"></script>
 <script src="/utils.js?v=20260709"></script>
+<!-- Teamsheet parser. BUMP THE ?v= ON EVERY CHANGE to these files: browsers
+     cache them aggressively, and a stale import.js against a fresh sibling is
+     a hard ReferenceError that shows up as "every slot came back blank". -->
+<script src="/teamsheet/dex.js?v=20260813c"></script>
+<script src="/teamsheet/paste.js?v=20260813c"></script>
+<script src="/teamsheet/segment.js?v=20260813c"></script>
+<script src="/teamsheet/type-icons.js?v=20260813c"></script>
+<script src="/teamsheet/species.js?v=20260813c"></script>
+<script src="/teamsheet/ocr.js?v=20260813c"></script>
+<script src="/teamsheet/import.js?v=20260813c"></script>
 
 <div id="boot-banner" class="banner">Loading…</div>
 
@@ -408,11 +418,20 @@ let seedSaved = [];                 // committed snapshot for the active bracket
 
 // ── match-data-entry state ──
 let pokemonById  = {};              // pokemon.json id -> entry
+let pokemonMeta  = { moveDescriptions: {}, abilityDescriptions: {} }; // name dictionaries from pokemon.json
 let rosterByTeam = {};              // team_id -> [{pokemon_id, acquired_week, released_week}]
 let expandedMatches = new Set();    // match ids whose data-entry card is expanded
 let collapsedDataGroups = new Set(); // group keys (week / stage+week) collapsed in Match & Game Results
 let autoCollapseInit = false;       // whether default-collapse has been seeded for the current load
 let matchModels = {};               // match_id -> editable model {loaded, loading, dirty, games[], manualBrought{a,b}}
+
+/* Teamsheet detail columns (nickname/item/ability/moves) on match_pokemon,
+   added by migrations/2026-08-13-match-pokemon-teamsheet.sql (applied
+   2026-08-13). Set back to false only if that migration is ever rolled back:
+   writing columns that do not exist fails the whole insert, and because
+   saveMatch deletes a match's children before re-inserting them, that failure
+   would take the games and stats with it. */
+const TEAMSHEET_DETAILS = true;
 
 const POKEMON_JSON_URL = "https://planner.springfieldbattleleague.com/pokemon.json";
 const ASSET_BASE = POKEMON_JSON_URL.replace(/[^/]*$/, '');
@@ -489,6 +508,12 @@ async function loadPokemon() {
     const arr = Array.isArray(data) ? data : (data.pokemon || []);
     pokemonById = {};
     arr.forEach(p => { pokemonById[p.id] = p; });
+    // Move/ability display names double as the OCR vocabulary for teamsheet
+    // imports; without them a misread move has nothing to be corrected against.
+    pokemonMeta = {
+      moveDescriptions: (data && data.moveDescriptions) || {},
+      abilityDescriptions: (data && data.abilityDescriptions) || {},
+    };
   } catch (err) {
     console.error('Could not load pokemon.json:', err);
     showToast('Pokémon data didn\u2019t load - names/sprites may be missing.', 'err');
@@ -1215,7 +1240,7 @@ function emptyGame(n) {
     picks: { a: [emptySlot(), emptySlot(), emptySlot(), emptySlot()], b: [emptySlot(), emptySlot(), emptySlot(), emptySlot()] } };
 }
 function ensureModel(matchId) {
-  if (!matchModels[matchId]) matchModels[matchId] = { loaded: false, loading: false, dirty: false, games: [], manualBrought: { a: [], b: [] } };
+  if (!matchModels[matchId]) matchModels[matchId] = { loaded: false, loading: false, dirty: false, games: [], manualBrought: { a: [], b: [] }, sheetDetails: { a: {}, b: {} } };
   return matchModels[matchId];
 }
 function sideTeam(m, side) { return side === 'a' ? m.team_a_id : m.team_b_id; }
@@ -1254,7 +1279,10 @@ async function loadMatchChildren(matchId) {
     if (gameIds.length) {
       stats = await fetchAllIn('game_pokemon_stats', 'game_id, team_id, pokemon_id, kills, deaths', 'game_id', gameIds);
     }
-    const { data: mp, error: mpErr } = await sb.from('match_pokemon').select('team_id, pokemon_id').eq('match_id', matchId);
+    const mpCols = TEAMSHEET_DETAILS
+      ? 'team_id, pokemon_id, nickname, item, ability, moves'
+      : 'team_id, pokemon_id';
+    const { data: mp, error: mpErr } = await sb.from('match_pokemon').select(mpCols).eq('match_id', matchId);
     if (mpErr) throw mpErr;
 
     model.games = (games || []).map(g => {
@@ -1269,10 +1297,21 @@ async function loadMatchChildren(matchId) {
       });
       return game;
     });
+    model.sheetDetails = { a: {}, b: {} };
     ['a', 'b'].forEach(side => {
       const teamId = sideTeam(m, side);
       const det = new Set(detectedBrought(model, side));
-      model.manualBrought[side] = (mp || []).filter(r => r.team_id === teamId && !det.has(r.pokemon_id)).map(r => r.pokemon_id);
+      const mine = (mp || []).filter(r => r.team_id === teamId);
+      model.manualBrought[side] = mine.filter(r => !det.has(r.pokemon_id)).map(r => r.pokemon_id);
+      if (TEAMSHEET_DETAILS) {
+        mine.forEach(r => {
+          if (r.nickname || r.item || r.ability || (r.moves && r.moves.length)) {
+            model.sheetDetails[side][r.pokemon_id] = {
+              nickname: r.nickname, item: r.item, ability: r.ability, moves: r.moves || [],
+            };
+          }
+        });
+      }
     });
     model.loaded = true; model.dirty = false;
   } catch (err) {
@@ -1402,8 +1441,8 @@ function renderMatchCard(m) {
   return card;
 }
 
-// ── PASTE FILL ──
-
+// ── PASTE FILL (disabled — no longer used, kept for reference) ──
+/*
 function findGameDataOffset(lines) {
   for (const line of lines) {
     const cols = line.split('\t').map(s => s.trim());
@@ -1572,6 +1611,7 @@ function parsePasteIntoModel(text, leftIsA) {
   const brought = isSpreadsheet ? parseSpreadsheetBrought(lines, leftSide, rightSide, nameToId, warnings) : null;
   return { games: newGames, warnings, brought };
 }
+*/
 
 function buildMatchBody(body, m, model) {
   // Postseason matches carry a per-match series length (Bo5/Bo7 vary by round and season).
@@ -1610,7 +1650,8 @@ function buildMatchBody(body, m, model) {
     body.appendChild(br);
   }
 
-  // ── Paste fill section ──
+  // ── Paste fill section (disabled — no longer used, kept for reference) ──
+  /*
   const pasteWrap = document.createElement('div');
   pasteWrap.style.cssText = 'margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;';
   const pasteHead = document.createElement('div');
@@ -1701,6 +1742,9 @@ function buildMatchBody(body, m, model) {
   pasteWrap.appendChild(pasteHead);
   pasteWrap.appendChild(pasteBody);
   body.appendChild(pasteWrap);
+  */
+
+  body.appendChild(renderTeamsheetPanel(m, model));
 
   const broughtWrap = document.createElement('div');
   broughtWrap.className = 'brought-wrap';
@@ -1732,6 +1776,439 @@ function buildMatchBody(body, m, model) {
   body.appendChild(foot);
 }
 
+// ── Teamsheet import ─────────────────────────────────────────────────────────
+// Sits beside the game-stats paste importer and fills the same model: parsed
+// species land in model.manualBrought[side], and nothing reaches Supabase until
+// the existing Save button runs. One write path, not two.
+let teamsheetDex = null;              // shared dex index, built lazily
+let teamsheetDrafts = {};             // match_id -> { side, slots[] }
+
+function teamsheetDexIndex() {
+  if (!teamsheetDex) {
+    const arr = Object.values(pokemonById);
+    teamsheetDex = arr.length ? Teamsheet.buildDexIndex(arr) : null;
+  }
+  return teamsheetDex;
+}
+
+// A sheet's six mons must come from that team's active roster for the week —
+// that constraint is what makes species identification tractable at all, since
+// it turns open recognition into picking six of about ten.
+function teamsheetRoster(m, side) {
+  return activeRoster(sideTeam(m, side), m.week);
+}
+
+/* Suggestion lists for the review grid's editable fields. Scoped to the chosen
+   species where possible — a mon has at most three abilities and ~60 learnable
+   moves, so the right answer is usually one or two keystrokes away. These feed
+   <datalist>, so they suggest without restricting. */
+let _tsItemHints = null;
+Object.defineProperty(window, 'TEAMSHEET_ITEM_HINTS', {
+  get() {
+    if (!_tsItemHints) {
+      const idx = teamsheetDexIndex();
+      _tsItemHints = idx ? Teamsheet.itemVocabulary(idx).slice().sort() : [];
+    }
+    return _tsItemHints;
+  },
+});
+
+function teamsheetAbilityOptions(pokemonId) {
+  const idx = teamsheetDexIndex();
+  if (!idx || !pokemonId) return Object.keys(pokemonMeta.abilityDescriptions || {});
+  // Sheets show the pre-mega ability, so suggest the base form's.
+  const e = Teamsheet.displayEntry(idx, pokemonId);
+  return (e && e.abilities && e.abilities.length)
+    ? e.abilities.slice()
+    : Object.keys(pokemonMeta.abilityDescriptions || {});
+}
+
+function teamsheetMoveOptions(pokemonId) {
+  const idx = teamsheetDexIndex();
+  const all = Object.keys(pokemonMeta.moveDescriptions || {});
+  if (!idx || !pokemonId) return all;
+  const e = Teamsheet.displayEntry(idx, pokemonId);
+  if (!e) return all;
+  const learn = new Set(learnsetFor(idx, e));
+  const scoped = all.filter(n => learn.has(tsNorm(n)));
+  return scoped.length ? scoped : all;
+}
+
+function renderTeamsheetPanel(m, model) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;';
+
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);cursor:pointer;user-select:none;';
+  const caret = document.createElement('span');
+  caret.style.cssText = 'font-size:11px;color:var(--text3);';
+  caret.textContent = '▶';
+  const title = document.createElement('span');
+  title.style.cssText = 'font-size:12px;font-weight:700;';
+  title.textContent = 'Import teamsheet';
+  head.appendChild(caret); head.appendChild(title);
+
+  const bodyEl = document.createElement('div');
+  bodyEl.style.cssText = 'display:none;padding:10px 12px;';
+  head.onclick = () => {
+    const open = bodyEl.style.display === 'none';
+    bodyEl.style.display = open ? 'block' : 'none';
+    caret.textContent = open ? '▼' : '▶';
+  };
+
+  const hint = document.createElement('div');
+  hint.style.cssText = 'font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5;';
+  hint.textContent = 'Drop a sheet screenshot or paste a pokepast.es link. Species are matched against this team’s roster for week ' + m.week + '; anything unclear is left blank for you to set.';
+
+  // Which side the sheet belongs to. The in-game header shows the player's
+  // Switch name rather than their league name, so this cannot be auto-detected.
+  const sideRow = document.createElement('div');
+  sideRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;';
+  const sideLabel = document.createElement('span');
+  sideLabel.style.cssText = 'font-size:11px;color:var(--text3);';
+  sideLabel.textContent = 'Sheet belongs to:';
+  const sideSel = document.createElement('select');
+  sideSel.className = 'inp';
+  sideSel.style.cssText = 'font-size:11px;padding:3px 6px;max-width:260px;';
+  ['a', 'b'].forEach(sd => {
+    const o = document.createElement('option');
+    o.value = sd; o.textContent = teamLabelText(sideTeam(m, sd));
+    sideSel.appendChild(o);
+  });
+  const existing = teamsheetDrafts[m.id];
+  if (existing && existing.side) sideSel.value = existing.side;
+  sideRow.appendChild(sideLabel); sideRow.appendChild(sideSel);
+
+  const urlRow = document.createElement('div');
+  urlRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;';
+  const urlIn = document.createElement('input');
+  urlIn.className = 'inp';
+  urlIn.placeholder = 'https://pokepast.es/…';
+  urlIn.style.cssText = 'flex:1;min-width:220px;font-size:11px;padding:4px 6px;';
+  const urlBtn = document.createElement('button');
+  urlBtn.className = 'btn btn-sm';
+  urlBtn.textContent = 'Read paste';
+  urlRow.appendChild(urlIn); urlRow.appendChild(urlBtn);
+
+  const drop = document.createElement('div');
+  drop.style.cssText = 'border:1px dashed var(--border);border-radius:6px;padding:14px;text-align:center;font-size:11px;color:var(--text3);cursor:pointer;margin-bottom:8px;';
+  drop.textContent = 'Drop a screenshot here, or click to choose a file';
+  const fileIn = document.createElement('input');
+  fileIn.type = 'file'; fileIn.accept = 'image/*'; fileIn.style.display = 'none';
+  drop.onclick = () => fileIn.click();
+  drop.ondragover = e => { e.preventDefault(); drop.style.borderColor = 'var(--accent)'; };
+  drop.ondragleave = () => { drop.style.borderColor = 'var(--border)'; };
+
+  const msg = document.createElement('div');
+  msg.style.cssText = 'font-size:11px;margin-bottom:8px;display:none;white-space:pre-wrap;line-height:1.5;';
+  const grid = document.createElement('div');
+
+  function setMsg(text, kind) {
+    if (!text) { msg.style.display = 'none'; return; }
+    msg.style.color = kind === 'err' ? '#ff9c9c' : kind === 'warn' ? 'var(--yellow)' : 'var(--text3)';
+    msg.textContent = text;
+    msg.style.display = 'block';
+  }
+
+  function showResult(ir) {
+    const draft = teamsheetDrafts[m.id] = { side: sideSel.value, slots: ir.slots };
+    const filled = ir.slots.filter(s => s.pokemon_id).length;
+    const blanks = ir.slots.length - filled;
+    setMsg(filled + ' of ' + ir.slots.length + ' identified' +
+      (blanks ? ', ' + blanks + ' left blank — set them below before applying.' : '.'),
+      blanks ? 'warn' : 'ok');
+    renderGrid(draft);
+  }
+
+  function renderGrid(draft) {
+    grid.innerHTML = '';
+    if (!draft || !draft.slots) return;
+    const roster = teamsheetRoster(m, draft.side);
+
+    draft.slots.forEach(s => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border);';
+
+      const num = document.createElement('span');
+      num.style.cssText = 'font-size:11px;color:var(--text3);width:14px;flex:none;';
+      num.textContent = String(s.slot);
+
+      const img = document.createElement('img');
+      img.style.cssText = 'width:28px;height:28px;flex:none;';
+      if (s.pokemon_id) { img.src = spriteUrl(s.pokemon_id); attachSpriteFallback(img, s.pokemon_id); }
+      else { img.src = POKEBALL_FALLBACK; img.style.opacity = '.4'; }
+
+      // Roster-only dropdown: a sheet cannot legitimately hold anything else,
+      // so constraining the choices makes blanks quick to resolve.
+      const sel = document.createElement('select');
+      sel.className = 'inp';
+      sel.style.cssText = 'flex:1;font-size:11px;padding:3px 6px;';
+      const blankOpt = document.createElement('option');
+      blankOpt.value = ''; blankOpt.textContent = '— not set —';
+      sel.appendChild(blankOpt);
+      roster.forEach(id => {
+        const o = document.createElement('option');
+        o.value = id; o.textContent = monName(id);
+        sel.appendChild(o);
+      });
+      sel.value = s.pokemon_id || '';
+      if (!s.pokemon_id) sel.style.borderColor = 'var(--yellow)';
+      sel.onchange = () => {
+        s.pokemon_id = sel.value || null;
+        sel.style.borderColor = sel.value ? 'var(--border)' : 'var(--yellow)';
+        if (sel.value) { img.style.opacity = '1'; img.src = spriteUrl(sel.value); attachSpriteFallback(img, sel.value); }
+        else { img.style.opacity = '.4'; img.src = POKEBALL_FALLBACK; }
+      };
+
+      /* Every parsed field is editable, not just the species. OCR gets ability
+         and item right ~100% of the time and moves ~96%, but "usually right" is
+         precisely why the wrong ones need to be fixable — and these are the
+         values that get stored once the migration is applied.
+
+         Inputs are backed by <datalist> rather than <select>: the suggestions
+         are the legal ones for the chosen species, but a sheet can legitimately
+         contain something the dex lists differently, so nothing is forced. */
+      const nick = document.createElement('input');
+      nick.className = 'inp';
+      nick.placeholder = 'nickname';
+      nick.style.cssText = 'flex:none;width:150px;font-size:11px;padding:3px 6px;';
+      nick.value = s.nickname || '';
+      // Mutates the draft in place and never re-renders — rebuilding the grid
+      // on each keystroke would destroy the field being typed into.
+      nick.oninput = () => { s.nickname = nick.value.trim() || null; };
+
+      row.appendChild(num); row.appendChild(img); row.appendChild(sel); row.appendChild(nick);
+      grid.appendChild(row);
+
+      const detail = document.createElement('div');
+      detail.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;padding:0 0 7px 50px;';
+
+      const uid = 'ts-' + m.id + '-' + s.slot;
+      const listFor = (suffix, values) => {
+        const dl = document.createElement('datalist');
+        dl.id = uid + '-' + suffix;
+        values.forEach(v => { const o = document.createElement('option'); o.value = v; dl.appendChild(o); });
+        detail.appendChild(dl);
+        return dl.id;
+      };
+      const field = (placeholder, value, width, listId, onChange) => {
+        const inp = document.createElement('input');
+        inp.className = 'inp';
+        inp.placeholder = placeholder;
+        inp.style.cssText = 'font-size:10px;padding:2px 5px;width:' + width + 'px;';
+        inp.value = value || '';
+        if (listId) inp.setAttribute('list', listId);
+        inp.oninput = () => onChange(inp.value.trim());
+        detail.appendChild(inp);
+        return inp;
+      };
+
+      const abilityList = listFor('ab', teamsheetAbilityOptions(s.pokemon_id));
+      const itemList = listFor('it', TEAMSHEET_ITEM_HINTS);
+      const moveList = listFor('mv', teamsheetMoveOptions(s.pokemon_id));
+
+      field('ability', s.ability, 118, abilityList, v => { s.ability = v || null; });
+      field('item', s.item, 118, itemList, v => { s.item = v || null; });
+      for (let k = 0; k < 4; k++) {
+        field('move ' + (k + 1), (s.moves || [])[k], 108, moveList, v => {
+          s.moves = s.moves || [];
+          s.moves[k] = v;
+          // Trailing blanks would otherwise be stored as empty strings.
+          while (s.moves.length && !s.moves[s.moves.length - 1]) s.moves.pop();
+        });
+      }
+
+      // Refresh the suggestion lists when the species changes, without a full
+      // re-render (which would wipe anything already typed into this row).
+      const baseOnChange = sel.onchange;
+      sel.onchange = () => {
+        baseOnChange();
+        const refresh = (id, values) => {
+          const dl = detail.querySelector('#' + CSS.escape(id));
+          if (!dl) return;
+          dl.innerHTML = '';
+          values.forEach(v => { const o = document.createElement('option'); o.value = v; dl.appendChild(o); });
+        };
+        refresh(abilityList, teamsheetAbilityOptions(s.pokemon_id));
+        refresh(moveList, teamsheetMoveOptions(s.pokemon_id));
+      };
+
+      grid.appendChild(detail);
+
+      if (s.warnings && s.warnings.length) {
+        const w = document.createElement('div');
+        w.style.cssText = 'font-size:10px;color:var(--yellow);padding:0 0 6px 50px;line-height:1.4;';
+        w.textContent = s.warnings.join(' ');
+        grid.appendChild(w);
+      }
+    });
+
+    const applyRow = document.createElement('div');
+    applyRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:10px;';
+    const apply = document.createElement('button');
+    apply.className = 'btn btn-accent btn-sm';
+    apply.textContent = 'Apply to ' + teamLabelText(sideTeam(m, draft.side));
+    apply.onclick = () => applyTeamsheet(m, model, draft);
+    const discard = document.createElement('button');
+    discard.className = 'btn btn-sm';
+    discard.textContent = 'Discard';
+    discard.onclick = () => { delete teamsheetDrafts[m.id]; grid.innerHTML = ''; setMsg(''); };
+    applyRow.appendChild(apply); applyRow.appendChild(discard);
+    grid.appendChild(applyRow);
+  }
+
+  async function runImage(file) {
+    drop.style.borderColor = 'var(--border)';
+    const index = teamsheetDexIndex();
+    if (!index) { setMsg('Pokémon data hasn’t loaded yet — reload and try again.', 'err'); return; }
+    const roster = teamsheetRoster(m, sideSel.value);
+    if (!roster.length) {
+      setMsg('No roster found for ' + teamLabelText(sideTeam(m, sideSel.value)) + ' in week ' + m.week + '.', 'err');
+      return;
+    }
+    setMsg('Reading sheet…');
+    const opts = { ocr: true, meta: pokemonMeta, onProgress: t => setMsg(t) };
+    try {
+      // OCR lazy-loads ~3MB of tesseract on first use, so progress is reported
+      // rather than leaving the panel looking hung.
+      const ir = await Teamsheet.fromImage(file, index, roster, opts);
+      const hits = ir.slots.filter(s => s.pokemon_id).length;
+
+      /* A sheet checked against the opposing team's roster does not come back
+         empty — it comes back with a couple of coincidental matches, which is
+         worse, because it looks like a normal partial read. Testing only for
+         zero missed that entirely: Wyki's sheet scored 2/6 against Awesome
+         Malamars and sailed through.
+
+         So whenever a read is less than convincing, parse the other side too and
+         keep whichever is clearly better. The side selector defaults to team A
+         and the in-game header shows a Switch name rather than a league name, so
+         there is nothing in the sheet itself to catch the mix-up. */
+      let best = ir, bestHits = hits, switched = false;
+      if (hits < 5) {
+        const other = sideSel.value === 'a' ? 'b' : 'a';
+        const otherRoster = teamsheetRoster(m, other);
+        if (otherRoster.length) {
+          setMsg('Only ' + hits + ' matched ' + teamLabelText(sideTeam(m, sideSel.value)) +
+            ' — checking the other side…');
+          const alt = await Teamsheet.fromImage(file, index, otherRoster, opts);
+          const altHits = alt.slots.filter(s => s.pokemon_id).length;
+          if (altHits >= hits + 2) {
+            sideSel.value = other; best = alt; bestHits = altHits; switched = true;
+          }
+        }
+      }
+
+      showResult(best);
+      if (switched) {
+        setMsg('This looks like ' + teamLabelText(sideTeam(m, sideSel.value)) + '’s sheet (' +
+          bestHits + ' of 6 matched, against ' + hits + ' for the other side) — switched the side ' +
+          'for you. Check it before applying.', 'warn');
+      } else if (bestHits === 0) {
+        setMsg('None of the six matched ' + teamLabelText(sideTeam(m, sideSel.value)) +
+          '’s week-' + m.week + ' roster. Check the side above, and that this is ' +
+          'the Moves & More tab.', 'err');
+      }
+    } catch (err) {
+      setMsg(err.message || String(err), 'err');
+    }
+  }
+
+  fileIn.onchange = () => { if (fileIn.files && fileIn.files[0]) runImage(fileIn.files[0]); };
+  drop.ondrop = e => {
+    e.preventDefault();
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) runImage(f);
+  };
+
+  urlBtn.onclick = async () => {
+    const index = teamsheetDexIndex();
+    if (!index) { setMsg('Pokémon data hasn’t loaded yet — reload and try again.', 'err'); return; }
+    const raw = urlIn.value.trim();
+    if (!raw) return;
+    setMsg('Fetching paste…');
+    try {
+      const ir = raw.indexOf('pokepast.es') !== -1
+        ? await Teamsheet.fromPokepaste(raw, index)
+        : Teamsheet.fromPasteText(raw, index);
+      showResult(ir);
+    } catch (err) {
+      setMsg(err.message || String(err), 'err');
+    }
+  };
+
+  sideSel.onchange = () => {
+    const d = teamsheetDrafts[m.id];
+    if (d) { d.side = sideSel.value; renderGrid(d); }
+  };
+
+  bodyEl.appendChild(hint);
+  bodyEl.appendChild(sideRow);
+  bodyEl.appendChild(urlRow);
+  bodyEl.appendChild(drop);
+  bodyEl.appendChild(fileIn);
+  bodyEl.appendChild(msg);
+  bodyEl.appendChild(grid);
+  wrap.appendChild(head);
+  wrap.appendChild(bodyEl);
+  if (teamsheetDrafts[m.id]) {
+    bodyEl.style.display = 'block';
+    caret.textContent = '▼';
+    renderGrid(teamsheetDrafts[m.id]);
+  }
+  return wrap;
+}
+
+/* Applies parsed species as that side's brought list. Writes only into the
+   in-memory model — the existing Save button stays the only thing that touches
+   Supabase, so an unwanted import is undone by simply not saving. */
+function applyTeamsheet(m, model, draft) {
+  const ids = draft.slots.map(s => s.pokemon_id).filter(Boolean);
+  if (!ids.length) { showToast('Nothing to apply — no species set.', 'err'); return; }
+
+  /* Block duplicates here rather than letting the save fail.
+     match_pokemon has unique(match_id, team_id, pokemon_id), so two slots set to
+     the same mon abort the entire insert — taking the games and stats down with
+     it — and Supabase reports it as an opaque constraint violation long after
+     the mistake was made. Two slots can easily end up the same if the admin
+     corrects one dropdown and forgets the other. */
+  const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
+  if (dupes.length) {
+    const names = [...new Set(dupes)].map(monName).join(', ');
+    openModal('<h3>Duplicate Pokémon</h3><p>' + escapeHtml(names) +
+      ' appears in more than one slot. A team can only bring each Pokémon once — ' +
+      'fix the duplicates before applying.</p>' +
+      '<div class="modal-actions"><button class="btn" onclick="closeModal()">OK</button></div>');
+    return;
+  }
+
+  const detected = new Set(detectedBrought(model, draft.side));
+  model.manualBrought[draft.side] = ids.filter(id => !detected.has(id));
+
+  /* Carry nickname/item/ability/moves alongside the species. A pokepaste
+     supplies all of them; an image currently supplies none (no OCR yet), so
+     these stay null for image imports until that lands. Held in the model
+     either way — nothing persists unless TEAMSHEET_DETAILS is on AND Save runs. */
+  if (!model.sheetDetails) model.sheetDetails = { a: {}, b: {} };
+  model.sheetDetails[draft.side] = {};
+  draft.slots.forEach(s => {
+    if (!s.pokemon_id) return;
+    if (!s.nickname && !s.item && !s.ability && !(s.moves && s.moves.length)) return;
+    model.sheetDetails[draft.side][s.pokemon_id] = {
+      nickname: s.nickname || null,
+      item: s.item || null,
+      ability: s.ability || null,
+      // Editing move 3 while leaving move 2 empty would otherwise store a hole
+      // in the array as an empty string.
+      moves: (s.moves || []).map(x => (x || '').trim()).filter(Boolean),
+    };
+  });
+
+  delete teamsheetDrafts[m.id];
+  markDirty(m.id);
+  showToast('Applied ' + ids.length + ' Pokémon to ' + teamLabelText(sideTeam(m, draft.side)) + '.', 'ok');
+}
+
 function renderBroughtTeam(m, model, side) {
   const teamId = sideTeam(m, side);
   const div = document.createElement('div');
@@ -1748,6 +2225,24 @@ function renderBroughtTeam(m, model, side) {
     slot.appendChild(img);
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = monName(id); slot.appendChild(nm);
     const stt = document.createElement('div'); stt.className = 'st'; stt.textContent = st.k + 'K / ' + st.d + 'F'; slot.appendChild(stt);
+
+    /* Click a brought Pokémon to edit its teamsheet detail. Without this the
+       review grid was the only editor, and it is discarded on Apply — so fixing
+       one misread nickname meant re-importing the entire sheet. */
+    if (TEAMSHEET_DETAILS) {
+      const has = !!(model.sheetDetails && model.sheetDetails[side] && model.sheetDetails[side][id]);
+      slot.style.cursor = 'pointer';
+      slot.title = (has ? 'Edit' : 'Add') + ' teamsheet detail for ' + monName(id);
+      if (has) {
+        // A quiet marker so it is obvious which mons already carry detail.
+        const dot = document.createElement('div');
+        dot.style.cssText = 'position:absolute;top:3px;left:4px;width:5px;height:5px;border-radius:50%;background:var(--accent);';
+        slot.style.position = 'relative';
+        slot.appendChild(dot);
+      }
+      slot.onclick = () => openTeamsheetDetails(m, model, side, id);
+    }
+
     if (!detSet.has(id)) {   // manually added (not from a game) → removable
       const rm = document.createElement('button'); rm.className = 'rm'; rm.textContent = '\u00D7'; rm.title = 'Remove';
       rm.onclick = (e) => { e.stopPropagation(); model.manualBrought[side] = model.manualBrought[side].filter(x => x !== id); markDirty(m.id); };
@@ -1764,6 +2259,65 @@ function renderBroughtTeam(m, model, side) {
   }
   div.appendChild(slots);
   return div;
+}
+
+/* Edit one brought Pokémon's teamsheet detail after the fact.
+
+   Before this, the review grid was the only place these fields existed, and it
+   is discarded on Apply — so correcting a single misread nickname meant
+   re-importing the whole sheet. The values live in match_pokemon and are read
+   back by loadMatchChildren, so the brought list is the natural place to edit
+   them: it is the persistent view of what was stored.
+
+   Writes into the model only; the existing Save button remains the sole thing
+   that touches Supabase. */
+function openTeamsheetDetails(m, model, side, id) {
+  if (!model.sheetDetails) model.sheetDetails = { a: {}, b: {} };
+  const cur = model.sheetDetails[side][id] || { nickname: null, item: null, ability: null, moves: [] };
+  const abilities = teamsheetAbilityOptions(id);
+  const moves = teamsheetMoveOptions(id);
+  const items = TEAMSHEET_ITEM_HINTS;
+  const opts = list => list.map(v => '<option value="' + escapeHtml(v) + '">').join('');
+  const val = v => escapeHtml(v == null ? '' : v);
+
+  openModal(
+    '<h3>Teamsheet detail — ' + escapeHtml(monName(id)) + '</h3>' +
+    '<p style="font-size:11px;color:var(--text3);margin-bottom:10px;">' +
+    'Leave a field blank to clear it. Suggestions are scoped to this Pokémon.</p>' +
+    '<datalist id="td-ab">' + opts(abilities) + '</datalist>' +
+    '<datalist id="td-it">' + opts(items) + '</datalist>' +
+    '<datalist id="td-mv">' + opts(moves) + '</datalist>' +
+    '<div style="display:flex;flex-direction:column;gap:6px;">' +
+      '<input id="td-nick" class="inp" placeholder="nickname" value="' + val(cur.nickname) + '">' +
+      '<input id="td-ability" class="inp" list="td-ab" placeholder="ability" value="' + val(cur.ability) + '">' +
+      '<input id="td-item" class="inp" list="td-it" placeholder="item" value="' + val(cur.item) + '">' +
+      [0, 1, 2, 3].map(k =>
+        '<input id="td-mv' + k + '" class="inp" list="td-mv" placeholder="move ' + (k + 1) + '" value="' +
+        val((cur.moves || [])[k]) + '">').join('') +
+    '</div>' +
+    '<div class="modal-actions">' +
+      '<button class="btn" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-accent" id="td-save">Save</button>' +
+    '</div>'
+  );
+
+  document.getElementById('td-save').onclick = () => {
+    const get = elId => (document.getElementById(elId).value || '').trim();
+    const detail = {
+      nickname: get('td-nick') || null,
+      ability: get('td-ability') || null,
+      item: get('td-item') || null,
+      // Filtered so a gap between move 1 and move 3 never reaches the text[]
+      // column as an empty string.
+      moves: [0, 1, 2, 3].map(k => get('td-mv' + k)).filter(Boolean),
+    };
+    const empty = !detail.nickname && !detail.ability && !detail.item && !detail.moves.length;
+    if (empty) delete model.sheetDetails[side][id];
+    else model.sheetDetails[side][id] = detail;
+    closeModal();
+    markDirty(m.id);
+    showToast('Detail updated — Save changes to store it.', 'ok');
+  };
 }
 
 function openBroughtPicker(m, model, side) {
@@ -1957,7 +2511,19 @@ async function saveMatch(matchId) {
     const mpRows = [];
     ['a', 'b'].forEach(side => {
       const teamId = sideTeam(m, side);
-      broughtList(model, side).all.forEach(id => mpRows.push({ match_id: matchId, team_id: teamId, pokemon_id: id }));
+      const details = (model.sheetDetails && model.sheetDetails[side]) || {};
+      broughtList(model, side).all.forEach(id => {
+        const row = { match_id: matchId, team_id: teamId, pokemon_id: id };
+        // Detail columns only exist post-migration; see TEAMSHEET_DETAILS.
+        if (TEAMSHEET_DETAILS && details[id]) {
+          const d = details[id];
+          row.nickname = d.nickname || null;
+          row.item = d.item || null;
+          row.ability = d.ability || null;
+          row.moves = (d.moves && d.moves.length) ? d.moves : null;
+        }
+        mpRows.push(row);
+      });
     });
     if (mpRows.length) { const { error } = await sb.from('match_pokemon').insert(mpRows); if (error) throw error; }
 
@@ -2020,7 +2586,7 @@ async function clearMatch(matchId) {
     const { error: e3 } = await sb.from('match_pokemon').delete().eq('match_id', matchId); if (e3) throw e3;
     const { error: e4 } = await sb.from('matches').update({ team_a_score: 0, team_b_score: 0 }).eq('id', matchId); if (e4) throw e4;
 
-    matchModels[matchId] = { loaded: true, loading: false, dirty: false, games: [], manualBrought: { a: [], b: [] } };
+    matchModels[matchId] = { loaded: true, loading: false, dirty: false, games: [], manualBrought: { a: [], b: [] }, sheetDetails: { a: {}, b: {} } };
     await refreshMatchRow(matchId);
     renderMatchData();
     showToast('Match data cleared.', 'ok');
