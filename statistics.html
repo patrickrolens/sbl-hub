@@ -38,7 +38,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .table-card { padding-top: 14px; }
 
 /* ─── 2-UP VISUAL GRID ─── */
-.viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+/* No margin-bottom: .wrap is a flex column with gap:14px, so one would stack on
+   top of the gap and leave 28px below the grid where every other card sits 14
+   apart. The gap alone spaces it. */
+.viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .viz-grid .viz-full { grid-column: 1 / -1; }
 .viz { min-width: 0; }
 /* Collapse-all bar above the 2×2 grid. */
@@ -49,7 +52,16 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 #pack-card.collapsed .scatter-wrap { display: none; }
 
 /* ─── CHART HEADER (shared by every visual) ─── */
-.scatter-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-bottom: 10px; }
+/* min-height matches a head containing a <select> (the tallest control). The row
+   is centered, so without it a head holding only a button — or only a title —
+   is shorter and its title sits at a different height from the cards beside it.
+
+   Columns are 1fr auto 1fr so the title is genuinely centered on the card. With
+   `auto 1fr auto` the title sat in the leftover space and centered on that, which
+   is only the card's center when the buttons and the controls happen to be the
+   same width — they never are, so every title was off by 58-181px. */
+.scatter-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin-bottom: 10px; min-height: 32px; }
+.scatter-head .scatter-btns { justify-self: start; }
 .scatter-head .scatter-btns { justify-self: start; display: flex; gap: 6px; }
 .scatter-head .scatter-title { grid-column: 2; margin: 0; text-align: center; font-size: 14px; color: var(--text); }
 .scatter-head .field, .scatter-head .hist-controls { justify-self: end; }
@@ -198,7 +210,41 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
   /* When expanded on mobile, give filters + controls their own full-width rows. */
   .viz-modal-filter, .viz-modal-controls { flex-basis: 100%; }
 }
+#sheet-card.collapsed .sheet-body { display: none; }
+.sheet-split { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+/* An author `display` beats the UA stylesheet's [hidden]{display:none}, so
+   .hidden = true on this grid would otherwise do nothing at all. */
+.sheet-split[hidden] { display: none; }
+@media (max-width: 860px) { .sheet-split { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .sheet-split { grid-template-columns: 1fr; } }
+/* Same uppercase micro-label the cards use for their own titles, one step down. */
+.sheet-col-title { font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin-bottom: 5px; }
+.sheet-bars { display: flex; flex-direction: column; gap: 3px; }
+.sheet-bar-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.sheet-bar-label { flex: 0 0 120px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-bar { flex: 1; height: 9px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.sheet-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.sheet-bar-n { flex: 0 0 26px; text-align: right; color: var(--text3); }
+/* Scoped rather than changing .ts-from itself: that rule also sits under the
+   compact set blocks on team/pokemon, where 4px is right. Here it closes a
+   full-width card and needs room to read as a footnote. */
+#sheet-foot { margin-top: 12px; }
+#sheet-find { width: 170px; }
+/* "Who runs this?" results. One row per Pokémon that carries the value, so the
+   answer is a roster of mons and teams rather than another count. */
+.sheet-found-head { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+.sheet-found-head b { color: var(--text); }
+.sheet-hits { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
+.sheet-hit { display: flex; align-items: center; gap: 7px; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 5px 8px; min-width: 0; }
+.sheet-hit img { width: 26px; height: 26px; flex: none; }
+.sheet-hit-txt { min-width: 0; }
+.sheet-hit-mon { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-hit-team { font-size: 10px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-hit-n { margin-left: auto; font-size: 11px; color: var(--text3); flex: none; }
+.sheet-bar-label.clickable { cursor: pointer; }
+.sheet-bar-label.clickable:hover { color: var(--accent); }
 </style>
+<script src="/teamsheet-sets.js?v=20260814b"></script>
 </head>
 <body>
 
@@ -320,9 +366,51 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
       </div>
       <div class="scatter-wrap" id="pack"></div>
     </div>
+
+    <div class="card viz viz-full" id="sheet-card" hidden>
+      <div class="scatter-head">
+        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('sheet-card')" title="Hide chart" aria-label="Hide chart">▾</button></div>
+        <div class="card-title scatter-title">Common Sets</div>
+        <div class="hist-controls">
+          <div class="field"><label>Find</label>
+            <input type="text" id="sheet-find" placeholder="move, item or ability…" oninput="renderSheetUsage()">
+          </div>
+          <div class="field"><label>Count</label>
+            <select id="sheet-mode" onchange="renderSheetUsage()">
+              <option value="sheet" selected>On the sheet</option>
+              <option value="played">Sent out in a game</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="sheet-body">
+        <!-- Search results replace the three columns while Find is non-empty. -->
+        <div class="sheet-found" id="sheet-found" hidden></div>
+        <div class="sheet-split" id="sheet-split">
+          <div>
+            <div class="sheet-col-title">Abilities</div>
+            <div id="sheet-abilities"></div>
+          </div>
+          <div>
+            <div class="sheet-col-title">Items</div>
+            <div id="sheet-items"></div>
+          </div>
+          <div>
+            <div class="sheet-col-title">Moves</div>
+            <div id="sheet-moves"></div>
+          </div>
+        </div>
+        <div class="ts-from" id="sheet-foot"></div>
+      </div>
+    </div>
   </div>
 
   <div class="card table-card">
+    <!-- scatter-head with only a title: its grid puts .scatter-title in column 2,
+         so this centers and spaces exactly like the chart card titles above. -->
+    <div class="scatter-head">
+      <div class="card-title scatter-title">Pokémon</div>
+    </div>
     <div class="table-scroll">
       <table class="tbl" id="stats-table"></table>
     </div>
@@ -517,27 +605,39 @@ function buildInstances() {
 // ─────────────────────────────────────────────────────────────────────────────
 // FILTER + SORT + RENDER
 // ─────────────────────────────────────────────────────────────────────────────
-function applyFilters() {
+/* The filter-bar predicate, shared so nothing re-implements it.
+
+   `skipMinGames` exists for Common Sets. Min games is a season-level cut on
+   games played, which would silently delete exactly the Pokémon that card's own
+   "On the sheet" mode is meant to show — one brought to a match but never sent
+   out has gpCount 0 and fails any Min games above 0. Both controls govern the
+   same axis, so the card's toggle owns it there and this one steps aside. */
+function filterPredicate(skipMinGames) {
   const q = (document.getElementById('f-search').value || '').trim().toLowerCase();
   const team = document.getElementById('f-team').value;
   const status = document.getElementById('f-status').value;
   const type = document.getElementById('f-type').value;
   const minGp = Math.max(0, parseInt(document.getElementById('f-mingp').value, 10) || 0);
-  filtered = instances.filter(r => {
+  return r => {
     if (q && !r.name.toLowerCase().includes(q)) return false;
     if (team !== 'all' && r.team_id !== team) return false;
     if (status === 'active' && !r.active) return false;
     if (status === 'inactive' && r.active) return false;
     if (type !== 'all' && r.type1 !== type && r.type2 !== type) return false;
-    if (r.gpCount < minGp) return false;
+    if (!skipMinGames && r.gpCount < minGp) return false;
     return true;
-  });
+  };
+}
+
+function applyFilters() {
+  filtered = instances.filter(filterPredicate(false));
   document.getElementById('row-count').textContent = filtered.length + ' of ' + instances.length + ' Pokémon';
   renderTable();
   renderScatter();
   renderHistogram();
   renderBoxPlot();
   renderPack();
+  renderSheetUsage();
   // The matrix is filter-independent (teams, not Pokémon), but re-render if it's the
   // open modal so its sizing stays correct.
   if (modalChart === 'matrix') renderMatrix();
@@ -1331,6 +1431,171 @@ function populateFilters() {
 // ─────────────────────────────────────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────────────────────────────────────
+
+/* Teamsheet usage: what the league is actually bringing.
+
+   Counted per brought Pokémon, not per match, so a move on two of a team's six
+   reads as two. Only rows from imported teamsheets carry this detail, so the
+   card hides itself entirely when none exist rather than drawing an empty axis —
+   at the start of a season that is the normal state. */
+let sheetUsageRows = null;
+
+async function loadSheetUsage() {
+  try {
+    sheetUsageRows = await fetchSheetRows();
+  } catch (e) {
+    console.warn('teamsheet usage unavailable', e);
+    sheetUsageRows = [];
+  }
+  const card = document.getElementById('sheet-card');
+  if (!card) return;
+  if (!sheetUsageRows.length) { card.hidden = true; return; }
+  card.hidden = false;
+  renderSheetUsage();
+}
+
+function renderSheetUsage() {
+  if (!sheetUsageRows) return;
+  /* Honors the filter bar like the table and charts do. A sheet row is per
+     match+team+Pokémon while an instance is per team+Pokémon, so the pair is
+     what matches — which also keeps a traded Pokémon's two stints distinct.
+
+     Filtered here rather than reusing `filtered` so Min games can be skipped;
+     see filterPredicate. Without that, a Pokémon brought but never sent out
+     (Ulico's Maushold, gpCount 0) vanished from both modes of this card. */
+  const allowed = new Set(instances.filter(filterPredicate(true))
+    .map(r => r.team_id + '|' + r.pokemon_id));
+  let rows = sheetUsageRows.filter(r => allowed.has(r.team_id + '|' + r.pokemon_id));
+
+  /* "Sent out in a game" narrows to sheet rows where the Pokémon actually
+     appeared, judged per match rather than per season: a mon can be on the
+     sheet in week 3 having played in week 1, and that week-3 sheet still
+     describes something it was never sent out with. */
+  const modeEl = document.getElementById('sheet-mode');
+  const playedOnly = modeEl && modeEl.value === 'played';
+  if (playedOnly) {
+    const seen = playedAppearances();
+    rows = rows.filter(r => seen.has(r.match_id + '|' + r.team_id + '|' + r.pokemon_id));
+  }
+
+  // "Who runs this?" — the inverse of the columns, which answer "what does this
+  // Pokémon run?". Takes over the body while Find has text in it.
+  const findEl = document.getElementById('sheet-find');
+  const query = findEl ? findEl.value.trim().toLowerCase() : '';
+  const split = document.getElementById('sheet-split');
+  const found = document.getElementById('sheet-found');
+  if (split && found) {
+    split.hidden = !!query;
+    found.hidden = !query;
+    if (query) renderSheetFind(rows, query, found);
+  }
+
+  const sum = summarizeSets(rows);
+  // Counted per brought Pokémon, so a move on two of a team's six counts twice.
+  bars('sheet-abilities', sum.abilities, 12);
+  bars('sheet-items', sum.items, 12);
+  bars('sheet-moves', sum.moves, 12);
+  const foot = document.getElementById('sheet-foot');
+  if (!foot) return;
+  const total = sheetUsageRows.length;
+  const count = sum.sheets === total ? String(sum.sheets) : sum.sheets + ' of ' + total;
+  foot.textContent = 'across ' + count + ' brought Pokémon' +
+    (playedOnly ? ' that were sent out in a game' : ' from imported teamsheets');
+}
+
+/* Every Pokémon whose set mentions `query`, in any of the three fields.
+
+   Collapsed to one card per team+Pokémon rather than one per sheet, because
+   "Whimsicott (Fallarbor Blitz) ×3" is the useful shape — three separate
+   identical rows would just be noise. Substring rather than exact match so a
+   half-typed "tail" already finds Tailwind. */
+function renderSheetFind(rows, query, el) {
+  const hits = {};
+  rows.forEach(r => {
+    const fields = [r.ability, r.item].concat(r.moves || []).filter(Boolean);
+    const hit = fields.filter(v => v.toLowerCase().includes(query));
+    if (!hit.length) return;
+    const key = r.team_id + '|' + r.pokemon_id;
+    if (!hits[key]) hits[key] = { team_id: r.team_id, pokemon_id: r.pokemon_id, n: 0, values: new Set() };
+    hits[key].n++;
+    hit.forEach(v => hits[key].values.add(v));
+  });
+
+  const list = Object.values(hits).sort((a, b) =>
+    b.n - a.n || monFor(a.pokemon_id).name.localeCompare(monFor(b.pokemon_id).name));
+  if (!list.length) {
+    el.innerHTML = '<div class="ts-empty">Nothing on an imported teamsheet matches “' +
+      escapeHtml(query) + '”.</div>';
+    return;
+  }
+
+  // Distinct matched values, so the header names what was actually found rather
+  // than echoing the half-typed query back.
+  const matched = [...new Set([].concat(...list.map(h => [...h.values])))].sort();
+  const mons = list.length, sheets = list.reduce((a, h) => a + h.n, 0);
+  /* Capped: a near-universal move like Protect matches over a hundred Pokémon,
+     and a card that long buries the rest of the page. The count in the header
+     still reports the true total. */
+  const CAP = 48;
+  const shown = list.slice(0, CAP);
+  el.innerHTML =
+    '<div class="sheet-found-head"><b>' + matched.map(escapeHtml).join(', ') + '</b> — ' +
+    mons + ' Pokémon, ' + sheets + ' sheet' + (sheets === 1 ? '' : 's') +
+    (mons > CAP ? ' (showing the ' + CAP + ' most frequent)' : '') + '</div>' +
+    '<div class="sheet-hits">' + shown.map(h =>
+      '<div class="sheet-hit">' +
+      '<img loading="lazy" src="' + iconUrl(h.pokemon_id) + '" alt="">' +
+      '<div class="sheet-hit-txt">' +
+        '<div class="sheet-hit-mon">' + escapeHtml(monFor(h.pokemon_id).name) + '</div>' +
+        '<div class="sheet-hit-team">' + escapeHtml(teamLabelText(h.team_id)) + '</div>' +
+      '</div>' +
+      '<span class="sheet-hit-n">×' + h.n + '</span></div>').join('') + '</div>';
+}
+
+// Clicking a bar searches for it — the columns show what is common, the search
+// shows who runs it, and this is the bridge between the two.
+function sheetFindValue(v) {
+  const el = document.getElementById('sheet-find');
+  if (!el) return;
+  el.value = v;
+  renderSheetUsage();
+}
+
+/* match|team|pokemon keys for every Pokémon that actually appeared in a game.
+   statsByTP is keyed team|pokemon and holds per-game rows, so mapping each game
+   back through gameToMatch gives the per-match answer the card needs. Built on
+   demand rather than cached: it costs one pass over the stat rows and the
+   indexes it reads are rebuilt whenever the season changes. */
+function playedAppearances() {
+  const seen = new Set();
+  Object.keys(statsByTP).forEach(key => {
+    const cut = key.indexOf('|');
+    const teamId = key.slice(0, cut), pid = key.slice(cut + 1);
+    statsByTP[key].forEach(st => {
+      const mid = gameToMatch[st.game_id];
+      if (mid) seen.add(mid + '|' + teamId + '|' + pid);
+    });
+  });
+  return seen;
+}
+
+// A bar per row: a sorted list is the honest shape for this, and it avoids
+// pulling in a chart library to draw what is essentially a ranking.
+function bars(elId, entries, limit) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const rows = entries.slice(0, limit);
+  if (!rows.length) { el.innerHTML = '<div class="ts-empty">No data yet.</div>'; return; }
+  const max = rows[0][1] || 1;
+  el.innerHTML = '<div class="sheet-bars">' + rows.map(([name, n]) =>
+    '<div class="sheet-bar-row">'
+    + '<span class="sheet-bar-label clickable" title="Show who runs ' + escapeHtml(name) + '"'
+    +   ' onclick="sheetFindValue(\'' + escapeHtml(name).replace(/'/g, '&#39;') + '\')">'
+    +   escapeHtml(name) + '</span>'
+    + '<span class="sheet-bar"><span style="width:' + Math.round(n / max * 100) + '%"></span></span>'
+    + '<span class="sheet-bar-n">' + n + '</span></div>').join('') + '</div>';
+}
+
 async function init() {
   const banner = document.getElementById('boot-banner');
   try {
@@ -1339,6 +1604,8 @@ async function init() {
     populateFilters();
     applyFilters();
     renderMatrix();
+    injectSetStyles();
+    loadSheetUsage();   // async, non-blocking: the card appears when it resolves
     banner.hidden = true;
     document.getElementById('wrap').hidden = false;
     patchStaticSeasonLinks();

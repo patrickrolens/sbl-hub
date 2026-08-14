@@ -238,6 +238,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .member-pop .pop-ability { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px; background: rgba(124,111,247,.15); color: #a89df9; border: 1px solid rgba(124,111,247,.3); }
 .member-pop .pop-move { font-size: 10px; background: var(--bg3); border: 1px solid var(--border); padding: 2px 7px; border-radius: 4px; color: var(--text2); }
 .member-pop .pop-dim { color: var(--text3); font-size: 11px; }
+.member-pop .pop-set-head { color: var(--text2); margin-bottom: 7px; }
+.member-pop .pop-set .pop-lbl { margin-top: 8px; }
+.member-pop .pop-set > .pop-lbl:first-child { margin-top: 0; }
+.member-pop .pop-set .pop-row { margin-bottom: 0; }
+.member-pop .pop-share { opacity: .5; font-size: 9px; font-weight: 400; }
+.member-pop .pop-from { margin-top: 7px; font-size: 9px; color: var(--text3); opacity: .8; }
 .member-pop .pop-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
 .member-pop .pop-stat { text-align: center; background: var(--bg3); border-radius: 5px; padding: 4px 2px; }
 .member-pop .pop-stat .ps-k { display: block; font-size: 8px; font-weight: 700; color: var(--text3); text-transform: uppercase; }
@@ -368,6 +374,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 <script src="/nav.js?v=20260709"></script>
 <script src="/utils.js?v=20260709"></script>
+<script src="/teamsheet-sets.js?v=20260814b"></script>
 <script src="/tooltip.js?v=20260709"></script>
 
 <div id="week-banner" class="sbln-week-banner" hidden></div>
@@ -500,6 +507,7 @@ let statRows     = [];      // game_pokemon_stats rows for this team
 let regularRecords = {};    // team_id -> { w, l, winRate } over regular season (for OW%)
 let regularOpponents = {};  // team_id -> [opponent_id, …] over regular season (for OOW%)
 let broughtByMatch = {};    // match_id -> Set(pokemon_id) brought by THIS team (from match_pokemon)
+let sheetSets = {};         // pokemon_id -> summarizeSets() over THIS team's teamsheets
 let txns         = [];      // unified transaction feed (free agency + trades)
 let pokemonById  = {};      // id -> pokemon.json entry
 let currentUser  = null;
@@ -685,12 +693,25 @@ async function loadTeamData() {
     const [gamesRows, statsRes, mpRes] = await Promise.all([
       fetchAllIn('games', 'id, match_id, game_number, winner_team_id', 'match_id', matchIds),
       sb.from('game_pokemon_stats').select('game_id, pokemon_id, kills, deaths').eq('team_id', team.id),
-      sb.from('match_pokemon').select('match_id, pokemon_id').eq('team_id', team.id).in('match_id', matchIds),
+      // nickname/item/ability/moves come from teamsheet imports; null on rows
+      // entered before that existed, so the set block below is optional.
+      sb.from('match_pokemon').select('match_id, pokemon_id, nickname, item, ability, moves').eq('team_id', team.id).in('match_id', matchIds),
     ]);
     for (const r of [statsRes, mpRes]) if (r.error) throw r.error;
     (gamesRows || []).forEach(g => { (gamesByMatch[g.match_id] = gamesByMatch[g.match_id] || []).push(g); });
     statRows = statsRes.data || [];
     (mpRes.data || []).forEach(r => { (broughtByMatch[r.match_id] = broughtByMatch[r.match_id] || new Set()).add(r.pokemon_id); });
+
+    /* What this team actually brings on each mon, from their own teamsheets.
+       Summarized once here rather than per card, because every roster card
+       builds a popover and re-grouping 6 rows per card would be wasteful. */
+    sheetSets = {};
+    const byMon = {};
+    (mpRes.data || []).forEach(r => {
+      if (!r.ability && !r.item && !(r.moves && r.moves.length)) return;
+      (byMon[r.pokemon_id] = byMon[r.pokemon_id] || []).push(r);
+    });
+    Object.keys(byMon).forEach(pid => { sheetSets[pid] = summarizeSets(byMon[pid]); });
   }
 
   // Reset per-team view state and rebuild the transaction feed.
@@ -1107,6 +1128,26 @@ function buildDetailPopover(uid, row, mon, disp) {
     + '<div class="pop-sec"><div class="pop-lbl">Abilities</div><div class="pop-row">' + abilities + '</div></div>'
     + (statsHtml ? '<div class="pop-sec"><div class="pop-lbl">Base Stats</div>' + statsHtml + '</div>' : '')
     + '<div class="pop-sec"><div class="pop-lbl">Utility Moves</div><div class="pop-row">' + moves + '</div></div>'
+    /* What this team runs on it, as opposed to what the species can do. The
+       sections above are dex facts; this one is scouting. */
+    /* Rendered with the popover's own classes so it reads as part of the card
+       rather than a bolted-on panel: same micro-labels, same purple ability
+       pills, same neutral chips as the Abilities and Utility Moves sections. */
+    + (sheetSets[row.pokemon_id]
+        ? '<div class="pop-sec"><div class="pop-lbl pop-set-head">Usage Stats</div>'
+          /* Ability lives here rather than merged into the Abilities section
+             above: that one is the dex list of what the species can have, this
+             is what the team actually brought — and for a mega they are not even
+             the same value, since a sheet shows the pre-mega form. */
+          + renderTypicalHtml(sheetSets[row.pokemon_id], {
+              moveCount: 6,
+              showNicknames: true,
+              cls: { wrap: 'pop-set', label: 'pop-lbl', row: 'pop-row',
+                     chip: 'pop-move', abilityChip: 'pop-ability',
+                     share: 'pop-share', from: 'pop-from', inlineSingles: false },
+            })
+          + '</div>'
+        : '')
     + '<div class="pop-foot">' + weeks + '</div>';
   return pop;
 }
@@ -1366,6 +1407,7 @@ window.addEventListener('hashchange', () => {
 // BOOT
 // ─────────────────────────────────────────────────────────────────────────────
 async function init() {
+  injectSetStyles();   // shared teamsheet-set styling (teamsheet-sets.js)
   const banner = document.getElementById('boot-banner');
   try {
     await loadGlobalData();
