@@ -76,12 +76,29 @@ window.TeamsheetOCR = (function () {
     ability:  { x0: 0.08, x1: 0.44, y0: 0.30, y1: 0.50 },
     item:     { x0: 0.11, x1: 0.50, y0: 0.52, y1: 0.75 },
   };
-  const MOVE_X = { x0: 0.645, x1: 1.0 };
+  /* Move text only, excluding the type icon on its left and the panel edge and
+     translucent slot number on its right.
+
+     The window used to run 0.645 -> 1.0 and swept both of those in, which cost
+     nothing visible because the vocabulary quietly corrected it: only 64% of
+     moves were read exactly, and 53 of 61 single-character errors were a
+     spurious leading or trailing glyph — "4 Heat Wave", "w Kowtow Cleave",
+     "Helping Hand j", "Protect A". Tightening took exact reads to 92% and total
+     accuracy to 96%. Worth doing even though the vocabulary was hiding it: an
+     exact read does not depend on the move being in this mon's learnset, so it
+     survives dex gaps and unfamiliar moves. */
+  const MOVE_X = { x0: 0.665, x1: 0.975 };
   const MOVE_Y0 = 0.095, MOVE_STEP = 0.2367, MOVE_H = 0.16;
 
   function moveWin(k) {
     return { x0: MOVE_X.x0, x1: MOVE_X.x1, y0: MOVE_Y0 + k * MOVE_STEP, y1: MOVE_Y0 + k * MOVE_STEP + MOVE_H };
   }
+
+  /* Tried and rejected: re-reading starved panels with the old, wider window
+     (0.645 -> 1.0) to recover the two species the tighter crop costs on the
+     worst photo. It recovered nothing — that image's move text is degraded
+     rather than clipped — while adding about a second per sheet. The narrow
+     window is not what loses those two slots. */
 
   /* Crop, upscale and binarise one region.
 
@@ -275,7 +292,9 @@ window.TeamsheetOCR = (function () {
     const texts = await recognizeMany(crops, onProgress);
     return texts.map(raw => {
       const m = bestMatch(raw, rosterAbilities);
-      return { ability: m ? m.value : null, raw };
+      // `dist` is kept for measurement: 0 means the raw OCR text already equalled
+      // the vocabulary entry and the fuzzy match changed nothing.
+      return { ability: m ? m.value : null, raw, dist: m ? m.distance : null };
     });
   }
 
@@ -304,7 +323,7 @@ window.TeamsheetOCR = (function () {
       recognizeMany(fieldCrops, onProgress),
     ]);
 
-    return panels.map((p, i) => {
+    const out = panels.map((p, i) => {
       const base = i * 5;
       const vocab = vocabFor(i);
       const out = { nickname: null, item: null, moves: [], raw: {} };
@@ -315,6 +334,7 @@ window.TeamsheetOCR = (function () {
       out.raw.item = texts[base];
       const it = bestMatch(out.raw.item, vocab.items);
       out.item = it ? it.value : null;
+      out.dist = { item: it ? it.distance : null, moves: [] };
 
       out.raw.moves = [];
       for (let k = 0; k < 4; k++) {
@@ -328,10 +348,12 @@ window.TeamsheetOCR = (function () {
            A real move matched loosely beats no move at all. */
         const mv = bestMatch(rawMove, vocab.moves) ||
                    bestMatch(rawMove, vocab.allMoves || vocab.moves);
-        if (mv) out.moves.push(mv.value);
+        if (mv) { out.moves.push(mv.value); out.dist.moves.push(mv.distance); }
       }
       return out;
     });
+
+    return out;
   }
 
   /* Tried and rejected: disabling Tesseract's English dictionaries for this

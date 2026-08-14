@@ -196,6 +196,7 @@ window.Teamsheet = (function () {
       abilities.forEach((a, i) => {
         slots[i].ability = a.ability || null;
         slots[i].raw = Object.assign(slots[i].raw || {}, { ability: a.raw });
+        slots[i].dist = Object.assign(slots[i].dist || {}, { ability: a.dist });
       });
 
       const ownersOf = ability => rosterIds.filter(id => {
@@ -282,6 +283,7 @@ window.Teamsheet = (function () {
         s.item = t.item || null;
         s.moves = t.moves || [];
         s.raw = Object.assign(s.raw || {}, t.raw);
+        s.dist = Object.assign(s.dist || {}, t.dist || {});
 
         /* The "prefer the raw OCR text for mega stones" rule that used to live
            here is gone. It existed because the generated stone names were wrong,
@@ -309,14 +311,14 @@ window.Teamsheet = (function () {
         if (s.pokemon_id || !s.moves || s.moves.length < 2) return;
         const keys = s.moves.map(tsNorm);
         const inUse = new Set(slots.map(x => x.pokemon_id).filter(Boolean));
-        const fits = rosterIds.filter(id => {
-          // `claimed` covers the ability pass; `inUse` also covers slots the
-          // type icons filled, which claimed deliberately does not track.
+
+        const scoredFits = rosterIds.filter(id => {
           if (claimed.has(id) || inUse.has(id)) return false;
           const learn = learnsetFor(index, displayEntry(index, id));
           return learn.length && keys.every(k => learn.indexOf(k) !== -1);
         });
-        if (fits.length !== 1) return;
+        if (scoredFits.length !== 1) return;
+        const fits = scoredFits;
         assign(i, fits[0], 'moves', 'only ' + ((index.byId.get(fits[0]) || {}).name || fits[0]) +
           ' can learn all of them');
         s.confidence = 'medium';   // moves are a weaker signal than a unique ability

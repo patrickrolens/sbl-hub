@@ -1901,6 +1901,29 @@ function renderTeamsheetPanel(m, model) {
 
   const msg = document.createElement('div');
   msg.style.cssText = 'font-size:11px;margin-bottom:8px;display:none;white-space:pre-wrap;line-height:1.5;';
+
+  /* The sheet being reviewed, shown beside its parsed fields. Verifying a
+     doubtful nickname or move otherwise means opening the image separately —
+     the whole point of the review step is comparing the two. Click to enlarge,
+     since the thumbnail is too small to read the small text. */
+  const preview = document.createElement('img');
+  preview.style.cssText = 'display:none;max-width:100%;border:1px solid var(--border);' +
+    'border-radius:6px;margin-bottom:8px;cursor:zoom-in;';
+  preview.onclick = () => {
+    const big = preview.style.position === 'fixed';
+    preview.style.cssText = big
+      ? 'display:block;max-width:100%;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;cursor:zoom-in;'
+      : 'display:block;position:fixed;inset:10px;width:auto;height:auto;max-width:calc(100vw - 20px);' +
+        'max-height:calc(100vh - 20px);object-fit:contain;background:#000;z-index:60;cursor:zoom-out;';
+  };
+  let previewUrl = null;
+  function showPreview(file) {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file);
+    preview.src = previewUrl;
+    preview.style.display = 'block';
+  }
+
   const grid = document.createElement('div');
 
   function setMsg(text, kind) {
@@ -1911,6 +1934,10 @@ function renderTeamsheetPanel(m, model) {
   }
 
   function showResult(ir) {
+    // Shrink the drop target once it has done its job, so the review grid is
+    // not pushed down the page behind a large empty box.
+    drop.style.padding = '6px';
+    drop.textContent = 'Drop another screenshot to re-read this sheet';
     const draft = teamsheetDrafts[m.id] = { side: sideSel.value, slots: ir.slots };
     const filled = ir.slots.filter(s => s.pokemon_id).length;
     const blanks = ir.slots.length - filled;
@@ -2114,11 +2141,11 @@ function renderTeamsheetPanel(m, model) {
     }
   }
 
-  fileIn.onchange = () => { if (fileIn.files && fileIn.files[0]) runImage(fileIn.files[0]); };
+  fileIn.onchange = () => { if (fileIn.files && fileIn.files[0]) { showPreview(fileIn.files[0]); runImage(fileIn.files[0]); } };
   drop.ondrop = e => {
     e.preventDefault();
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) runImage(f);
+    if (f) { showPreview(f); runImage(f); }
   };
 
   urlBtn.onclick = async () => {
@@ -2148,6 +2175,7 @@ function renderTeamsheetPanel(m, model) {
   bodyEl.appendChild(drop);
   bodyEl.appendChild(fileIn);
   bodyEl.appendChild(msg);
+  bodyEl.appendChild(preview);
   bodyEl.appendChild(grid);
   wrap.appendChild(head);
   wrap.appendChild(bodyEl);
