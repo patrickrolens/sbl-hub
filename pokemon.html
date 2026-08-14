@@ -576,11 +576,11 @@ async function loadMonStats(pokemonId) {
         /* getTeamLabel() takes a team row, not an id, and this page has no teams
            lookup of its own — fetch just the ones that appear on these sheets. */
         const teamIds = [...new Set(sheetRows.map(r => r.team_id))].filter(Boolean);
-        const teamRes = teamIds.length
-          ? await sb.from('teams').select('id,name,slug,season_id').in('id', teamIds)
-          : { data: [] };
+        const teamRows = teamIds.length
+          ? await fetchAllIn('teams', 'id,name,slug,season_id', 'id', teamIds)
+          : [];
         const teamById = {};
-        (teamRes.data || []).forEach(t => { teamById[t.id] = t; });
+        teamRows.forEach(t => { teamById[t.id] = t; });
         const league = summariseSets(sheetRows);
         const byTeam = {};
         sheetRows.forEach(r => { (byTeam[r.team_id] = byTeam[r.team_id] || []).push(r); });

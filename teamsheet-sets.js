@@ -22,7 +22,13 @@ async function fetchSheetRows(extra) {
   return paginate(() => {
     let qb = dbClient().from('match_pokemon').select(TS_SET_COLS).not('ability', 'is', null);
     (extra || []).forEach(([col, op, val]) => { qb = qb.filter(col, op, val); });
-    return qb.order('match_id');
+    /* .order('id'), not match_id: paginate() pages with .range(), and twelve rows
+       share a match_id (six a side), so ordering on it leaves ties in undefined
+       order and a page boundary can drop or repeat rows. The primary key is the
+       only unique column here — the same reason fetchAll/fetchAllIn order by id.
+       Harmless at today's row count, wrong once a season passes 1000 sheet rows,
+       which a full 14-team season does. */
+    return qb.order('id');
   });
 }
 
