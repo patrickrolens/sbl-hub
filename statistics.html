@@ -38,7 +38,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .table-card { padding-top: 14px; }
 
 /* ─── 2-UP VISUAL GRID ─── */
-.viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+/* No margin-bottom: .wrap is a flex column with gap:14px, so one would stack on
+   top of the gap and leave 28px below the grid where every other card sits 14
+   apart. The gap alone spaces it. */
+.viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .viz-grid .viz-full { grid-column: 1 / -1; }
 .viz { min-width: 0; }
 /* Collapse-all bar above the 2×2 grid. */
@@ -49,7 +52,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 #pack-card.collapsed .scatter-wrap { display: none; }
 
 /* ─── CHART HEADER (shared by every visual) ─── */
-.scatter-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-bottom: 10px; }
+/* min-height matches a head containing a <select> (the tallest control). The row
+   is centred, so without it a head holding only a button — or only a title —
+   is shorter and its title sits at a different height from the cards beside it. */
+.scatter-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-bottom: 10px; min-height: 32px; }
 .scatter-head .scatter-btns { justify-self: start; display: flex; gap: 6px; }
 .scatter-head .scatter-title { grid-column: 2; margin: 0; text-align: center; font-size: 14px; color: var(--text); }
 .scatter-head .field, .scatter-head .hist-controls { justify-self: end; }
@@ -199,11 +205,6 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
   .viz-modal-filter, .viz-modal-controls { flex-basis: 100%; }
 }
 #sheet-card.collapsed .sheet-body { display: none; }
-/* The chart cards put a select in the head, which fills the row and carries its
-   own visual weight; this head holds only the collapse button, so the standard
-   10px below it plus a column heading read as a gap the other cards don't have.
-   Trimmed here so the first bar sits about as far below the title as a chart. */
-#sheet-card .scatter-head { margin-bottom: 2px; }
 .sheet-split { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 @media (max-width: 860px) { .sheet-split { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .sheet-split { grid-template-columns: 1fr; } }
@@ -369,6 +370,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
   </div>
 
   <div class="card table-card">
+    <!-- scatter-head with only a title: its grid puts .scatter-title in column 2,
+         so this centres and spaces exactly like the chart card titles above. -->
+    <div class="scatter-head">
+      <div class="card-title scatter-title">Pokémon</div>
+    </div>
     <div class="table-scroll">
       <table class="tbl" id="stats-table"></table>
     </div>
