@@ -348,6 +348,14 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
       <div class="scatter-head">
         <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('sheet-card')" title="Hide chart" aria-label="Hide chart">▾</button></div>
         <div class="card-title scatter-title">Common Sets</div>
+        <div class="hist-controls">
+          <div class="field"><label>Count</label>
+            <select id="sheet-mode" onchange="renderSheetUsage()">
+              <option value="sheet" selected>On the sheet</option>
+              <option value="played">Sent out in a game</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="sheet-body">
         <div class="sheet-split">
@@ -590,6 +598,7 @@ function applyFilters() {
   renderHistogram();
   renderBoxPlot();
   renderPack();
+  renderSheetUsage();
   // The matrix is filter-independent (teams, not Pokémon), but re-render if it's the
   // open modal so its sizing stays correct.
   if (modalChart === 'matrix') renderMatrix();
@@ -1408,13 +1417,55 @@ async function loadSheetUsage() {
 
 function renderSheetUsage() {
   if (!sheetUsageRows) return;
-  const sum = summariseSets(sheetUsageRows);
+  /* Honours the filter bar like the table and charts do. A sheet row is per
+     match+team+Pokémon while `filtered` is per team+Pokémon, so the pair is what
+     matches — which also keeps a traded Pokémon's two stints distinct.
+
+     Note the Min games default of 1 excludes anything brought but never sent
+     out, so the unfiltered total here is lower than the raw sheet-row count. */
+  const allowed = new Set(filtered.map(r => r.team_id + '|' + r.pokemon_id));
+  let rows = sheetUsageRows.filter(r => allowed.has(r.team_id + '|' + r.pokemon_id));
+
+  /* "Sent out in a game" narrows to sheet rows where the Pokémon actually
+     appeared, judged per match rather than per season: a mon can be on the
+     sheet in week 3 having played in week 1, and that week-3 sheet still
+     describes something it was never sent out with. */
+  const modeEl = document.getElementById('sheet-mode');
+  const playedOnly = modeEl && modeEl.value === 'played';
+  if (playedOnly) {
+    const seen = playedAppearances();
+    rows = rows.filter(r => seen.has(r.match_id + '|' + r.team_id + '|' + r.pokemon_id));
+  }
+
+  const sum = summariseSets(rows);
   // Counted per brought Pokémon, so a move on two of a team's six counts twice.
   bars('sheet-abilities', sum.abilities, 12);
   bars('sheet-items', sum.items, 12);
   bars('sheet-moves', sum.moves, 12);
   const foot = document.getElementById('sheet-foot');
-  if (foot) foot.textContent = 'across ' + sum.sheets + ' brought Pokémon from imported teamsheets';
+  if (!foot) return;
+  const total = sheetUsageRows.length;
+  const count = sum.sheets === total ? String(sum.sheets) : sum.sheets + ' of ' + total;
+  foot.textContent = 'across ' + count + ' brought Pokémon' +
+    (playedOnly ? ' that were sent out in a game' : ' from imported teamsheets');
+}
+
+/* match|team|pokemon keys for every Pokémon that actually appeared in a game.
+   statsByTP is keyed team|pokemon and holds per-game rows, so mapping each game
+   back through gameToMatch gives the per-match answer the card needs. Built on
+   demand rather than cached: it costs one pass over the stat rows and the
+   indexes it reads are rebuilt whenever the season changes. */
+function playedAppearances() {
+  const seen = new Set();
+  Object.keys(statsByTP).forEach(key => {
+    const cut = key.indexOf('|');
+    const teamId = key.slice(0, cut), pid = key.slice(cut + 1);
+    statsByTP[key].forEach(st => {
+      const mid = gameToMatch[st.game_id];
+      if (mid) seen.add(mid + '|' + teamId + '|' + pid);
+    });
+  });
+  return seen;
 }
 
 // A bar per row: a sorted list is the honest shape for this, and it avoids
