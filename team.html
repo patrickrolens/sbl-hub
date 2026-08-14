@@ -1141,6 +1141,7 @@ function buildDetailPopover(uid, row, mon, disp) {
              the same value, since a sheet shows the pre-mega form. */
           + renderTypicalHtml(sheetSets[row.pokemon_id], {
               moveCount: 6,
+              showNicknames: true,
               cls: { wrap: 'pop-set', label: 'pop-lbl', row: 'pop-row',
                      chip: 'pop-move', abilityChip: 'pop-ability',
                      share: 'pop-share', from: 'pop-from', inlineSingles: false },

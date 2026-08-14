@@ -111,17 +111,27 @@ function renderTypicalHtml(sum, opts) {
      is the default because it is what pokemon.html already looked like; a host
      page wanting everything as chips passes cls.inlineSingles = false, which is
      what the team popover does to match its own card language. */
-  const inline = entries => '<div class="' + c.label + '"><b>' +
-    (entries === sum.abilities ? 'Ability' : 'Item') + '</b> ' +
+  const inline = (entries, name) => '<div class="' + c.label + '"><b>' + name + '</b> ' +
     entries.map(e => tsShare(e, sum.sheets)).join(' <span class="ts-or">·</span> ') + '</div>';
 
   const parts = [];
   const asChips = c.inlineSingles === false;
+
+  /* Nicknames are opt-in (opts.showNicknames). They are the one field here that
+     says nothing about how the Pokémon is built, so a page showing a set to
+     answer "what does it run" does not want them — but on a roster card they
+     are the whole point, since the nickname is what the opponent actually saw.
+     Rendered first: it is a name, and names go above the thing they name. */
+  if (o.showNicknames && sum.nicknames && sum.nicknames.length) {
+    parts.push(asChips
+      ? label('Nickname') + row(sum.nicknames, c.chip)
+      : inline(sum.nicknames, 'Nickname'));
+  }
   if (sum.abilities.length) {
-    parts.push(asChips ? label('Ability') + row(sum.abilities, c.abilityChip) : inline(sum.abilities));
+    parts.push(asChips ? label('Ability') + row(sum.abilities, c.abilityChip) : inline(sum.abilities, 'Ability'));
   }
   if (sum.items.length) {
-    parts.push(asChips ? label('Item') + row(sum.items, c.chip) : inline(sum.items));
+    parts.push(asChips ? label('Item') + row(sum.items, c.chip) : inline(sum.items, 'Item'));
   }
   if (topMoves.length) parts.push(label('Moves') + row(topMoves, c.chip));
   return '<div class="' + c.wrap + '">' + parts.join('') +

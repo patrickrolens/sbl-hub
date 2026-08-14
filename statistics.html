@@ -54,8 +54,14 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 /* ─── CHART HEADER (shared by every visual) ─── */
 /* min-height matches a head containing a <select> (the tallest control). The row
    is centred, so without it a head holding only a button — or only a title —
-   is shorter and its title sits at a different height from the cards beside it. */
-.scatter-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-bottom: 10px; min-height: 32px; }
+   is shorter and its title sits at a different height from the cards beside it.
+
+   Columns are 1fr auto 1fr so the title is genuinely centred on the card. With
+   `auto 1fr auto` the title sat in the leftover space and centred on that, which
+   is only the card's centre when the buttons and the controls happen to be the
+   same width — they never are, so every title was off by 58-181px. */
+.scatter-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin-bottom: 10px; min-height: 32px; }
+.scatter-head .scatter-btns { justify-self: start; }
 .scatter-head .scatter-btns { justify-self: start; display: flex; gap: 6px; }
 .scatter-head .scatter-title { grid-column: 2; margin: 0; text-align: center; font-size: 14px; color: var(--text); }
 .scatter-head .field, .scatter-head .hist-controls { justify-self: end; }
