@@ -12,10 +12,10 @@
    floor returns null rather than a guess.
    ============================================================================ */
 
-/* Calibrated from the labelled fixtures (see calibrate-type-icons.js), inlined
+/* Calibrated from the labeled fixtures (see calibrate-type-icons.js), inlined
    rather than fetched because tools/ is gitignored and never deploys — the
    admin page must carry this table with it. */
-const TYPE_COLOURS = {
+const TYPE_COLORS = {
   Normal: [159, 159, 160], Fire: [207, 40, 43], Water: [42, 126, 232],
   Electric: [250, 192, 71], Grass: [68, 153, 66], Ice: [111, 216, 255],
   Fighting: [225, 116, 100], Poison: [144, 64, 204], Ground: [144, 81, 52],
@@ -24,12 +24,12 @@ const TYPE_COLOURS = {
   Dark: [80, 65, 66], Steel: [97, 160, 184], Fairy: [218, 112, 233],
 };
 
-function colourDist(a, b) {
+function colorDist(a, b) {
   return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
 }
 
 // 0..1, where 1 is exact. 300 total-channel error is treated as no match.
-function colourScore(a, b) { return Math.max(0, 1 - colourDist(a, b) / 300); }
+function colorScore(a, b) { return Math.max(0, 1 - colorDist(a, b) / 300); }
 
 /* Score one candidate against an icon row.
 
@@ -46,8 +46,8 @@ function scoreCandidate(icons, types) {
   for (const perm of perms) {
     let sum = 0;
     perm.forEach((ti, k) => {
-      const want = TYPE_COLOURS[types[ti]];
-      sum += want ? colourScore(tail[k].colour, want) : 0;
+      const want = TYPE_COLORS[types[ti]];
+      sum += want ? colorScore(tail[k].color, want) : 0;
     });
     best = Math.max(best, sum / types.length);
   }
@@ -72,12 +72,12 @@ function scoreCandidate(icons, types) {
 }
 
 /* Rejected: disqualifying a candidate whose tail icon sits nearer a gender
-   colour than the type it is matched against.
+   color than the type it is matched against.
 
    The motivating failure is real — Blaziken (male/Fire/Fighting) lost two icons
    and the leftover blue gender marker was confidently read as mono-Water
    Blastoise. But the guard cost more than it saved, 1 wrong -> 2 wrong, because
-   several real types sit close to the gender colours (Dragon by male blue,
+   several real types sit close to the gender colors (Dragon by male blue,
    Psychic and Fairy by female red). It disqualified the CORRECT candidate on
    panels whose rows were merely imperfect, which raised the runner-up's margin
    past the confidence floor and converted blanks into wrong answers.
@@ -126,12 +126,12 @@ function identifySpecies(panelIcons, candidates) {
       ranked: ranked.slice(0, 3).map(r => ({ id: r.id, s: +r.s.toFixed(3) })),
       // Surfaced so the review grid can show what was actually read when a slot
       // comes back blank, instead of just an empty box.
-      icons: panelIcons[p].map(ch => ch.colour),
+      icons: panelIcons[p].map(ch => ch.color),
     };
   }
   return out;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { TYPE_COLOURS, identifySpecies, scoreCandidate };
+  module.exports = { TYPE_COLORS, identifySpecies, scoreCandidate };
 }

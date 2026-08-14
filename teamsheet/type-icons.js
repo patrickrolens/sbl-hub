@@ -7,7 +7,7 @@
    roster — so these icons, not the sprite, are the primary species signal.
 
    They are also the easiest thing on the sheet to read: flat blocks of solid
-   colour at a fixed position, with no fine detail to lose. That is what makes
+   color at a fixed position, with no fine detail to lose. That is what makes
    them survive the moire, keystone and JPEG artifacts that defeated silhouette
    matching on photographed screens.
    ============================================================================ */
@@ -32,7 +32,7 @@ function typeIconStripCanvas(img, panel, scale) {
 /* Type icons are found as blocks that differ from the header's purple, NOT by
    saturation: the Normal-type icon is grey and the Steel/Ice icons are pale,
    so a saturation threshold silently drops them. The background is estimated
-   as the strip's modal colour, which is safe because the header pill is by far
+   as the strip's modal color, which is safe because the header pill is by far
    the largest flat region in the window. */
 function extractTypeIcons(img, panel, scale) {
   const cv = typeIconStripCanvas(img, panel, scale);
@@ -82,7 +82,7 @@ function extractTypeIcons(img, panel, scale) {
     if (bw / bh < 0.65 || bw / bh > 1.5) continue;
     if (area < bw * bh * 0.5) continue;
 
-    /* Icon colour = median of its pixels after dropping the glyph. The glyph is
+    /* Icon color = median of its pixels after dropping the glyph. The glyph is
        near-white or near-black and would drag a mean toward grey; a median over
        the remaining body is stable even when the icon is only ~20px across. */
     const rs = [], gs = [], bs = [];
@@ -95,7 +95,7 @@ function extractTypeIcons(img, panel, scale) {
     }
     if (rs.length < 12) continue;
     const med = a => { a.sort((x, y) => x - y); return a[a.length >> 1]; };
-    out.push({ x: x0, w: bw, h: bh, colour: [med(rs), med(gs), med(bs)] });
+    out.push({ x: x0, w: bw, h: bh, color: [med(rs), med(gs), med(bs)] });
   }
   out.sort((a, b) => a.x - b.x);
   return out;
@@ -104,10 +104,10 @@ function extractTypeIcons(img, panel, scale) {
 /* Rejected alternative: sampling fixed positions instead of finding blobs.
 
    The icon row is right-aligned and evenly spaced, so reading a patch at each
-   predicted centre looked immune to the blur that costs blob detection its
+   predicted center looked immune to the blur that costs blob detection its
    icons on photographed screens. Measured, it is worse — 16/54 slots against
-   39/54 — because the predicted centres are not stable: keystone shifts the
-   whole header, moving icon centres by 15px+ between fixtures, and the patches
+   39/54 — because the predicted centers are not stable: keystone shifts the
+   whole header, moving icon centers by 15px+ between fixtures, and the patches
    land between icons and return header purple. Detection has to follow the
    icons rather than assume where they are. */
 

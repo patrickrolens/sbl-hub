@@ -39,7 +39,7 @@ async function fetchSheetRows(extra) {
    individually rather than as a set: a four-move slot is rarely identical twice,
    but the individual moves repeat, and "always brings Protect" is the useful
    fact. */
-function summariseSets(rows) {
+function summarizeSets(rows) {
   const tally = (list) => {
     const c = {};
     list.forEach(v => { if (v) c[v] = (c[v] || 0) + 1; });
@@ -80,7 +80,7 @@ function renderSetHtml(row) {
   return '<div class="ts-set">' + head + mv + '</div>';
 }
 
-/* The "usually runs" block, from summariseSets output.
+/* The "usually runs" block, from summarizeSets output.
 
    `opts.cls` lets a host page supply its own class names so the block adopts
    that page's existing visual language instead of importing a second one. The
@@ -99,7 +99,7 @@ function renderTypicalHtml(sum, opts) {
   const topMoves = sum.moves.slice(0, o.moveCount || 6);
 
   /* All three fields render as the same kind of row. Abilities and items used to
-     be plain labelled text while moves were chips, which read as three different
+     be plain labeled text while moves were chips, which read as three different
      kinds of information when they are the same kind — a value, its count, and
      possibly an alternative. */
   const row = (entries, chipCls) => '<div class="' + c.row + '">' + entries.map(e =>
@@ -142,7 +142,7 @@ function renderTypicalHtml(sum, opts) {
    its own <style>, so a single call keeps the set blocks identical everywhere
    rather than five near-copies drifting apart.
 
-   Colours come from tokens.css via bare var() with no fallback, the same way
+   Colors come from tokens.css via bare var() with no fallback, the same way
    the rest of the site writes them. A fallback here would be a second copy of
    the palette that no one maintains — the ones this used to carry had all
    drifted a shade or two from the real tokens. */
@@ -160,7 +160,7 @@ function injectSetStyles() {
     '.ts-share{opacity:.6;font-size:10px}',
     '.ts-or{opacity:.4;margin:0 1px}',
     '.ts-typical .ts-line b{color:var(--text2);font-weight:600;margin-right:4px}',
-    // Colour stated rather than inherited: inside .ts-set it already resolves
+    // Color stated rather than inherited: inside .ts-set it already resolves
     // to text3, but used on its own (statistics' card footer) it inherited full
     // --text and read as body copy instead of a footnote.
     '.ts-from{margin-top:4px;opacity:.65;font-size:10px;color:var(--text3)}',

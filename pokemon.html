@@ -581,11 +581,11 @@ async function loadMonStats(pokemonId) {
           : [];
         const teamById = {};
         teamRows.forEach(t => { teamById[t.id] = t; });
-        const league = summariseSets(sheetRows);
+        const league = summarizeSets(sheetRows);
         const byTeam = {};
         sheetRows.forEach(r => { (byTeam[r.team_id] = byTeam[r.team_id] || []).push(r); });
         const teamBlocks = Object.keys(byTeam)
-          .map(tid => ({ tid, sum: summariseSets(byTeam[tid]) }))
+          .map(tid => ({ tid, sum: summarizeSets(byTeam[tid]) }))
           .sort((a, b) => b.sum.sheets - a.sum.sheets)
           .map(({ tid, sum }) => '<div class="ts-team-block"><div class="ts-team-name">'
             + escapeHtml(getTeamLabel(teamById[tid])) + '</div>'

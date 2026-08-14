@@ -189,7 +189,7 @@ window.TeamsheetOCR = (function () {
      what makes splitting the work across a worker pool straightforward.
 
      Rows are laid out at known y offsets and results are mapped back by each
-     line's vertical centre, not by order: a region that reads as blank produces
+     line's vertical center, not by order: a region that reads as blank produces
      no line at all, and positional mapping would shift every later field up. */
   const ROW_PAD = 14;
 
@@ -233,7 +233,7 @@ window.TeamsheetOCR = (function () {
     return poolPromise;
   }
 
-  // Split the regions across the pool and recognise the chunks concurrently.
+  // Split the regions across the pool and recognize the chunks concurrently.
   async function recognizeMany(canvases, onProgress, charset, extraParams) {
     const pool = await getPool(onProgress);
     if (pool.length < 2 || canvases.length < 4) {
@@ -304,8 +304,8 @@ window.TeamsheetOCR = (function () {
   async function readDetails(img, panels, scale, vocabFor, onProgress) {
     if (onProgress) onProgress('Reading sheet text…');
 
-    // One stack for the whole sheet: 36 regions, one recognise call.
-    /* Nicknames are recognised separately from everything else because they need
+    // One stack for the whole sheet: 36 regions, one recognize call.
+    /* Nicknames are recognized separately from everything else because they need
        different character rules. Items, abilities and moves come from closed
        vocabularies, so a tight whitelist helps them; nicknames are player-chosen
        free text, and that same whitelist was silently deleting real characters —
@@ -360,7 +360,7 @@ window.TeamsheetOCR = (function () {
      pass (load_system_dawg/load_freq_dawg = 0), on the theory that word bias was
      suppressing the punctuation players use. Measured identical — 86% either
      way, with the same five misses and the same lost glyphs. The dictionary is
-     not what drops "/" from PlayW/MyWyrm or "#" from #1TripFan; the recogniser
+     not what drops "/" from PlayW/MyWyrm or "#" from #1TripFan; the recognizer
      simply does not emit those shapes at this resolution. Widening the
      whitelist stopped them being deleted, but permitting a glyph does not make
      Tesseract predict it. */

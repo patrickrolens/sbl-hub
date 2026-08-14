@@ -507,7 +507,7 @@ let statRows     = [];      // game_pokemon_stats rows for this team
 let regularRecords = {};    // team_id -> { w, l, winRate } over regular season (for OW%)
 let regularOpponents = {};  // team_id -> [opponent_id, …] over regular season (for OOW%)
 let broughtByMatch = {};    // match_id -> Set(pokemon_id) brought by THIS team (from match_pokemon)
-let sheetSets = {};         // pokemon_id -> summariseSets() over THIS team's teamsheets
+let sheetSets = {};         // pokemon_id -> summarizeSets() over THIS team's teamsheets
 let txns         = [];      // unified transaction feed (free agency + trades)
 let pokemonById  = {};      // id -> pokemon.json entry
 let currentUser  = null;
@@ -703,7 +703,7 @@ async function loadTeamData() {
     (mpRes.data || []).forEach(r => { (broughtByMatch[r.match_id] = broughtByMatch[r.match_id] || new Set()).add(r.pokemon_id); });
 
     /* What this team actually brings on each mon, from their own teamsheets.
-       Summarised once here rather than per card, because every roster card
+       Summarized once here rather than per card, because every roster card
        builds a popover and re-grouping 6 rows per card would be wasteful. */
     sheetSets = {};
     const byMon = {};
@@ -711,7 +711,7 @@ async function loadTeamData() {
       if (!r.ability && !r.item && !(r.moves && r.moves.length)) return;
       (byMon[r.pokemon_id] = byMon[r.pokemon_id] || []).push(r);
     });
-    Object.keys(byMon).forEach(pid => { sheetSets[pid] = summariseSets(byMon[pid]); });
+    Object.keys(byMon).forEach(pid => { sheetSets[pid] = summarizeSets(byMon[pid]); });
   }
 
   // Reset per-team view state and rebuild the transaction feed.

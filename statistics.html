@@ -53,12 +53,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 /* ─── CHART HEADER (shared by every visual) ─── */
 /* min-height matches a head containing a <select> (the tallest control). The row
-   is centred, so without it a head holding only a button — or only a title —
+   is centered, so without it a head holding only a button — or only a title —
    is shorter and its title sits at a different height from the cards beside it.
 
-   Columns are 1fr auto 1fr so the title is genuinely centred on the card. With
-   `auto 1fr auto` the title sat in the leftover space and centred on that, which
-   is only the card's centre when the buttons and the controls happen to be the
+   Columns are 1fr auto 1fr so the title is genuinely centered on the card. With
+   `auto 1fr auto` the title sat in the leftover space and centered on that, which
+   is only the card's center when the buttons and the controls happen to be the
    same width — they never are, so every title was off by 58-181px. */
 .scatter-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin-bottom: 10px; min-height: 32px; }
 .scatter-head .scatter-btns { justify-self: start; }
@@ -407,7 +407,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 
   <div class="card table-card">
     <!-- scatter-head with only a title: its grid puts .scatter-title in column 2,
-         so this centres and spaces exactly like the chart card titles above. -->
+         so this centers and spaces exactly like the chart card titles above. -->
     <div class="scatter-head">
       <div class="card-title scatter-title">Pokémon</div>
     </div>
@@ -1456,7 +1456,7 @@ async function loadSheetUsage() {
 
 function renderSheetUsage() {
   if (!sheetUsageRows) return;
-  /* Honours the filter bar like the table and charts do. A sheet row is per
+  /* Honors the filter bar like the table and charts do. A sheet row is per
      match+team+Pokémon while an instance is per team+Pokémon, so the pair is
      what matches — which also keeps a traded Pokémon's two stints distinct.
 
@@ -1490,7 +1490,7 @@ function renderSheetUsage() {
     if (query) renderSheetFind(rows, query, found);
   }
 
-  const sum = summariseSets(rows);
+  const sum = summarizeSets(rows);
   // Counted per brought Pokémon, so a move on two of a team's six counts twice.
   bars('sheet-abilities', sum.abilities, 12);
   bars('sheet-items', sum.items, 12);
