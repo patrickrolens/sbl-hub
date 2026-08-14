@@ -199,11 +199,16 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
   .viz-modal-filter, .viz-modal-controls { flex-basis: 100%; }
 }
 #sheet-card.collapsed .sheet-body { display: none; }
+/* The chart cards put a select in the head, which fills the row and carries its
+   own visual weight; this head holds only the collapse button, so the standard
+   10px below it plus a column heading read as a gap the other cards don't have.
+   Trimmed here so the first bar sits about as far below the title as a chart. */
+#sheet-card .scatter-head { margin-bottom: 2px; }
 .sheet-split { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 @media (max-width: 860px) { .sheet-split { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .sheet-split { grid-template-columns: 1fr; } }
 /* Same uppercase micro-label the cards use for their own titles, one step down. */
-.sheet-col-title { font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.sheet-col-title { font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin-bottom: 5px; }
 .sheet-bars { display: flex; flex-direction: column; gap: 3px; }
 .sheet-bar-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
 .sheet-bar-label { flex: 0 0 120px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
