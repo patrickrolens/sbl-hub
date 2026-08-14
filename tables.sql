@@ -177,6 +177,15 @@ CREATE TABLE public.match_pokemon(
     team_id uuid references public.teams(id),  -- no ON DELETE action, unlike match_id above (confirmed
                                                  -- via pg_constraint; likely inconsistency, not intentional)
     pokemon_id text not null,
+    -- Teamsheet detail, all nullable and never backfilled: rows predating the
+    -- importer, and any brought-six entered by hand, simply leave these null.
+    -- `moves` is text[] rather than move1..move4 so "who brought Trick Room"
+    -- is a containment query. No tera_type (tera is draft-level, see
+    -- team_pokemon.is_tera) and no gender (the league does not track it).
+    nickname text,
+    item text,
+    ability text,
+    moves text[],
     -- match_id/team_id are nullable live despite the app always populating both on
     -- insert — likely an oversight when this table was created rather than intentional.
     constraint unique_match_pokemon unique(match_id, team_id, pokemon_id)
