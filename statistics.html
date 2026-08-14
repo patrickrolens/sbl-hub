@@ -577,21 +577,32 @@ function buildInstances() {
 // ─────────────────────────────────────────────────────────────────────────────
 // FILTER + SORT + RENDER
 // ─────────────────────────────────────────────────────────────────────────────
-function applyFilters() {
+/* The filter-bar predicate, shared so nothing re-implements it.
+
+   `skipMinGames` exists for Common Sets. Min games is a season-level cut on
+   games played, which would silently delete exactly the Pokémon that card's own
+   "On the sheet" mode is meant to show — one brought to a match but never sent
+   out has gpCount 0 and fails any Min games above 0. Both controls govern the
+   same axis, so the card's toggle owns it there and this one steps aside. */
+function filterPredicate(skipMinGames) {
   const q = (document.getElementById('f-search').value || '').trim().toLowerCase();
   const team = document.getElementById('f-team').value;
   const status = document.getElementById('f-status').value;
   const type = document.getElementById('f-type').value;
   const minGp = Math.max(0, parseInt(document.getElementById('f-mingp').value, 10) || 0);
-  filtered = instances.filter(r => {
+  return r => {
     if (q && !r.name.toLowerCase().includes(q)) return false;
     if (team !== 'all' && r.team_id !== team) return false;
     if (status === 'active' && !r.active) return false;
     if (status === 'inactive' && r.active) return false;
     if (type !== 'all' && r.type1 !== type && r.type2 !== type) return false;
-    if (r.gpCount < minGp) return false;
+    if (!skipMinGames && r.gpCount < minGp) return false;
     return true;
-  });
+  };
+}
+
+function applyFilters() {
+  filtered = instances.filter(filterPredicate(false));
   document.getElementById('row-count').textContent = filtered.length + ' of ' + instances.length + ' Pokémon';
   renderTable();
   renderScatter();
@@ -1418,12 +1429,14 @@ async function loadSheetUsage() {
 function renderSheetUsage() {
   if (!sheetUsageRows) return;
   /* Honours the filter bar like the table and charts do. A sheet row is per
-     match+team+Pokémon while `filtered` is per team+Pokémon, so the pair is what
-     matches — which also keeps a traded Pokémon's two stints distinct.
+     match+team+Pokémon while an instance is per team+Pokémon, so the pair is
+     what matches — which also keeps a traded Pokémon's two stints distinct.
 
-     Note the Min games default of 1 excludes anything brought but never sent
-     out, so the unfiltered total here is lower than the raw sheet-row count. */
-  const allowed = new Set(filtered.map(r => r.team_id + '|' + r.pokemon_id));
+     Filtered here rather than reusing `filtered` so Min games can be skipped;
+     see filterPredicate. Without that, a Pokémon brought but never sent out
+     (Ulico's Maushold, gpCount 0) vanished from both modes of this card. */
+  const allowed = new Set(instances.filter(filterPredicate(true))
+    .map(r => r.team_id + '|' + r.pokemon_id));
   let rows = sheetUsageRows.filter(r => allowed.has(r.team_id + '|' + r.pokemon_id));
 
   /* "Sent out in a game" narrows to sheet rows where the Pokémon actually
