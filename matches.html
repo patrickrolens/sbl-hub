@@ -154,6 +154,13 @@ a { color: inherit; }
 @media (max-width: 768px) {
   .week-grid { grid-template-columns: 1fr; }
 }
+/* Brought-icon tooltip: the teamsheet set, a rule, then the match stats.
+   The set block itself is .ts-set from teamsheet-sets.js — only the bits
+   specific to sitting inside a tooltip are set here. */
+#sbl-tip .ts-set { margin-top: 0; color: var(--text2); }  /* text3 is too dim on the tooltip's darker ground */
+#sbl-tip .ts-moves { margin-bottom: 0; }
+.tip-rule { border-top: 1px solid var(--border); margin: 7px 0 6px; }
+.tip-stats { font-size: 12px; }
 </style>
 </head>
 <body>
@@ -161,6 +168,9 @@ a { color: inherit; }
 <script src="/nav.js?v=20260709"></script>
 <script src="/utils.js?v=20260709"></script>
 <script src="/tooltip.js?v=20260709"></script>
+<!-- For renderSetHtml/injectSetStyles: the brought-icon tooltips show a set, and
+     it should be the same one team.html and pokemon.html draw, not a copy. -->
+<script src="/teamsheet-sets.js?v=20260814b"></script>
 
 <div id="week-banner" class="sbln-week-banner" hidden></div>
 <div id="boot-banner" class="banner">Loading…</div>
@@ -256,6 +266,7 @@ function computeCurrentWeek() {
 // LOAD
 // ─────────────────────────────────────────────────────────────────────────────
 async function init() {
+  injectSetStyles();   // .ts-* rules the brought-icon tooltips render into
   const banner = document.getElementById('boot-banner');
   try {
     const pjPromise = fetch(POKEMON_JSON_URL).then(r => r.ok ? r.json() : Promise.reject(new Error('pokemon.json ' + r.status)));
@@ -512,18 +523,17 @@ function broughtIconsHtml(ids, stats, matchId, teamId) {
     if (o.played) cls += (topKos > 0 && o.kos === topKos) ? ' top-ko' : ' played';
     /* Tip shows the set above the KO line: what they brought is the question the
        icons raise, and data-tip is injected as innerHTML so it can be formatted
-       rather than crammed onto one line. */
+       rather than crammed onto one line.
+
+       renderSetHtml is the same call team.html and pokemon.html use, so a set
+       reads identically wherever it appears — ability · item, then moves as
+       chips. A rule separates it from the match stats, which are a different
+       kind of fact about the same icon. */
     const sheet = sheetRowFor(matchId, teamId, id);
     let tip = '';
-    if (sheet) {
-      const head = [sheet.ability, sheet.item].filter(Boolean).map(escapeHtml).join(' · ');
-      const mvs = (sheet.moves || []).filter(Boolean).map(escapeHtml).join(' / ');
-      if (head) tip += '<div>' + head + '</div>';
-      if (mvs) tip += '<div style="opacity:.85">' + mvs + '</div>';
-      if (tip) tip += '<div style="margin-top:3px">';
-    }
-    tip += 'KOs ' + o.kos + ' · Faints ' + o.faints;
-    if (sheet && tip.indexOf('<div style="margin-top:3px">') !== -1) tip += '</div>';
+    const setHtml = sheet ? renderSetHtml(sheet) : '';
+    if (setHtml) tip += setHtml + '<div class="tip-rule"></div>';
+    tip += '<div class="tip-stats">KOs ' + o.kos + ' · Faints ' + o.faints + '</div>';
     h += '<img loading="lazy" class="' + cls + '" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '"'
       + ' alt="' + escapeHtml(monName(id)) + '"'
       + ' data-tip-title="' + escapeHtml(sheet && sheet.nickname ? sheet.nickname + ' (' + monName(id) + ')' : monName(id))
