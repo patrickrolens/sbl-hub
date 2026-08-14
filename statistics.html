@@ -198,7 +198,14 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
   /* When expanded on mobile, give filters + controls their own full-width rows. */
   .viz-modal-filter, .viz-modal-controls { flex-basis: 100%; }
 }
+.sheet-bars{display:flex;flex-direction:column;gap:3px}
+.sheet-bar-row{display:flex;align-items:center;gap:6px;font-size:11px}
+.sheet-bar-label{flex:0 0 130px;color:var(--text2,#b6bdd0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet-bar{flex:1;height:9px;background:var(--bg3,#232734);border-radius:3px;overflow:hidden}
+.sheet-bar>span{display:block;height:100%;background:var(--accent,#7c6cf0)}
+.sheet-bar-n{flex:0 0 26px;text-align:right;color:var(--text3,#8d94a8)}
 </style>
+<script src="/teamsheet-sets.js?v=20260814"></script>
 </head>
 <body>
 
@@ -225,6 +232,18 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
     <span class="grid-bar-label">Visualizations</span>
   </div>
   <div class="viz-grid" id="viz-grid">
+  <div class="card viz" id="sheet-card" hidden>
+      <div class="card-title">Teamsheet Usage</div>
+      <div class="field" style="margin-bottom:6px"><label>Show</label>
+        <select id="sheet-metric" onchange="renderSheetUsage()">
+          <option value="moves">Moves</option>
+          <option value="items">Items</option>
+          <option value="abilities">Abilities</option>
+        </select>
+      </div>
+      <div id="sheet-usage"></div>
+    </div>
+
     <div class="card viz" id="scatter-card">
       <div class="scatter-head">
         <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('scatter')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
@@ -1331,6 +1350,47 @@ function populateFilters() {
 // ─────────────────────────────────────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────────────────────────────────────
+
+/* Teamsheet usage: what the league is actually bringing.
+
+   Counted per brought Pokémon, not per match, so a move on two of a team's six
+   reads as two. Only rows from imported teamsheets carry this detail, so the
+   card hides itself entirely when none exist rather than drawing an empty axis —
+   at the start of a season that is the normal state. */
+let sheetUsageRows = null;
+
+async function loadSheetUsage() {
+  try {
+    sheetUsageRows = await fetchSheetRows();
+  } catch (e) {
+    console.warn('teamsheet usage unavailable', e);
+    sheetUsageRows = [];
+  }
+  const card = document.getElementById('sheet-card');
+  if (!card) return;
+  if (!sheetUsageRows.length) { card.hidden = true; return; }
+  card.hidden = false;
+  renderSheetUsage();
+}
+
+function renderSheetUsage() {
+  const el = document.getElementById('sheet-usage');
+  if (!el || !sheetUsageRows) return;
+  const metric = (document.getElementById('sheet-metric') || {}).value || 'moves';
+  const sum = summariseSets(sheetUsageRows);
+  const rows = (sum[metric] || []).slice(0, 20);
+  if (!rows.length) { el.innerHTML = '<div class="ts-empty">No teamsheet data yet.</div>'; return; }
+  const max = rows[0][1] || 1;
+  // A bar per row keeps the shape readable without pulling in a chart library
+  // for what is fundamentally a sorted list.
+  el.innerHTML = '<div class="sheet-bars">' + rows.map(([name, n]) =>
+    '<div class="sheet-bar-row">'
+    + '<span class="sheet-bar-label">' + escapeHtml(name) + '</span>'
+    + '<span class="sheet-bar"><span style="width:' + Math.round(n / max * 100) + '%"></span></span>'
+    + '<span class="sheet-bar-n">' + n + '</span></div>').join('')
+  + '</div><div class="ts-from">across ' + sum.sheets + ' brought Pokémon from imported teamsheets</div>';
+}
+
 async function init() {
   const banner = document.getElementById('boot-banner');
   try {
@@ -1339,6 +1399,8 @@ async function init() {
     populateFilters();
     applyFilters();
     renderMatrix();
+    injectSetStyles();
+    loadSheetUsage();   // async, non-blocking: the card appears when it resolves
     banner.hidden = true;
     document.getElementById('wrap').hidden = false;
     patchStaticSeasonLinks();

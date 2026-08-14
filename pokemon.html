@@ -98,6 +98,7 @@ details.leaders-fold{margin:0}
 
 <script src="/nav.js?v=20260709"></script>
 <script src="/utils.js?v=20260716"></script>
+<script src="/teamsheet-sets.js?v=20260814"></script>
 
 <div class="page-wrap">
 <div class="card">
@@ -241,6 +242,7 @@ function $id(id) { return document.getElementById(id); }
 function showStatus(txt, kind) { const s = $id('status'); s.textContent = txt || ''; s.style.color = kind === 'err' ? 'var(--red)' : 'var(--text2)'; }
 
 async function boot() {
+  injectSetStyles();   // shared teamsheet-set styling (teamsheet-sets.js)
   $id('do-search').addEventListener('click', () => onSearchClick());
   const input = $id('search');
   input.addEventListener('input', e => { onSearchInput(e); });
@@ -558,6 +560,44 @@ async function loadMonStats(pokemonId) {
         '<div class="table-wrap"><table class="stat-table"><thead><tr>'
         + '<th>Trainer</th><th class="num">Sets</th><th class="num">Record</th><th class="num">Win %</th><th class="num">KOs</th>'
         + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
+    }
+
+    /* How this Pokémon is actually built, league-wide and per team.
+
+       The tables above answer "who used it and how did it do"; this answers
+       "what do people run on it". Split per team on purpose: 39 species sit on
+       two S10 rosters and the two builds are often nothing alike — one
+       Dragonite is Inner Focus / Life Orb, the other Multiscale / Sitrus Berry
+       / Tailwind. A single league-wide average would blur exactly the
+       distinction worth seeing. */
+    try {
+      const sheetRows = await fetchSheetRows([['pokemon_id', 'eq', pokemonId]]);
+      if (sheetRows.length) {
+        /* getTeamLabel() takes a team row, not an id, and this page has no teams
+           lookup of its own — fetch just the ones that appear on these sheets. */
+        const teamIds = [...new Set(sheetRows.map(r => r.team_id))].filter(Boolean);
+        const teamRes = teamIds.length
+          ? await sb.from('teams').select('id,name,slug,season_id').in('id', teamIds)
+          : { data: [] };
+        const teamById = {};
+        (teamRes.data || []).forEach(t => { teamById[t.id] = t; });
+        const league = summariseSets(sheetRows);
+        const byTeam = {};
+        sheetRows.forEach(r => { (byTeam[r.team_id] = byTeam[r.team_id] || []).push(r); });
+        const teamBlocks = Object.keys(byTeam)
+          .map(tid => ({ tid, sum: summariseSets(byTeam[tid]) }))
+          .sort((a, b) => b.sum.sheets - a.sum.sheets)
+          .map(({ tid, sum }) => '<div class="ts-team-block"><div class="ts-team-name">'
+            + escapeHtml(getTeamLabel(teamById[tid])) + '</div>'
+            + renderTypicalHtml(sum, { moveCount: 6 }) + '</div>')
+          .join('');
+        html += sectionHtml('Common sets',
+          '<div class="ts-league">' + renderTypicalHtml(league, { moveCount: 8 }) + '</div>'
+          + (Object.keys(byTeam).length > 1
+              ? '<div class="ts-team-grid">' + teamBlocks + '</div>' : ''));
+      }
+    } catch (e) {
+      console.warn('teamsheet sets unavailable', e);   // non-fatal: the rest of the page stands
     }
 
     el.innerHTML = html;

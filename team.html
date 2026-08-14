@@ -368,6 +368,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 <script src="/nav.js?v=20260709"></script>
 <script src="/utils.js?v=20260709"></script>
+<script src="/teamsheet-sets.js?v=20260814"></script>
 <script src="/tooltip.js?v=20260709"></script>
 
 <div id="week-banner" class="sbln-week-banner" hidden></div>
@@ -500,6 +501,7 @@ let statRows     = [];      // game_pokemon_stats rows for this team
 let regularRecords = {};    // team_id -> { w, l, winRate } over regular season (for OW%)
 let regularOpponents = {};  // team_id -> [opponent_id, …] over regular season (for OOW%)
 let broughtByMatch = {};    // match_id -> Set(pokemon_id) brought by THIS team (from match_pokemon)
+let sheetSets = {};         // pokemon_id -> summariseSets() over THIS team's teamsheets
 let txns         = [];      // unified transaction feed (free agency + trades)
 let pokemonById  = {};      // id -> pokemon.json entry
 let currentUser  = null;
@@ -685,12 +687,25 @@ async function loadTeamData() {
     const [gamesRows, statsRes, mpRes] = await Promise.all([
       fetchAllIn('games', 'id, match_id, game_number, winner_team_id', 'match_id', matchIds),
       sb.from('game_pokemon_stats').select('game_id, pokemon_id, kills, deaths').eq('team_id', team.id),
-      sb.from('match_pokemon').select('match_id, pokemon_id').eq('team_id', team.id).in('match_id', matchIds),
+      // nickname/item/ability/moves come from teamsheet imports; null on rows
+      // entered before that existed, so the set block below is optional.
+      sb.from('match_pokemon').select('match_id, pokemon_id, nickname, item, ability, moves').eq('team_id', team.id).in('match_id', matchIds),
     ]);
     for (const r of [statsRes, mpRes]) if (r.error) throw r.error;
     (gamesRows || []).forEach(g => { (gamesByMatch[g.match_id] = gamesByMatch[g.match_id] || []).push(g); });
     statRows = statsRes.data || [];
     (mpRes.data || []).forEach(r => { (broughtByMatch[r.match_id] = broughtByMatch[r.match_id] || new Set()).add(r.pokemon_id); });
+
+    /* What this team actually brings on each mon, from their own teamsheets.
+       Summarised once here rather than per card, because every roster card
+       builds a popover and re-grouping 6 rows per card would be wasteful. */
+    sheetSets = {};
+    const byMon = {};
+    (mpRes.data || []).forEach(r => {
+      if (!r.ability && !r.item && !(r.moves && r.moves.length)) return;
+      (byMon[r.pokemon_id] = byMon[r.pokemon_id] || []).push(r);
+    });
+    Object.keys(byMon).forEach(pid => { sheetSets[pid] = summariseSets(byMon[pid]); });
   }
 
   // Reset per-team view state and rebuild the transaction feed.
@@ -1107,6 +1122,12 @@ function buildDetailPopover(uid, row, mon, disp) {
     + '<div class="pop-sec"><div class="pop-lbl">Abilities</div><div class="pop-row">' + abilities + '</div></div>'
     + (statsHtml ? '<div class="pop-sec"><div class="pop-lbl">Base Stats</div>' + statsHtml + '</div>' : '')
     + '<div class="pop-sec"><div class="pop-lbl">Utility Moves</div><div class="pop-row">' + moves + '</div></div>'
+    /* What this team runs on it, as opposed to what the species can do. The
+       sections above are dex facts; this one is scouting. */
+    + (sheetSets[row.pokemon_id]
+        ? '<div class="pop-sec"><div class="pop-lbl">Their Set</div>'
+          + renderTypicalHtml(sheetSets[row.pokemon_id], { moveCount: 6 }) + '</div>'
+        : '')
     + '<div class="pop-foot">' + weeks + '</div>';
   return pop;
 }
@@ -1366,6 +1387,7 @@ window.addEventListener('hashchange', () => {
 // BOOT
 // ─────────────────────────────────────────────────────────────────────────────
 async function init() {
+  injectSetStyles();   // shared teamsheet-set styling (teamsheet-sets.js)
   const banner = document.getElementById('boot-banner');
   try {
     await loadGlobalData();

@@ -320,7 +320,10 @@ async function loadMatchDetail(id) {
     if (gameIds.length) {
       stats = await fetchAllIn('game_pokemon_stats', 'game_id, team_id, pokemon_id, kills, deaths', 'game_id', gameIds);
     }
-    const { data: mp, error: mpErr } = await sb.from('match_pokemon').select('team_id, pokemon_id').eq('match_id', id);
+    // nickname/item/ability/moves arrive with teamsheet imports and are null on
+    // anything entered before that, so the set line below is conditional.
+    const { data: mp, error: mpErr } = await sb.from('match_pokemon')
+      .select('team_id, pokemon_id, nickname, item, ability, moves').eq('match_id', id);
     if (mpErr) throw mpErr;
     matchDetailCache[id] = { games: games || [], stats, mp: mp || [] };
   } catch (err) {
@@ -486,7 +489,16 @@ function monStatsFor(matchId, teamId) {
 // The brought-six row: each icon tooltipped with KOs/Faints; white bottom border if
 // the mon appeared in battle, yellow if it was (one of) the team's top KO scorer(s).
 // Pokéball placeholders and never-played mons get no border.
-function broughtIconsHtml(ids, stats) {
+/* The teamsheet row for one brought Pokémon, if the sheet was imported.
+   Keyed per match+team because the same species is on 39 different pairs of
+   S10 rosters and each team builds it differently. */
+function sheetRowFor(matchId, teamId, pokemonId) {
+  const d = matchDetailCache[matchId];
+  if (!d || !d.mp) return null;
+  return d.mp.find(r => r.team_id === teamId && r.pokemon_id === pokemonId && (r.ability || r.item || (r.moves || []).length)) || null;
+}
+
+function broughtIconsHtml(ids, stats, matchId, teamId) {
   // Top-KO threshold for this team (only meaningful if > 0).
   let topKos = 0;
   ids.forEach(id => { const o = stats[id]; if (o && o.kos > topKos) topKos = o.kos; });
@@ -498,10 +510,24 @@ function broughtIconsHtml(ids, stats) {
     const o = stats[id] || { kos: 0, faints: 0, played: false };
     let cls = 'bi';
     if (o.played) cls += (topKos > 0 && o.kos === topKos) ? ' top-ko' : ' played';
-    const tip = 'KOs ' + o.kos + ' · Faints ' + o.faints;
+    /* Tip shows the set above the KO line: what they brought is the question the
+       icons raise, and data-tip is injected as innerHTML so it can be formatted
+       rather than crammed onto one line. */
+    const sheet = sheetRowFor(matchId, teamId, id);
+    let tip = '';
+    if (sheet) {
+      const head = [sheet.ability, sheet.item].filter(Boolean).map(escapeHtml).join(' · ');
+      const mvs = (sheet.moves || []).filter(Boolean).map(escapeHtml).join(' / ');
+      if (head) tip += '<div>' + head + '</div>';
+      if (mvs) tip += '<div style="opacity:.85">' + mvs + '</div>';
+      if (tip) tip += '<div style="margin-top:3px">';
+    }
+    tip += 'KOs ' + o.kos + ' · Faints ' + o.faints;
+    if (sheet && tip.indexOf('<div style="margin-top:3px">') !== -1) tip += '</div>';
     h += '<img loading="lazy" class="' + cls + '" src="' + iconUrl(id) + '" data-mon="' + escapeHtml(id) + '"'
       + ' alt="' + escapeHtml(monName(id)) + '"'
-      + ' data-tip-title="' + escapeHtml(monName(id)) + '" data-tip="' + escapeHtml(tip) + '">';
+      + ' data-tip-title="' + escapeHtml(sheet && sheet.nickname ? sheet.nickname + ' (' + monName(id) + ')' : monName(id))
+      + '" data-tip="' + tip.replace(/"/g, '&quot;') + '">';
   }
   return h;
 }
@@ -555,7 +581,7 @@ function renderMatchDetail(body, m, d) {
   [m.team_a_id, m.team_b_id].forEach((teamId, i) => {
     const stats = monStatsFor(m.id, teamId);
     h.push('<div class="dm-side">' + teamLinkHtml(teamId, m.week)
-      + '<div class="brought-row">' + broughtIconsHtml(broughtIds(m.id, teamId), stats) + '</div></div>');
+      + '<div class="brought-row">' + broughtIconsHtml(broughtIds(m.id, teamId), stats, m.id, teamId) + '</div></div>');
     if (i === 0) h.push('<div class="dm-side-divider"></div>');
   });
   h.push('</div>');
