@@ -206,6 +206,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 }
 #sheet-card.collapsed .sheet-body { display: none; }
 .sheet-split { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+/* An author `display` beats the UA stylesheet's [hidden]{display:none}, so
+   .hidden = true on this grid would otherwise do nothing at all. */
+.sheet-split[hidden] { display: none; }
 @media (max-width: 860px) { .sheet-split { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .sheet-split { grid-template-columns: 1fr; } }
 /* Same uppercase micro-label the cards use for their own titles, one step down. */
@@ -220,6 +223,20 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
    compact set blocks on team/pokemon, where 4px is right. Here it closes a
    full-width card and needs room to read as a footnote. */
 #sheet-foot { margin-top: 12px; }
+#sheet-find { width: 170px; }
+/* "Who runs this?" results. One row per Pokémon that carries the value, so the
+   answer is a roster of mons and teams rather than another count. */
+.sheet-found-head { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+.sheet-found-head b { color: var(--text); }
+.sheet-hits { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
+.sheet-hit { display: flex; align-items: center; gap: 7px; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 5px 8px; min-width: 0; }
+.sheet-hit img { width: 26px; height: 26px; flex: none; }
+.sheet-hit-txt { min-width: 0; }
+.sheet-hit-mon { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-hit-team { font-size: 10px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-hit-n { margin-left: auto; font-size: 11px; color: var(--text3); flex: none; }
+.sheet-bar-label.clickable { cursor: pointer; }
+.sheet-bar-label.clickable:hover { color: var(--accent); }
 </style>
 <script src="/teamsheet-sets.js?v=20260814b"></script>
 </head>
@@ -349,6 +366,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
         <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('sheet-card')" title="Hide chart" aria-label="Hide chart">▾</button></div>
         <div class="card-title scatter-title">Common Sets</div>
         <div class="hist-controls">
+          <div class="field"><label>Find</label>
+            <input type="text" id="sheet-find" placeholder="move, item or ability…" oninput="renderSheetUsage()">
+          </div>
           <div class="field"><label>Count</label>
             <select id="sheet-mode" onchange="renderSheetUsage()">
               <option value="sheet" selected>On the sheet</option>
@@ -358,7 +378,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
         </div>
       </div>
       <div class="sheet-body">
-        <div class="sheet-split">
+        <!-- Search results replace the three columns while Find is non-empty. -->
+        <div class="sheet-found" id="sheet-found" hidden></div>
+        <div class="sheet-split" id="sheet-split">
           <div>
             <div class="sheet-col-title">Abilities</div>
             <div id="sheet-abilities"></div>
@@ -1450,6 +1472,18 @@ function renderSheetUsage() {
     rows = rows.filter(r => seen.has(r.match_id + '|' + r.team_id + '|' + r.pokemon_id));
   }
 
+  // "Who runs this?" — the inverse of the columns, which answer "what does this
+  // Pokémon run?". Takes over the body while Find has text in it.
+  const findEl = document.getElementById('sheet-find');
+  const query = findEl ? findEl.value.trim().toLowerCase() : '';
+  const split = document.getElementById('sheet-split');
+  const found = document.getElementById('sheet-found');
+  if (split && found) {
+    split.hidden = !!query;
+    found.hidden = !query;
+    if (query) renderSheetFind(rows, query, found);
+  }
+
   const sum = summariseSets(rows);
   // Counted per brought Pokémon, so a move on two of a team's six counts twice.
   bars('sheet-abilities', sum.abilities, 12);
@@ -1461,6 +1495,64 @@ function renderSheetUsage() {
   const count = sum.sheets === total ? String(sum.sheets) : sum.sheets + ' of ' + total;
   foot.textContent = 'across ' + count + ' brought Pokémon' +
     (playedOnly ? ' that were sent out in a game' : ' from imported teamsheets');
+}
+
+/* Every Pokémon whose set mentions `query`, in any of the three fields.
+
+   Collapsed to one card per team+Pokémon rather than one per sheet, because
+   "Whimsicott (Fallarbor Blitz) ×3" is the useful shape — three separate
+   identical rows would just be noise. Substring rather than exact match so a
+   half-typed "tail" already finds Tailwind. */
+function renderSheetFind(rows, query, el) {
+  const hits = {};
+  rows.forEach(r => {
+    const fields = [r.ability, r.item].concat(r.moves || []).filter(Boolean);
+    const hit = fields.filter(v => v.toLowerCase().includes(query));
+    if (!hit.length) return;
+    const key = r.team_id + '|' + r.pokemon_id;
+    if (!hits[key]) hits[key] = { team_id: r.team_id, pokemon_id: r.pokemon_id, n: 0, values: new Set() };
+    hits[key].n++;
+    hit.forEach(v => hits[key].values.add(v));
+  });
+
+  const list = Object.values(hits).sort((a, b) =>
+    b.n - a.n || monFor(a.pokemon_id).name.localeCompare(monFor(b.pokemon_id).name));
+  if (!list.length) {
+    el.innerHTML = '<div class="ts-empty">Nothing on an imported teamsheet matches “' +
+      escapeHtml(query) + '”.</div>';
+    return;
+  }
+
+  // Distinct matched values, so the header names what was actually found rather
+  // than echoing the half-typed query back.
+  const matched = [...new Set([].concat(...list.map(h => [...h.values])))].sort();
+  const mons = list.length, sheets = list.reduce((a, h) => a + h.n, 0);
+  /* Capped: a near-universal move like Protect matches over a hundred Pokémon,
+     and a card that long buries the rest of the page. The count in the header
+     still reports the true total. */
+  const CAP = 48;
+  const shown = list.slice(0, CAP);
+  el.innerHTML =
+    '<div class="sheet-found-head"><b>' + matched.map(escapeHtml).join(', ') + '</b> — ' +
+    mons + ' Pokémon, ' + sheets + ' sheet' + (sheets === 1 ? '' : 's') +
+    (mons > CAP ? ' (showing the ' + CAP + ' most frequent)' : '') + '</div>' +
+    '<div class="sheet-hits">' + shown.map(h =>
+      '<div class="sheet-hit">' +
+      '<img loading="lazy" src="' + iconUrl(h.pokemon_id) + '" alt="">' +
+      '<div class="sheet-hit-txt">' +
+        '<div class="sheet-hit-mon">' + escapeHtml(monFor(h.pokemon_id).name) + '</div>' +
+        '<div class="sheet-hit-team">' + escapeHtml(teamLabelText(h.team_id)) + '</div>' +
+      '</div>' +
+      '<span class="sheet-hit-n">×' + h.n + '</span></div>').join('') + '</div>';
+}
+
+// Clicking a bar searches for it — the columns show what is common, the search
+// shows who runs it, and this is the bridge between the two.
+function sheetFindValue(v) {
+  const el = document.getElementById('sheet-find');
+  if (!el) return;
+  el.value = v;
+  renderSheetUsage();
 }
 
 /* match|team|pokemon keys for every Pokémon that actually appeared in a game.
@@ -1491,7 +1583,9 @@ function bars(elId, entries, limit) {
   const max = rows[0][1] || 1;
   el.innerHTML = '<div class="sheet-bars">' + rows.map(([name, n]) =>
     '<div class="sheet-bar-row">'
-    + '<span class="sheet-bar-label" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span>'
+    + '<span class="sheet-bar-label clickable" title="Show who runs ' + escapeHtml(name) + '"'
+    +   ' onclick="sheetFindValue(\'' + escapeHtml(name).replace(/'/g, '&#39;') + '\')">'
+    +   escapeHtml(name) + '</span>'
     + '<span class="sheet-bar"><span style="width:' + Math.round(n / max * 100) + '%"></span></span>'
     + '<span class="sheet-bar-n">' + n + '</span></div>').join('') + '</div>';
 }
