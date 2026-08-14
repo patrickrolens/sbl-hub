@@ -52,6 +52,17 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 select, input[type=number], input[type=datetime-local], input[type=text], input[type=url], input:not([type]) { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 13px; font-family: inherit; padding: 7px 10px; outline: none; }
 input::placeholder { color: var(--text3); opacity: .8; }
 select:focus, input:focus { border-color: var(--accent); }
+/* Teamsheet coverage. The pill sits in the section head so the count is visible
+   without expanding - the point is to notice a gap, not to go looking for one. */
+.sheetcov-pill { font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--border); color: var(--text3); }
+.sheetcov-pill.ok { color: var(--green); border-color: var(--green); }
+.sheetcov-pill.gap { color: var(--yellow); border-color: var(--yellow); }
+.sheetcov-row { display: flex; align-items: center; gap: 10px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; cursor: pointer; background: var(--bg3); }
+.sheetcov-row:hover { border-color: var(--accent); }
+.sheetcov-wk { font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); flex: none; width: 62px; }
+.sheetcov-teams { font-size: 12px; color: var(--text2); flex: 1; min-width: 0; }
+.sheetcov-missing { font-size: 11px; color: var(--yellow); flex: none; }
+.sheetcov-done { font-size: 12px; color: var(--text3); }
 .fmt-hint { font-size: 11px; color: var(--text3); margin-top: 8px; line-height: 1.5; }
 .fmt-hint code { background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--text2); }
 
@@ -374,6 +385,26 @@ select:focus, input:focus { border-color: var(--accent); }
     </div>
   </div>
 
+  <!-- ── TEAMSHEET COVERAGE (disabled) ──
+       Shelved for now. To bring it back, uncomment this block and the three
+       sites marked "teamsheet coverage (disabled)": the fetch in loadSeason,
+       the call in renderTool, and the bookkeeping in saveMatch.
+       renderSheetCoverage() and the .sheetcov-* styles are left in place.
+
+  <div class="section">
+    <div class="section-head" onclick="toggleSheetCovSection()">
+      <span class="caret" id="sheetcov-caret">&#9654;</span>
+      <span class="section-title">Teamsheet Coverage</span>
+      <span class="sheetcov-pill" id="sheetcov-pill"></span>
+    </div>
+    <div id="sheetcov-body" hidden>
+      <div class="section-sub">Every match with games entered should have a teamsheet imported for both sides. A missing sheet is invisible on the site, the match still shows and its sets just aren't there, so this lists the gaps. Click a row to jump to that match.</div>
+      <div id="sheetcov-list"></div>
+    </div>
+  </div>
+
+  ── end teamsheet coverage ── -->
+
   <!-- ── MATCH DATA ENTRY ── -->
   <div class="section">
     <div class="section-head" onclick="toggleDataSection()">
@@ -419,6 +450,10 @@ let seedingCollapsed = true;        // section starts collapsed
 let seedBracket = 'playoff';        // 'playoff' | 'cup' - which bracket is being edited
 let seedSlots = [];                 // working copy: array of team_id|null, index 0 = seed 1
 let seedSaved = [];                 // committed snapshot for the active bracket (dirty diff baseline)
+
+// ── teamsheet coverage ──  match_id -> Set(team_id) that has an imported sheet
+let sheetSidesByMatch = {};
+let sheetCovCollapsed = true;
 
 // ── match-data-entry state ──
 let pokemonById  = {};              // pokemon.json id -> entry
@@ -585,9 +620,25 @@ async function loadSeasonData(seasonId) {
 
   // Count games per match so we can tell which matches already have results.
   const matchIds = matches.map(m => m.id);
+  sheetSidesByMatch = {};
   if (matchIds.length) {
     const games = await fetchAllIn('games', 'id, match_id', 'match_id', matchIds);
     (games || []).forEach(g => { gamesCountByMatch[g.match_id] = (gamesCountByMatch[g.match_id] || 0) + 1; });
+
+    /* teamsheet coverage (disabled) — which sides already have a sheet. A row
+       only counts if it carries parsed detail: the brought six can be entered
+       by hand, which writes pokemon_id and leaves ability/item/moves null, and
+       that is exactly the case the panel existed to surface. Commented out so
+       every admin load does not pay for a fetch nothing reads.
+
+    if (TEAMSHEET_DETAILS) {
+      const mp = await fetchAllIn('match_pokemon', 'match_id, team_id, ability', 'match_id', matchIds);
+      (mp || []).forEach(r => {
+        if (!r.ability) return;
+        (sheetSidesByMatch[r.match_id] = sheetSidesByMatch[r.match_id] || new Set()).add(r.team_id);
+      });
+    }
+    */
   }
 
   seedDefaultCollapse();
@@ -629,7 +680,8 @@ function onSeasonChange() {
 // ─────────────────────────────────────────────────────────────────────────────
 function renderTool() {
   populateTeamSelects();
-  renderCoverage();
+  renderCoverage();          // schedule coverage (which teams play which weeks)
+  // renderSheetCoverage();  // teamsheet coverage (disabled)
   renderMatchList();
   rebuildSeedSlotsFromDb();
   renderSeeding();
@@ -1231,6 +1283,78 @@ function setDefaultWeek() {
 // MATCH & GAME DATA ENTRY
 // ─────────────────────────────────────────────────────────────────────────────
 let dataSectionCollapsed = false;
+function toggleSheetCovSection() {
+  sheetCovCollapsed = !sheetCovCollapsed;
+  document.getElementById('sheetcov-body').hidden = sheetCovCollapsed;
+  document.getElementById('sheetcov-caret').textContent = sheetCovCollapsed ? '▶' : '▼';
+}
+
+/* Which matches with games entered are missing a teamsheet.
+
+   Judged against games rather than a winner: results get entered game by game,
+   and a match half-entered still wants its sheets. Both sides are listed
+   separately because one-sided coverage is the common case - an admin imports
+   the sheet they were sent and the opponent's never arrives. */
+function renderSheetCoverage() {
+  const list = document.getElementById('sheetcov-list');
+  const pill = document.getElementById('sheetcov-pill');
+  if (!list || !pill) return;
+
+  if (!TEAMSHEET_DETAILS) {
+    pill.textContent = 'off'; pill.className = 'sheetcov-pill';
+    list.innerHTML = '<div class="sheetcov-done">Teamsheet detail is disabled.</div>';
+    return;
+  }
+
+  const played = matches.filter(m => (gamesCountByMatch[m.id] || 0) > 0);
+  const gaps = [];
+  played.forEach(m => {
+    const have = sheetSidesByMatch[m.id] || new Set();
+    const missing = [m.team_a_id, m.team_b_id].filter(t => t && !have.has(t));
+    if (missing.length) gaps.push({ m, missing });
+  });
+
+  pill.textContent = played.length
+    ? (played.length - gaps.length) + ' / ' + played.length
+    : 'none played';
+  pill.className = 'sheetcov-pill' + (played.length ? (gaps.length ? ' gap' : ' ok') : '');
+
+  if (!played.length) {
+    list.innerHTML = '<div class="sheetcov-done">No matches have games entered yet.</div>';
+    return;
+  }
+  if (!gaps.length) {
+    list.innerHTML = '<div class="sheetcov-done">All ' + played.length +
+      ' matches with games entered have both teamsheets.</div>';
+    return;
+  }
+
+  list.innerHTML = gaps.sort((a, b) => a.m.week - b.m.week).map(({ m, missing }) =>
+    '<div class="sheetcov-row" onclick="jumpToMatch(\'' + m.id + '\')">'
+    + '<span class="sheetcov-wk">' + escapeHtml(stageLabelShort(m)) + '</span>'
+    + '<span class="sheetcov-teams">' + escapeHtml(teamLabelText(m.team_a_id))
+    +   ' vs ' + escapeHtml(teamLabelText(m.team_b_id)) + '</span>'
+    + '<span class="sheetcov-missing">missing: '
+    +   missing.map(t => escapeHtml(teamLabelText(t))).join(', ') + '</span></div>').join('');
+}
+
+// "Week 3" / "Playoffs W1" - short enough for the fixed-width column.
+function stageLabelShort(m) {
+  return m.stage && m.stage !== 'regular'
+    ? (m.stage === 'cup' ? 'Cup ' : 'PO ') + 'W' + m.week
+    : 'Week ' + m.week;
+}
+
+// Open the match's card in the data-entry section and scroll to it.
+function jumpToMatch(matchId) {
+  if (dataSectionCollapsed) toggleDataSection();
+  if (!expandedMatches.has(matchId)) toggleMatchCard(matchId);
+  requestAnimationFrame(() => {
+    const card = document.querySelector('.md-card[data-mid="' + matchId + '"]');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
 function toggleDataSection() {
   dataSectionCollapsed = !dataSectionCollapsed;
   document.getElementById('data-body').hidden = dataSectionCollapsed;
@@ -2557,6 +2681,15 @@ async function saveMatch(matchId) {
     });
     if (mpRows.length) { const { error } = await sb.from('match_pokemon').insert(mpRows); if (error) throw error; }
 
+    /* teamsheet coverage (disabled) — kept the panel honest without a reload.
+       saveMatch deletes and re-inserts this match's rows, so coverage is
+       recomputed from what was just written rather than merged into the old.
+
+    const covered = new Set(mpRows.filter(r => r.ability).map(r => r.team_id));
+    if (covered.size) sheetSidesByMatch[matchId] = covered;
+    else delete sheetSidesByMatch[matchId];
+    */
+
     const sc = scoreFromModel(model);
     // Backfill the match date on first results entry if it was never scheduled.
     const mUpdate = { team_a_score: sc.a, team_b_score: sc.b };
@@ -2567,6 +2700,7 @@ async function saveMatch(matchId) {
 
     await refreshMatchRow(matchId);
     await loadMatchChildren(matchId);   // reload from DB → clears dirty
+    // renderSheetCoverage();           // teamsheet coverage (disabled)
     showToast('Match data saved.', 'ok');
 
     // If this was a postseason match that now has a winner, see if it unlocks the next round.
