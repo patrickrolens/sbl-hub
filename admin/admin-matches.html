@@ -46,7 +46,11 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
 .controls .group { display: flex; align-items: center; gap: 8px; }
 .controls label { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--text3); text-transform: uppercase; }
-select, input[type=number], input[type=datetime-local] { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 13px; font-family: inherit; padding: 7px 10px; outline: none; }
+/* Text and url inputs were left out here, so anything created without an
+   explicit type rendered as a white browser default against the dark page —
+   which is what the teamsheet review grid and the bracket-position box did. */
+select, input[type=number], input[type=datetime-local], input[type=text], input[type=url], input:not([type]) { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 13px; font-family: inherit; padding: 7px 10px; outline: none; }
+input::placeholder { color: var(--text3); opacity: .8; }
 select:focus, input:focus { border-color: var(--accent); }
 .fmt-hint { font-size: 11px; color: var(--text3); margin-top: 8px; line-height: 1.5; }
 .fmt-hint code { background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--text2); }
@@ -1862,14 +1866,14 @@ function renderTeamsheetPanel(m, model) {
 
   // Which side the sheet belongs to. The in-game header shows the player's
   // Switch name rather than their league name, so this cannot be auto-detected.
+  // md-series-row is the page's existing label + control row, reused as-is.
   const sideRow = document.createElement('div');
-  sideRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;';
-  const sideLabel = document.createElement('span');
-  sideLabel.style.cssText = 'font-size:11px;color:var(--text3);';
-  sideLabel.textContent = 'Sheet belongs to:';
+  sideRow.className = 'md-series-row';
+  sideRow.style.cssText = 'margin-bottom:8px;flex-wrap:wrap;';
+  const sideLabel = document.createElement('label');
+  sideLabel.textContent = 'Sheet belongs to';
   const sideSel = document.createElement('select');
-  sideSel.className = 'inp';
-  sideSel.style.cssText = 'font-size:11px;padding:3px 6px;max-width:260px;';
+  sideSel.style.cssText = 'max-width:260px;';
   ['a', 'b'].forEach(sd => {
     const o = document.createElement('option');
     o.value = sd; o.textContent = teamLabelText(sideTeam(m, sd));
@@ -1882,7 +1886,6 @@ function renderTeamsheetPanel(m, model) {
   const urlRow = document.createElement('div');
   urlRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;';
   const urlIn = document.createElement('input');
-  urlIn.className = 'inp';
   urlIn.placeholder = 'https://pokepast.es/…';
   urlIn.style.cssText = 'flex:1;min-width:220px;font-size:11px;padding:4px 6px;';
   const urlBtn = document.createElement('button');
@@ -1968,7 +1971,6 @@ function renderTeamsheetPanel(m, model) {
       // Roster-only dropdown: a sheet cannot legitimately hold anything else,
       // so constraining the choices makes blanks quick to resolve.
       const sel = document.createElement('select');
-      sel.className = 'inp';
       sel.style.cssText = 'flex:1;font-size:11px;padding:3px 6px;';
       const blankOpt = document.createElement('option');
       blankOpt.value = ''; blankOpt.textContent = '— not set —';
@@ -1996,7 +1998,6 @@ function renderTeamsheetPanel(m, model) {
          are the legal ones for the chosen species, but a sheet can legitimately
          contain something the dex lists differently, so nothing is forced. */
       const nick = document.createElement('input');
-      nick.className = 'inp';
       nick.placeholder = 'nickname';
       nick.style.cssText = 'flex:none;width:150px;font-size:11px;padding:3px 6px;';
       nick.value = s.nickname || '';
@@ -2020,9 +2021,8 @@ function renderTeamsheetPanel(m, model) {
       };
       const field = (placeholder, value, width, listId, onChange) => {
         const inp = document.createElement('input');
-        inp.className = 'inp';
         inp.placeholder = placeholder;
-        inp.style.cssText = 'font-size:10px;padding:2px 5px;width:' + width + 'px;';
+        inp.style.cssText = 'font-size:11px;padding:3px 6px;width:' + width + 'px;';
         inp.value = value || '';
         if (listId) inp.setAttribute('list', listId);
         inp.oninput = () => onChange(inp.value.trim());
@@ -2316,11 +2316,11 @@ function openTeamsheetDetails(m, model, side, id) {
     '<datalist id="td-it">' + opts(items) + '</datalist>' +
     '<datalist id="td-mv">' + opts(moves) + '</datalist>' +
     '<div style="display:flex;flex-direction:column;gap:6px;">' +
-      '<input id="td-nick" class="inp" placeholder="nickname" value="' + val(cur.nickname) + '">' +
-      '<input id="td-ability" class="inp" list="td-ab" placeholder="ability" value="' + val(cur.ability) + '">' +
-      '<input id="td-item" class="inp" list="td-it" placeholder="item" value="' + val(cur.item) + '">' +
+      '<input id="td-nick" placeholder="nickname" value="' + val(cur.nickname) + '">' +
+      '<input id="td-ability" list="td-ab" placeholder="ability" value="' + val(cur.ability) + '">' +
+      '<input id="td-item" list="td-it" placeholder="item" value="' + val(cur.item) + '">' +
       [0, 1, 2, 3].map(k =>
-        '<input id="td-mv' + k + '" class="inp" list="td-mv" placeholder="move ' + (k + 1) + '" value="' +
+        '<input id="td-mv' + k + '" list="td-mv" placeholder="move ' + (k + 1) + '" value="' +
         val((cur.moves || [])[k]) + '">').join('') +
     '</div>' +
     '<div class="modal-actions">' +

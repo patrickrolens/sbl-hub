@@ -238,6 +238,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .member-pop .pop-ability { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px; background: rgba(124,111,247,.15); color: #a89df9; border: 1px solid rgba(124,111,247,.3); }
 .member-pop .pop-move { font-size: 10px; background: var(--bg3); border: 1px solid var(--border); padding: 2px 7px; border-radius: 4px; color: var(--text2); }
 .member-pop .pop-dim { color: var(--text3); font-size: 11px; }
+.member-pop .pop-set-head { color: var(--text2); margin-bottom: 7px; }
+.member-pop .pop-set .pop-lbl { margin-top: 8px; }
+.member-pop .pop-set > .pop-lbl:first-child { margin-top: 0; }
+.member-pop .pop-set .pop-row { margin-bottom: 0; }
+.member-pop .pop-share { opacity: .5; font-size: 9px; font-weight: 400; }
+.member-pop .pop-from { margin-top: 7px; font-size: 9px; color: var(--text3); opacity: .8; }
 .member-pop .pop-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
 .member-pop .pop-stat { text-align: center; background: var(--bg3); border-radius: 5px; padding: 4px 2px; }
 .member-pop .pop-stat .ps-k { display: block; font-size: 8px; font-weight: 700; color: var(--text3); text-transform: uppercase; }
@@ -368,7 +374,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 
 <script src="/nav.js?v=20260709"></script>
 <script src="/utils.js?v=20260709"></script>
-<script src="/teamsheet-sets.js?v=20260814"></script>
+<script src="/teamsheet-sets.js?v=20260814b"></script>
 <script src="/tooltip.js?v=20260709"></script>
 
 <div id="week-banner" class="sbln-week-banner" hidden></div>
@@ -1124,9 +1130,22 @@ function buildDetailPopover(uid, row, mon, disp) {
     + '<div class="pop-sec"><div class="pop-lbl">Utility Moves</div><div class="pop-row">' + moves + '</div></div>'
     /* What this team runs on it, as opposed to what the species can do. The
        sections above are dex facts; this one is scouting. */
+    /* Rendered with the popover's own classes so it reads as part of the card
+       rather than a bolted-on panel: same micro-labels, same purple ability
+       pills, same neutral chips as the Abilities and Utility Moves sections. */
     + (sheetSets[row.pokemon_id]
-        ? '<div class="pop-sec"><div class="pop-lbl">Their Set</div>'
-          + renderTypicalHtml(sheetSets[row.pokemon_id], { moveCount: 6 }) + '</div>'
+        ? '<div class="pop-sec"><div class="pop-lbl pop-set-head">Usage Stats</div>'
+          /* Ability lives here rather than merged into the Abilities section
+             above: that one is the dex list of what the species can have, this
+             is what the team actually brought — and for a mega they are not even
+             the same value, since a sheet shows the pre-mega form. */
+          + renderTypicalHtml(sheetSets[row.pokemon_id], {
+              moveCount: 6,
+              cls: { wrap: 'pop-set', label: 'pop-lbl', row: 'pop-row',
+                     chip: 'pop-move', abilityChip: 'pop-ability',
+                     share: 'pop-share', from: 'pop-from', inlineSingles: false },
+            })
+          + '</div>'
         : '')
     + '<div class="pop-foot">' + weeks + '</div>';
   return pop;

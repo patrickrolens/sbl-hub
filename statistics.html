@@ -198,14 +198,20 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
   /* When expanded on mobile, give filters + controls their own full-width rows. */
   .viz-modal-filter, .viz-modal-controls { flex-basis: 100%; }
 }
-.sheet-bars{display:flex;flex-direction:column;gap:3px}
-.sheet-bar-row{display:flex;align-items:center;gap:6px;font-size:11px}
-.sheet-bar-label{flex:0 0 130px;color:var(--text2,#b6bdd0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sheet-bar{flex:1;height:9px;background:var(--bg3,#232734);border-radius:3px;overflow:hidden}
-.sheet-bar>span{display:block;height:100%;background:var(--accent,#7c6cf0)}
-.sheet-bar-n{flex:0 0 26px;text-align:right;color:var(--text3,#8d94a8)}
+#sheet-card.collapsed .sheet-body { display: none; }
+.sheet-split { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+@media (max-width: 860px) { .sheet-split { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .sheet-split { grid-template-columns: 1fr; } }
+/* Same uppercase micro-label the cards use for their own titles, one step down. */
+.sheet-col-title { font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.sheet-bars { display: flex; flex-direction: column; gap: 3px; }
+.sheet-bar-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.sheet-bar-label { flex: 0 0 120px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-bar { flex: 1; height: 9px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.sheet-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.sheet-bar-n { flex: 0 0 26px; text-align: right; color: var(--text3); }
 </style>
-<script src="/teamsheet-sets.js?v=20260814"></script>
+<script src="/teamsheet-sets.js?v=20260814b"></script>
 </head>
 <body>
 
@@ -232,18 +238,6 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
     <span class="grid-bar-label">Visualizations</span>
   </div>
   <div class="viz-grid" id="viz-grid">
-  <div class="card viz" id="sheet-card" hidden>
-      <div class="card-title">Teamsheet Usage</div>
-      <div class="field" style="margin-bottom:6px"><label>Show</label>
-        <select id="sheet-metric" onchange="renderSheetUsage()">
-          <option value="moves">Moves</option>
-          <option value="items">Items</option>
-          <option value="abilities">Abilities</option>
-        </select>
-      </div>
-      <div id="sheet-usage"></div>
-    </div>
-
     <div class="card viz" id="scatter-card">
       <div class="scatter-head">
         <div class="scatter-btns"><button class="scatter-btn" onclick="openModal('scatter')" title="Expand chart" aria-label="Expand chart">⤢</button></div>
@@ -338,6 +332,30 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
         </div>
       </div>
       <div class="scatter-wrap" id="pack"></div>
+    </div>
+
+    <div class="card viz viz-full" id="sheet-card" hidden>
+      <div class="scatter-head">
+        <div class="scatter-btns"><button class="scatter-btn" onclick="toggleCollapse('sheet-card')" title="Hide chart" aria-label="Hide chart">▾</button></div>
+        <div class="card-title scatter-title">Common Sets</div>
+      </div>
+      <div class="sheet-body">
+        <div class="sheet-split">
+          <div>
+            <div class="sheet-col-title">Abilities</div>
+            <div id="sheet-abilities"></div>
+          </div>
+          <div>
+            <div class="sheet-col-title">Items</div>
+            <div id="sheet-items"></div>
+          </div>
+          <div>
+            <div class="sheet-col-title">Moves</div>
+            <div id="sheet-moves"></div>
+          </div>
+        </div>
+        <div class="ts-from" id="sheet-foot"></div>
+      </div>
     </div>
   </div>
 
@@ -1374,21 +1392,29 @@ async function loadSheetUsage() {
 }
 
 function renderSheetUsage() {
-  const el = document.getElementById('sheet-usage');
-  if (!el || !sheetUsageRows) return;
-  const metric = (document.getElementById('sheet-metric') || {}).value || 'moves';
+  if (!sheetUsageRows) return;
   const sum = summariseSets(sheetUsageRows);
-  const rows = (sum[metric] || []).slice(0, 20);
-  if (!rows.length) { el.innerHTML = '<div class="ts-empty">No teamsheet data yet.</div>'; return; }
+  // Counted per brought Pokémon, so a move on two of a team's six counts twice.
+  bars('sheet-abilities', sum.abilities, 12);
+  bars('sheet-items', sum.items, 12);
+  bars('sheet-moves', sum.moves, 12);
+  const foot = document.getElementById('sheet-foot');
+  if (foot) foot.textContent = 'across ' + sum.sheets + ' brought Pokémon from imported teamsheets';
+}
+
+// A bar per row: a sorted list is the honest shape for this, and it avoids
+// pulling in a chart library to draw what is essentially a ranking.
+function bars(elId, entries, limit) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const rows = entries.slice(0, limit);
+  if (!rows.length) { el.innerHTML = '<div class="ts-empty">No data yet.</div>'; return; }
   const max = rows[0][1] || 1;
-  // A bar per row keeps the shape readable without pulling in a chart library
-  // for what is fundamentally a sorted list.
   el.innerHTML = '<div class="sheet-bars">' + rows.map(([name, n]) =>
     '<div class="sheet-bar-row">'
-    + '<span class="sheet-bar-label">' + escapeHtml(name) + '</span>'
+    + '<span class="sheet-bar-label" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span>'
     + '<span class="sheet-bar"><span style="width:' + Math.round(n / max * 100) + '%"></span></span>'
-    + '<span class="sheet-bar-n">' + n + '</span></div>').join('')
-  + '</div><div class="ts-from">across ' + sum.sheets + ' brought Pokémon from imported teamsheets</div>';
+    + '<span class="sheet-bar-n">' + n + '</span></div>').join('') + '</div>';
 }
 
 async function init() {

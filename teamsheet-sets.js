@@ -74,57 +74,86 @@ function renderSetHtml(row) {
   return '<div class="ts-set">' + head + mv + '</div>';
 }
 
-/* Every distinct value for a single-valued field, not just the winner.
+/* The "usually runs" block, from summariseSets output.
 
-   Showing only the most common one made "Babiri Berry 1/2" a riddle: the count
-   says a second item exists and then hides what it was. When a coach alternates
-   between two items week to week, that IS the interesting fact, so list them all
-   in frequency order. */
-function tsAllShares(entries, total) {
-  return entries.map(e => tsShare(e, total)).join(' <span class="ts-or">·</span> ');
-}
+   `opts.cls` lets a host page supply its own class names so the block adopts
+   that page's existing visual language instead of importing a second one. The
+   team page's roster popover already has micro-labels, purple ability pills and
+   neutral move chips; passing those in makes this section look native there
+   while pokemon.html keeps the default. */
+const TS_DEFAULT_CLS = {
+  wrap: 'ts-typical', label: 'ts-line', row: 'ts-moves',
+  chip: '', abilityChip: '', share: 'ts-share', from: 'ts-from',
+};
 
-// The "usually runs" block, from summariseSets output.
 function renderTypicalHtml(sum, opts) {
   if (!sum || !sum.sheets) return '';
   const o = opts || {};
+  const c = Object.assign({}, TS_DEFAULT_CLS, o.cls || {});
   const topMoves = sum.moves.slice(0, o.moveCount || 6);
+
+  /* All three fields render as the same kind of row. Abilities and items used to
+     be plain labelled text while moves were chips, which read as three different
+     kinds of information when they are the same kind — a value, its count, and
+     possibly an alternative. */
+  const row = (entries, chipCls) => '<div class="' + c.row + '">' + entries.map(e =>
+    '<span' + (chipCls ? ' class="' + chipCls + '"' : '') + '>' + escapeHtml(e[0]) +
+    ' <span class="' + c.share + '">' + e[1] + '/' + sum.sheets + '</span></span>').join('') + '</div>';
+  const label = t => '<div class="' + c.label + '">' + (c.label === 'ts-line' ? '<b>' + t + '</b>' : t) + '</div>';
+
+  /* Inline "Ability  Value 4/5" for single-valued fields, chips for moves. That
+     is the default because it is what pokemon.html already looked like; a host
+     page wanting everything as chips passes cls.inlineSingles = false, which is
+     what the team popover does to match its own card language. */
+  const inline = entries => '<div class="' + c.label + '"><b>' +
+    (entries === sum.abilities ? 'Ability' : 'Item') + '</b> ' +
+    entries.map(e => tsShare(e, sum.sheets)).join(' <span class="ts-or">·</span> ') + '</div>';
+
   const parts = [];
-  if (sum.abilities.length) parts.push('<div class="ts-line"><b>Ability</b> ' + tsAllShares(sum.abilities, sum.sheets) + '</div>');
-  if (sum.items.length) parts.push('<div class="ts-line"><b>Item</b> ' + tsAllShares(sum.items, sum.sheets) + '</div>');
-  if (topMoves.length) {
-    parts.push('<div class="ts-line"><b>Moves</b></div><div class="ts-moves">' +
-      topMoves.map(m => '<span>' + escapeHtml(m[0]) +
-        ' <span class="ts-share">' + m[1] + '/' + sum.sheets + '</span></span>').join('') + '</div>');
+  const asChips = c.inlineSingles === false;
+  if (sum.abilities.length) {
+    parts.push(asChips ? label('Ability') + row(sum.abilities, c.abilityChip) : inline(sum.abilities));
   }
-  return '<div class="ts-typical">' + parts.join('') +
-    '<div class="ts-from">from ' + sum.sheets + ' teamsheet' + (sum.sheets === 1 ? '' : 's') + '</div></div>';
+  if (sum.items.length) {
+    parts.push(asChips ? label('Item') + row(sum.items, c.chip) : inline(sum.items));
+  }
+  if (topMoves.length) parts.push(label('Moves') + row(topMoves, c.chip));
+  return '<div class="' + c.wrap + '">' + parts.join('') +
+    '<div class="' + c.from + '">from ' + sum.sheets + ' teamsheet' + (sum.sheets === 1 ? '' : 's') + '</div></div>';
 }
 
 /* Shared styling, injected once. The pages have no build step and each carries
    its own <style>, so a single call keeps the set blocks identical everywhere
-   rather than five near-copies drifting apart. */
+   rather than five near-copies drifting apart.
+
+   Colours come from tokens.css via bare var() with no fallback, the same way
+   the rest of the site writes them. A fallback here would be a second copy of
+   the palette that no one maintains — the ones this used to carry had all
+   drifted a shade or two from the real tokens. */
 function injectSetStyles() {
   if (document.getElementById('ts-set-styles')) return;
   const el = document.createElement('style');
   el.id = 'ts-set-styles';
   el.textContent = [
-    '.ts-set{font-size:11px;line-height:1.5;color:var(--text3,#8d94a8);margin-top:3px}',
+    '.ts-set{font-size:11px;line-height:1.5;color:var(--text3);margin-top:3px}',
     '.ts-line{margin-bottom:2px}',
-    '.ts-ability{color:var(--text2,#b6bdd0)}',
-    '.ts-item{color:var(--accent,#7c6cf0)}',
-    '.ts-moves{display:flex;flex-wrap:wrap;gap:3px;margin-top:2px}',
-    '.ts-moves span{background:var(--bg3,#232734);border-radius:3px;padding:1px 5px;white-space:nowrap}',
+    '.ts-ability{color:var(--text2)}',
+    '.ts-item{color:var(--accent)}',
+    '.ts-moves{display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;margin-bottom:4px}',
+    '.ts-moves span{background:var(--bg3);border-radius:3px;padding:1px 5px;white-space:nowrap}',
     '.ts-share{opacity:.6;font-size:10px}',
     '.ts-or{opacity:.4;margin:0 1px}',
-    '.ts-typical .ts-line b{color:var(--text2,#b6bdd0);font-weight:600;margin-right:4px}',
-    '.ts-from{margin-top:4px;opacity:.65;font-size:10px}',
-    '.ts-empty{font-size:11px;color:var(--text3,#8d94a8);opacity:.75}',
+    '.ts-typical .ts-line b{color:var(--text2);font-weight:600;margin-right:4px}',
+    // Colour stated rather than inherited: inside .ts-set it already resolves
+    // to text3, but used on its own (statistics' card footer) it inherited full
+    // --text and read as body copy instead of a footnote.
+    '.ts-from{margin-top:4px;opacity:.65;font-size:10px;color:var(--text3)}',
+    '.ts-empty{font-size:11px;color:var(--text3);opacity:.75}',
     // pokemon.html: league-wide block, then one block per team that runs it
     '.ts-league{margin-bottom:10px}',
     '.ts-team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}',
-    '.ts-team-block{background:var(--bg2,#1b1e27);border:1px solid var(--border,#333a4a);border-radius:6px;padding:8px}',
-    '.ts-team-name{font-size:11px;font-weight:600;color:var(--text2,#b6bdd0);margin-bottom:4px}',
+    '.ts-team-block{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px}',
+    '.ts-team-name{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px}',
   ].join('');
   document.head.appendChild(el);
 }
