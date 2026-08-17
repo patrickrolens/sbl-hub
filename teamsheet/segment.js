@@ -97,7 +97,8 @@ function isPanelShaped(c, imgW, imgH) {
    an integer multiple of theirs is a stack, and splitting it into equal bands
    recovers the originals. Only runs when fewer than six panels were found. */
 function splitMerged(accepted, rejected, imgW, imgH) {
-  if (accepted.length >= 6 || !accepted.length) return [];
+  if (accepted.length >= 6) return [];
+  if (!accepted.length) return splitMergedNoReference(rejected, imgW, imgH);
   const med = arr => { const s = [...arr].sort((a, b) => a - b); return s[s.length >> 1]; };
   const medW = med(accepted.map(c => c.w)), medH = med(accepted.map(c => c.h));
   const out = [];
@@ -111,6 +112,52 @@ function splitMerged(accepted, rejected, imgW, imgH) {
     for (let k = 0; k < n; k++) {
       out.push({ x: c.x, y: Math.round(c.y + k * band), w: c.w, h: Math.round(band),
                  area: c.area / n, fill: c.fill, aspect: c.w / band, split: true });
+    }
+  }
+  return out;
+}
+
+/* Same recovery, for a photo where EVERY panel fused with its stack-mate —
+   there is no correctly-shaped survivor left to size a split against (a
+   90-degree phone photo of the whole sheet: two columns, and both merge into
+   one blob each, so `accepted` is empty and the sibling-comparison approach
+   above has nothing to compare to).
+
+   Without a reference panel, a lone blob's band is ambiguous: at n=2 or n=3
+   the resulting band can independently satisfy isPanelShaped (a 3-stack's
+   half is still shaped enough to pass), so no single blob can pick its own n.
+   What is not ambiguous is the total: this function is only reached when
+   fewer than six panels exist, so the true split factor is whichever n makes
+   (surviving panels + newly split ones) add up to six once applied to every
+   blob it fits — in practice all fused blobs in one photo merge the same way,
+   so this is decided once, globally, rather than guessed per blob. */
+function splitMergedNoReference(rejected, imgW, imgH) {
+  const cands = rejected.filter(c =>
+    c.fill >= 0.6 && c.w >= imgW * 0.18 && c.w <= imgW * 0.62);
+  if (!cands.length) return [];
+
+  let bestN = 0, bestFits = [];
+  for (const n of [2, 3]) {
+    const fits = cands.filter(c => {
+      const band = c.h / n;
+      return isPanelShaped({ w: c.w, h: band, aspect: c.w / band, fill: c.fill }, imgW, imgH);
+    });
+    // Prefer whichever n lands the total panel count on six; a tie (both
+    // candidate blobs happen to fit both factors) falls back to more blobs
+    // splitting cleanly, since that is the stronger signal of the two.
+    if (Math.abs(6 - fits.length * n) < Math.abs(6 - bestFits.length * bestN) ||
+        (fits.length * n === bestFits.length * bestN && fits.length > bestFits.length)) {
+      bestN = n; bestFits = fits;
+    }
+  }
+  if (!bestFits.length) return [];
+
+  const out = [];
+  for (const c of bestFits) {
+    const band = c.h / bestN;
+    for (let k = 0; k < bestN; k++) {
+      out.push({ x: c.x, y: Math.round(c.y + k * band), w: c.w, h: Math.round(band),
+                 area: c.area / bestN, fill: c.fill, aspect: c.w / band, split: true });
     }
   }
   return out;
