@@ -143,7 +143,13 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 }
 .copy-team-btn:hover { color: var(--text); border-color: var(--accent); }
 .copy-team-btn.copied { color: var(--green); border-color: var(--green); }
-.roster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.roster-grid {
+  display: grid; gap: 8px;
+  /* Auto-fit rather than a fixed 2-up: the middle column's width depends on how
+     many side panels are showing, and below ~310px per card the stat cells'
+     "label value" pairs collide. Cards reflow to 1-up before that happens. */
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
 
 /* ── MEMBER CARD: 170px sprite block (left) + inline stat grid (right). The card
    border encodes the Pokémon's type(s) - set inline by JS (solid or split). ── */
@@ -191,8 +197,8 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   grid-auto-rows: 1fr; gap: 2px; padding: 2px; background: var(--border);
 }
 .member-statgrid .sc {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  background: var(--bg2); padding: 4px 10px; min-width: 0;
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0 8px;
+  background: var(--bg2); padding: 4px 10px; min-width: 0; overflow: hidden;
 }
 .member-statgrid .sc.r1 { grid-column: span 3; }
 .member-statgrid .sc.r2 { grid-column: span 2; }
@@ -332,7 +338,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
    narrow screens; the side panels stack under the roster before that. A proper
    mobile pass is Phase 5, so this is just the coarse breakpoints for now.
 ───────────────────────────────────────────────────────────────────────────── */
-@media (max-width: 1180px) {
+@media (max-width: 1360px) {
   .layout { grid-template-columns: 320px minmax(0, 1fr); }
   .col-right { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--border); }
 }
@@ -351,7 +357,6 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
   .sec-identity { order: 1; } .sec-stats { order: 2; }
   .sec-roster { order: 3; } .sec-right-sched { order: 4; }
   .sec-txns { order: 5; }
-  .roster-grid { grid-template-columns: 1fr; }
   /* Reclaim a little horizontal room for the cards on mobile. */
   .card { margin: 8px; }
   .inactive-grid { grid-template-columns: 1fr; }
