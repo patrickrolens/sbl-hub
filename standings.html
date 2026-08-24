@@ -459,7 +459,11 @@ function buildStandings() {
     if (opps[m.team_a_id]) opps[m.team_a_id].push(m.team_b_id);
     if (opps[m.team_b_id]) opps[m.team_b_id].push(m.team_a_id);
   });
-  const avg = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  // Rounded to 6dp so teams with mathematically-identical schedules (e.g. two
+  // teams that played the same round-robin opponent set) come out exactly tied
+  // instead of splitting on floating-point summation-order noise and skipping
+  // the game-diff tiebreaker that should have decided them.
+  const avg = arr => { const v = arr.filter(x => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 1e6) / 1e6 : null; };
   const owp = {}, oowp = {};
   allTeams.forEach(t => {
     owp[t.id] = avg(opps[t.id].map(o => winRate[o]));
