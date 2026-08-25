@@ -145,10 +145,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); co
 .copy-team-btn.copied { color: var(--green); border-color: var(--green); }
 .roster-grid {
   display: grid; gap: 8px;
-  /* Auto-fit rather than a fixed 2-up: the middle column's width depends on how
+  /* Auto-fill rather than a fixed 2-up: the middle column's width depends on how
      many side panels are showing, and below ~310px per card the stat cells'
-     "label value" pairs collide. Cards reflow to 1-up before that happens. */
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+     "label value" pairs collide. Cards reflow to 1-up before that happens. The
+     track min is half the container (not a flat 340px), so on very wide screens
+     the grid still tops out at 2-up instead of stretching to 3+. */
+  grid-template-columns: repeat(auto-fill, minmax(max(340px, (100% - 8px) / 2), 1fr));
 }
 
 /* ── MEMBER CARD: 170px sprite block (left) + inline stat grid (right). The card
