@@ -112,6 +112,18 @@ select:focus, input:focus { border-color: var(--accent); }
 .seed-foot { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
 .seed-foot-note { font-size: 12px; color: var(--text3); line-height: 1.5; }
 
+/* ── TEAMSHEET REVIEW: FIELDS THE PARSER COULD NOT FILL ──
+   Same yellow the rest of the admin uses for "needs a human", but on the input
+   itself. The warning line under a row said how many moves were missing; it
+   could not say which box to look at, and on a six-slot grid of identical grey
+   inputs that is the part that costs time. Cleared live as soon as one is
+   typed into, so what is left lit is exactly what is left to do. */
+.ts-need { border-color: var(--yellow); background: rgba(240,192,96,.10); }
+.ts-need::placeholder { color: var(--yellow); opacity: .9; }
+.ts-need:focus { border-color: var(--yellow); background: rgba(240,192,96,.16); }
+.ts-slot-need { box-shadow: inset 2px 0 0 var(--yellow); background: rgba(240,192,96,.05); }
+.ts-need-count { color: var(--yellow); font-weight: 700; font-variant-numeric: tabular-nums; }
+
 /* ── COLLAPSIBLE PANEL (shared by coverage + match list) ── */
 .collapse { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 16px; }
 .collapse-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none; }
@@ -1950,10 +1962,7 @@ function teamsheetRoster(m, side) {
 let _tsItemHints = null;
 Object.defineProperty(window, 'TEAMSHEET_ITEM_HINTS', {
   get() {
-    if (!_tsItemHints) {
-      const idx = teamsheetDexIndex();
-      _tsItemHints = idx ? Teamsheet.itemVocabulary(idx).slice().sort() : [];
-    }
+    if (!_tsItemHints) _tsItemHints = Teamsheet.itemVocabulary().slice().sort();
     return _tsItemHints;
   },
 });
@@ -2098,7 +2107,7 @@ function renderTeamsheetPanel(m, model) {
 
     draft.slots.forEach(s => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border);';
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 10px;border-top:1px solid var(--border);';
 
       const num = document.createElement('span');
       num.style.cssText = 'font-size:11px;color:var(--text3);width:14px;flex:none;';
@@ -2122,13 +2131,20 @@ function renderTeamsheetPanel(m, model) {
         sel.appendChild(o);
       });
       sel.value = s.pokemon_id || '';
-      if (!s.pokemon_id) sel.style.borderColor = 'var(--yellow)';
+      sel.classList.toggle('ts-need', !s.pokemon_id);
       sel.onchange = () => {
         s.pokemon_id = sel.value || null;
-        sel.style.borderColor = sel.value ? 'var(--border)' : 'var(--yellow)';
+        sel.classList.toggle('ts-need', !sel.value);
         if (sel.value) { img.style.opacity = '1'; img.src = spriteUrl(sel.value); attachSpriteFallback(img, sel.value); }
         else { img.style.opacity = '.4'; img.src = POKEBALL_FALLBACK; }
+        refreshNeed();
       };
+
+      // Count of what this slot still needs, so a collapsed glance at the grid
+      // shows which rows are done without scanning 24 inputs for empty ones.
+      const need = document.createElement('span');
+      need.style.cssText = 'font-size:10px;flex:none;white-space:nowrap;';
+      need.className = 'ts-need-count';
 
       /* Every parsed field is editable, not just the species. OCR gets ability
          and item right ~100% of the time and moves ~96%, but "usually right" is
@@ -2147,10 +2163,11 @@ function renderTeamsheetPanel(m, model) {
       nick.oninput = () => { s.nickname = nick.value.trim() || null; };
 
       row.appendChild(num); row.appendChild(img); row.appendChild(sel); row.appendChild(nick);
+      row.appendChild(need);
       grid.appendChild(row);
 
       const detail = document.createElement('div');
-      detail.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;padding:0 0 7px 50px;';
+      detail.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;padding:0 10px 7px 60px;';
 
       const uid = 'ts-' + m.id + '-' + s.slot;
       const listFor = (suffix, values) => {
@@ -2160,13 +2177,23 @@ function renderTeamsheetPanel(m, model) {
         detail.appendChild(dl);
         return dl.id;
       };
+      /* Fields the parser left empty are lit yellow, and go quiet the moment
+         they are filled, so the row always shows what is still outstanding
+         rather than what was outstanding when the sheet was read. */
+      const needy = [];
       const field = (placeholder, value, width, listId, onChange) => {
         const inp = document.createElement('input');
         inp.placeholder = placeholder;
         inp.style.cssText = 'font-size:11px;padding:3px 6px;width:' + width + 'px;';
         inp.value = value || '';
         if (listId) inp.setAttribute('list', listId);
-        inp.oninput = () => onChange(inp.value.trim());
+        inp.classList.toggle('ts-need', !inp.value);
+        inp.oninput = () => {
+          onChange(inp.value.trim());
+          inp.classList.toggle('ts-need', !inp.value.trim());
+          refreshNeed();
+        };
+        needy.push(inp);
         detail.appendChild(inp);
         return inp;
       };
@@ -2177,6 +2204,10 @@ function renderTeamsheetPanel(m, model) {
 
       field('ability', s.ability, 118, abilityList, v => { s.ability = v || null; });
       field('item', s.item, 118, itemList, v => { s.item = v || null; });
+      /* Indexed by k, so an unread move stays in its own box. The parser now
+         leaves a null in the slot it could not read rather than compacting the
+         list, which is what makes "move 3 is the missing one" visible here
+         instead of the blank always landing on move 4. */
       for (let k = 0; k < 4; k++) {
         field('move ' + (k + 1), (s.moves || [])[k], 108, moveList, v => {
           s.moves = s.moves || [];
@@ -2185,6 +2216,16 @@ function renderTeamsheetPanel(m, model) {
           while (s.moves.length && !s.moves[s.moves.length - 1]) s.moves.pop();
         });
       }
+
+      // The warning line is a third element rather than part of the row, so it
+      // has to be lit alongside them or the highlight stops halfway down a slot.
+      const lit = [row, detail];
+      function refreshNeed() {
+        const n = needy.filter(i => !i.value.trim()).length + (sel.value ? 0 : 1);
+        need.textContent = n ? n + ' to fill' : '';
+        lit.forEach(el => el.classList.toggle('ts-slot-need', !!n));
+      }
+      refreshNeed();
 
       // Refresh the suggestion lists when the species changes, without a full
       // re-render (which would wipe anything already typed into this row).
@@ -2205,8 +2246,10 @@ function renderTeamsheetPanel(m, model) {
 
       if (s.warnings && s.warnings.length) {
         const w = document.createElement('div');
-        w.style.cssText = 'font-size:10px;color:var(--yellow);padding:0 0 6px 50px;line-height:1.4;';
+        w.style.cssText = 'font-size:10px;color:var(--yellow);padding:0 10px 6px 60px;line-height:1.4;';
         w.textContent = s.warnings.join(' ');
+        lit.push(w);
+        refreshNeed();
         grid.appendChild(w);
       }
     });
