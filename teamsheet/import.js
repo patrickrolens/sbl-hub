@@ -291,8 +291,11 @@ window.Teamsheet = (function () {
            read "Frostassite" and it overrode a correctly matched "Froslassite".
            With verified spellings in the vocabulary the fuzzy match is now the
            more reliable of the two, so the raw text no longer overrides it. */
-        if (s.moves.length < 4) {
-          s.warnings.push('Only ' + s.moves.length + ' of 4 moves could be read.');
+        // moves is always 4 long now, with a null wherever a slot went unread,
+        // so count what is actually there rather than the array's length.
+        const readCount = s.moves.filter(Boolean).length;
+        if (readCount < 4) {
+          s.warnings.push('Only ' + readCount + ' of 4 moves could be read.');
         }
       });
 
@@ -308,8 +311,11 @@ window.Teamsheet = (function () {
          able to learn all of them — anything less is a guess, and a blank costs
          the admin less than a plausible wrong answer. */
       slots.forEach((s, i) => {
-        if (s.pokemon_id || !s.moves || s.moves.length < 2) return;
-        const keys = s.moves.map(tsNorm);
+        // Only the moves that were actually read can constrain a learnset — an
+        // unread slot is a null, and tsNorm(null) would match nothing anywhere.
+        const known = (s.moves || []).filter(Boolean);
+        if (s.pokemon_id || known.length < 2) return;
+        const keys = known.map(tsNorm);
         const inUse = new Set(slots.map(x => x.pokemon_id).filter(Boolean));
 
         const scoredFits = rosterIds.filter(id => {
@@ -350,12 +356,11 @@ window.Teamsheet = (function () {
     return { source: { kind: 'image' }, slots };
   }
 
-  /* Held items have no dictionary in pokemon.json, unlike moves and abilities.
-     Mega stones are derived from the dex's own mega entries so new ones appear
-     automatically; the rest is the common VGC pool. An item outside this list
-     simply comes back unmatched and the admin types it, which is why the list
-     does not need to be exhaustive. */
-  function itemVocabulary(index) {
+  /* Held items have no dictionary in pokemon.json, unlike moves and abilities,
+     so this is the list: mega stones whose spelling a sheet has actually shown,
+     plus the common VGC pool. An item outside it simply comes back unmatched and
+     the admin types it, which is why the list does not need to be exhaustive. */
+  function itemVocabulary() {
     const items = [
       'Leftovers', 'Life Orb', 'Focus Sash', 'Choice Band', 'Choice Specs', 'Choice Scarf',
       'Assault Vest', 'Rocky Helmet', 'Eviolite', 'Safety Goggles', 'Mental Herb', 'White Herb',
@@ -381,33 +386,30 @@ window.Teamsheet = (function () {
        behind them — Manectric gives Manectite, Blastoise gives Blastoisinite,
        Sableye gives Sablenite, Scrafty gives Scraftinite. Generating
        "<base>ite" and its truncations produced "Manectricite" and "Blastoiseite",
-       neither of which exists. Verified names take precedence; the generated
-       forms below stay only as a fallback for megas not yet seen on a sheet. */
+       neither of which exists, so nothing is generated: a mega whose stone
+       has not turned up on a sheet yet comes back unmatched and the admin
+       types it. An invented name is worse than no name — it buries the item
+       suggestions under hundreds of non-items, and each truncation sits one
+       edit from a real stone, so "Scizoite" competes with Scizorite for the
+       fuzzy match.
+
+       Add a spelling here once a sheet shows it: run harvest-items.js, which
+       lists every item in match_pokemon that this vocabulary cannot match. It
+       is also how the nine stones after the original batch were found — each
+       was read perfectly by OCR and thrown away for want of an entry, which
+       was most of the item error on the sheet suite. It flags one-offs rather
+       than listing them, so a mistyped "Frosite" on a Floette that reads
+       Floettite nine times over does not get promoted to a real name. */
     const VERIFIED_STONES = [
-      'Aerodactylite', 'Blastoisinite', 'Blazikenite', 'Charizardite X', 'Charizardite Y',
-      'Delphoxite', 'Dragalgite', 'Excadrite', 'Floettite', 'Froslassite', 'Garchompite',
-      'Glimmoranite', 'Kangaskhanite', 'Lopunnite', 'Malamarite', 'Manectite', 'Mawilite',
-      'Meganiumite', 'Metagrossite', 'Sablenite', 'Sceptilite', 'Scizorite', 'Scovillainite',
-      'Scraftinite', 'Staraptite', 'Swampertite', 'Venusaurite',
+      'Aerodactylite', 'Beedrillite', 'Blastoisinite', 'Blazikenite', 'Charizardite X',
+      'Charizardite Y', 'Clefablite', 'Delphoxite', 'Dragalgite', 'Excadrite', 'Floettite',
+      'Froslassite', 'Garchompite', 'Gardevoirite', 'Gengarite', 'Glalieite', 'Glimmoranite',
+      'Gyaradosite', 'Kangaskhanite', 'Lopunnite', 'Malamarite', 'Manectite', 'Mawilite',
+      'Meganiumite', 'Metagrossite', 'Raichuite Y', 'Sablenite', 'Sceptilite', 'Scizorite',
+      'Scovillainite', 'Scraftinite', 'Skarmorite', 'Staraptite', 'Swampertite',
+      'Tyranitarite', 'Venusaurite',
     ];
     items.push.apply(items, VERIFIED_STONES);
-    const known = new Set(VERIFIED_STONES.map(tsNorm));
-
-    /* Fallback guesses for megas with no verified spelling yet. Every
-       truncation is emitted because the elision is unpredictable, and anything
-       colliding with a verified name is dropped so a guess can never displace a
-       real one. */
-    for (const p of index.all) {
-      if (!/^Mega /.test(p.name)) continue;
-      const rest = p.name.slice(5);
-      const vm = rest.match(/^(.*?)\s+([XY])$/);
-      const base = (vm ? vm[1] : rest).split('-')[0].replace(/[^A-Za-z]/g, '');
-      const suffix = vm ? ' ' + vm[2] : '';
-      for (let cut = base.length; cut >= 4; cut--) {
-        const guess = base.slice(0, cut) + 'ite' + suffix;
-        if (!known.has(tsNorm(guess))) items.push(guess);
-      }
-    }
     return items;
   }
 
@@ -437,7 +439,7 @@ window.Teamsheet = (function () {
     return {
       moves: moves.length ? moves : moveNames,
       abilities: abilities.length ? abilities : abilityNames,
-      items: itemVocabulary(index),
+      items: itemVocabulary(),
       // Full dictionary, used as a fallback when the narrowed learnset rejects a
       // move — the dex's learnsets have holes (see ocr.js readDetails).
       allMoves: moveNames,
