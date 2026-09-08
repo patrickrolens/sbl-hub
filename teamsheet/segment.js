@@ -163,6 +163,42 @@ function splitMergedNoReference(rejected, imgW, imgH) {
   return out;
 }
 
+/* The sheet's own bounding box, for images where it does not fill the frame.
+
+   isPanelShaped sizes a panel against the whole image, which assumes the sheet
+   fills it. A phone screenshot letterboxed with black bars breaks that: the six
+   panels are found as components, correctly shaped relative to each other, and
+   every one is thrown out for being under 7% of the frame's height when it is
+   27% of the sheet's. Re-measuring against the content instead of the frame
+   costs nothing on an image that already fills its frame, because then the box
+   is the frame. */
+function contentBox(all, w, h) {
+  // Only components large enough to be sheet furniture; a speck of glare in a
+  // corner would otherwise stretch the box back out to the whole frame.
+  const big = all.filter(c => c.w >= w * 0.10 && c.h >= h * 0.01);
+  if (big.length < 3) return null;
+  const x0 = Math.min(...big.map(c => c.x)), y0 = Math.min(...big.map(c => c.y));
+  const x1 = Math.max(...big.map(c => c.x + c.w)), y1 = Math.max(...big.map(c => c.y + c.h));
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+/* More shaped candidates than there are panels.
+
+   A sheet carries other purple furniture — the "Moves & More" / "Stats" tab
+   pill, an "Add a Mon" bar — and on one photo a pill landed inside the aspect
+   and fill bounds and became a seventh panel, which failed the whole import
+   because the pipeline wants exactly six. The six real panels are near-identical
+   in size and the intruders are not (231x53 against a median 390x120), so
+   keeping the six closest to the median size discards the furniture without
+   needing to know what it was. */
+function pickSix(cands) {
+  if (cands.length <= 6) return cands;
+  const med = arr => { const s = [...arr].sort((a, b) => a - b); return s[s.length >> 1]; };
+  const mw = med(cands.map(c => c.w)), mh = med(cands.map(c => c.h));
+  const off = c => Math.abs(c.w - mw) / mw + Math.abs(c.h - mh) / mh;
+  return cands.slice().sort((a, b) => off(a) - off(b)).slice(0, 6);
+}
+
 /* Keep the six panels forming the 3x2 grid. Photos are keystoned, so rows are
    found by clustering on vertical center with a generous tolerance rather than
    by assuming equal spacing. */
@@ -197,11 +233,28 @@ function segmentPanels(canvas, opts) {
   const mask = panelMask(data, w, h);
   let maskCoverage = 0;
   for (let i = 0; i < mask.length; i++) maskCoverage += mask[i];
-  const all = components(mask, w, h, (w * h) * 0.004);
+  /* A letterboxed capture needs a smaller area floor to find its panels at all,
+     so the flood fill keeps anything a panel could plausibly be and the shape
+     test below does the discarding. */
+  const all = components(mask, w, h, (w * h) * 0.0012);
+  let refW = w, refH = h;
   let cands = all.filter(c => isPanelShaped(c, w, h));
-  const recovered = splitMerged(cands, all.filter(c => !isPanelShaped(c, w, h)), w, h);
+
+  /* Nothing shaped like a panel against the frame, but the sheet may simply not
+     fill the frame. Re-test against the content's own box, and keep the result
+     only if it actually finds more — so an image that fills its frame, where the
+     box IS the frame, is unaffected. */
+  if (cands.length < 6) {
+    const box = contentBox(all, w, h);
+    if (box && (box.w < w * 0.92 || box.h < h * 0.92)) {
+      const alt = all.filter(c => isPanelShaped(c, box.w, box.h));
+      if (alt.length > cands.length) { cands = alt; refW = box.w; refH = box.h; }
+    }
+  }
+
+  const recovered = splitMerged(cands, all.filter(c => !isPanelShaped(c, refW, refH)), refW, refH);
   if (recovered.length) cands = cands.concat(recovered);
-  const grid = pickGrid(cands, h);
+  const grid = pickGrid(pickSix(cands), refH);
   return {
     panels: grid.panels, rows: grid.rows, candidates: cands.length,
     debug: { maskFrac: +(maskCoverage / (w * h)).toFixed(3), all },
