@@ -72,7 +72,22 @@ window.TeamsheetOCR = (function () {
        cleanNickname() below deal with whatever sliver still bleeds in.
        It also runs wider, because long names were being clipped ("DEEZ RETURN:"),
        stopping just short of the right-aligned type icons. */
-    nickname: { x0: 0.100, x1: 0.415, y0: 0.02, y1: 0.28 },
+    /* zoom/cut override the shared crop settings for this field alone.
+
+       Tried and rejected: raising them to recover the punctuation nicknames
+       lose. The note under NICK_CHARS concluded that Tesseract "does not emit
+       those shapes at this resolution", which reads as an invitation to raise
+       the resolution — so it was measured, 3 zooms x 3 thresholds against the
+       hand-transcribed suite. Zoom makes it WORSE, monotonically (113 exact at
+       2.5x, 105 at 4x, 102 at 5.5x): upscaling a crop that is already
+       interpolated invents smooth edges where the glyph had none, and a "!"
+       blurred into a "l" is no more recoverable than a "!" that was dropped.
+       A lower threshold was worth one slot in 132, which is noise.
+
+       The values below are therefore the shared defaults, stated explicitly so
+       the next person can see they were chosen rather than inherited. The
+       remaining nickname error is genuine recognizer limit, not tuning. */
+    nickname: { x0: 0.100, x1: 0.415, y0: 0.02, y1: 0.28, zoom: 2.5, cut: 0.62 },
     ability:  { x0: 0.08, x1: 0.44, y0: 0.30, y1: 0.50 },
     item:     { x0: 0.11, x1: 0.50, y0: 0.52, y1: 0.75 },
   };
@@ -88,7 +103,26 @@ window.TeamsheetOCR = (function () {
      exact read does not depend on the move being in this mon's learnset, so it
      survives dex gaps and unfamiliar moves. */
   const MOVE_X = { x0: 0.665, x1: 0.975 };
-  const MOVE_Y0 = 0.095, MOVE_STEP = 0.2367, MOVE_H = 0.16;
+  /* The step was 0.2367 and is really 0.2217, which cost the fourth move.
+
+     A step that is 0.015 too large is invisible on row 1 and compounds: by row 4
+     the window sits 0.037 of a panel below its text, catching the panel's bottom
+     edge instead. It read 91.1% while rows 1-3 read 96.8-98.4%, and because the
+     miss was always the LAST row it looked like "the fourth move is hard" rather
+     than a geometry bug.
+
+     Measured, not guessed: the brightness profile of the moves column, averaged
+     over all 642 panels of the sheet suite, puts the four text bands at 0.183 /
+     0.405 / 0.627 / 0.848. Rows 2 and 3 are the ones to trust — rows 1 and 4 sit
+     against the panel border, which bleeds into the profile and drags their
+     apparent centers outward — so the step comes from those two alone.
+
+     Height 0.17 rather than 0.16 beat every alternative tried (0.16 and 0.18 at
+     two anchors): the text band itself is only ~0.10 tall, so the extra margin
+     absorbs keystone on photographed screens without reaching the next row,
+     which the 0.2217 gutter leaves 0.05 of room for. Moves 94.6% -> 97.1%,
+     row 4 91.1% -> 97.8%. */
+  const MOVE_Y0 = 0.0982, MOVE_STEP = 0.2217, MOVE_H = 0.17;
 
   function moveWin(k) {
     return { x0: MOVE_X.x0, x1: MOVE_X.x1, y0: MOVE_Y0 + k * MOVE_STEP, y1: MOVE_Y0 + k * MOVE_STEP + MOVE_H };
@@ -114,9 +148,10 @@ window.TeamsheetOCR = (function () {
     const sx = px + win.x0 * pw, sy = py + win.y0 * ph;
     const sw = (win.x1 - win.x0) * pw, sh = (win.y1 - win.y0) * ph;
 
+    const zoom = win.zoom || OCR_SCALE;
     const cv = document.createElement('canvas');
-    cv.width = Math.max(8, Math.round(sw * OCR_SCALE));
-    cv.height = Math.max(8, Math.round(sh * OCR_SCALE));
+    cv.width = Math.max(8, Math.round(sw * zoom));
+    cv.height = Math.max(8, Math.round(sh * zoom));
     const ctx = cv.getContext('2d', { willReadFrequently: true });
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
@@ -134,7 +169,7 @@ window.TeamsheetOCR = (function () {
     }
     // Text is the brightest content present; sit the cut high in the range so
     // the lavender panel body falls entirely on the background side.
-    const cut = lo + (hi - lo) * 0.62;
+    const cut = lo + (hi - lo) * (win.cut || 0.62);
     for (let i = 0, p = 0; i < lum.length; i++, p += 4) {
       const on = lum[i] >= cut ? 0 : 255;   // inverted: glyphs become black
       px2[p] = px2[p + 1] = px2[p + 2] = on;
@@ -348,7 +383,13 @@ window.TeamsheetOCR = (function () {
            A real move matched loosely beats no move at all. */
         const mv = bestMatch(rawMove, vocab.moves) ||
                    bestMatch(rawMove, vocab.allMoves || vocab.moves);
-        if (mv) { out.moves.push(mv.value); out.dist.moves.push(mv.distance); }
+        /* Keep the slot even when nothing matched, so an unread move leaves a
+           hole where it actually is. Compacting the array instead moved every
+           later move up a row and always put the blank last, which told the
+           admin a move was missing but not which one — and silently shifted
+           three correct moves out of position to say it. */
+        out.moves.push(mv ? mv.value : null);
+        out.dist.moves.push(mv ? mv.distance : null);
       }
       return out;
     });
