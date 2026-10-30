@@ -441,38 +441,34 @@ function expandedCardHtml(node) {
     + '<span class="bpos">' + node.posLetter + '</span>';
 }
 
-// Measure heights, stack round 0 (skipping hidden byes), center each parent on its
-// VISIBLE children (slide-to-child), then resolve any sibling overlaps within a round
-// by nudging crowded nodes apart — so hidden byes float teams forward without piling
-// nodes on top of each other.
+// Tree-band layout, built from the final backwards. Each visible node reserves a
+// vertical band = max(its own card height, its visible feeders' bands stacked with
+// V_GAP). Bands within a column never overlap, so no nudging pass is needed.
+// Why: when bye-heavy brackets leave a later round with MORE visible nodes than
+// round 0 (e.g. 11 teams: 3 real R16 matches feeding 4 QFs), a node fed only by
+// hidden byes (seed 4 vs 5) gets its own slot instead of stealing a sibling's
+// position and pushing every node below it off its feeder. Parents center on their
+// visible feeders, so single-feeder links are straight lines.
 function layoutBracket(rounds) {
-  let cursor = 0;
-  rounds[0].forEach(node => {
-    if (node._hidden) return;
-    node._h = node.el.offsetHeight;
-    node._top = cursor;
-    node._center = cursor + node._h / 2;
-    cursor += node._h + V_GAP;
-  });
-  const midH = Math.max(cursor - V_GAP, 0) / 2;
-
-  for (let r = 1; r < rounds.length; r++) {
-    const visible = rounds[r].filter(n => !n._hidden);
-    // 1) Desired child-centered position for each visible node.
-    visible.forEach(node => {
-      node._h = node.el.offsetHeight;
-      const vis = [node.childA, node.childB].filter(c => c && !c._hidden && c._center != null);
-      node._center = vis.length ? vis.reduce((s, c) => s + c._center, 0) / vis.length : midH;
-    });
-    // 2) Resolve overlaps top-to-bottom: each node must start at least V_GAP below the
-    //    previous node's bottom. Only pushes down, preserving child-centering where there's room.
-    for (let i = 1; i < visible.length; i++) {
-      const prev = visible[i - 1], cur = visible[i];
-      const minCenter = (prev._center + prev._h / 2) + V_GAP + cur._h / 2;
-      if (cur._center < minCenter) cur._center = minCenter;
-    }
-    visible.forEach(node => { node._top = node._center - node._h / 2; });
-  }
+  rounds.forEach(round => round.forEach(n => { n._h = n._hidden ? 0 : n.el.offsetHeight; n._ext = null; }));
+  // Band height of a subtree (0 for hidden byes, which reserve no space).
+  const ext = n => {
+    if (!n || n._hidden) return 0;
+    if (n._ext != null) return n._ext;
+    n._kids = [n.childA, n.childB].filter(c => ext(c) > 0);
+    n._kidsSum = n._kids.reduce((s, c) => s + c._ext, 0) + V_GAP * Math.max(n._kids.length - 1, 0);
+    return (n._ext = Math.max(n._h, n._kidsSum));
+  };
+  // Place a subtree in the band starting at `top`.
+  const place = (n, top) => {
+    let y = top + (n._ext - n._kidsSum) / 2;          // center the feeders' stack in the band
+    n._kids.forEach(c => { place(c, y); y += c._ext + V_GAP; });
+    let c = n._kids.length ? n._kids.reduce((s, k) => s + k._center, 0) / n._kids.length : top + n._ext / 2;
+    c = Math.min(Math.max(c, top + n._h / 2), top + n._ext - n._h / 2);   // stay inside own band
+    n._center = c; n._top = c - n._h / 2;
+  };
+  const final = rounds[rounds.length - 1][0];
+  ext(final); place(final, 0);
   rounds.forEach(round => round.forEach(node => { if (!node._hidden) node.el.style.top = node._top + 'px'; }));
 }
 
@@ -556,7 +552,7 @@ function openPanel(matchId) {
   document.getElementById('panel-title').textContent = teamName(m.team_a_id) + ' vs ' + teamName(m.team_b_id);
   const body = document.getElementById('panel-body');
   if (matchDetailCache[matchId]) { renderMatchDetail(body, m, matchDetailCache[matchId]); return; }
-  body.innerHTML = '<div class="dm-loading">Loading match\u2026</div>';
+  body.innerHTML = '<div class="dm-loading">Loading match…</div>';
   if (!detailLoading[matchId]) loadMatchDetail(matchId);
 }
 function closePanel() { document.getElementById('panel-overlay').hidden = true; }
@@ -617,8 +613,8 @@ function statListHtml(matchId, teamId, d) {
 function gameHtml(m, g, d) {
   const winName = g.winner_team_id ? teamName(g.winner_team_id) : null;
   let head = 'Game ' + g.game_number;
-  if (winName) head += ' \u00B7 <span class="gw">' + escapeHtml(winName) + ' won</span>';
-  if (g.replay_url) head += ' \u00B7 <a class="replay" href="' + escapeHtml(g.replay_url) + '" target="_blank" rel="noopener">Replay \u2197</a>';
+  if (winName) head += ' · <span class="gw">' + escapeHtml(winName) + ' won</span>';
+  if (g.replay_url) head += ' · <a class="replay" href="' + escapeHtml(g.replay_url) + '" target="_blank" rel="noopener">Replay ↗</a>';
   const sideHtml = teamId => {
     const rows = d.stats.filter(s => s.game_id === g.id && s.team_id === teamId);
     if (!rows.length) return '<div class="dm-empty">-</div>';
@@ -635,9 +631,9 @@ function renderMatchDetail(body, m, d) {
   const aWin = m.winner_team_id === m.team_a_id, bWin = m.winner_team_id === m.team_b_id;
   const date = fmtDateTime(m.match_date);
   const meta = [stageLabel(m.stage), (m.postseason_round || 'Week ' + m.week), 'Bo' + (m.series_length || 3)]
-    .concat(date ? [date] : []).join(' \u00B7 ');
+    .concat(date ? [date] : []).join(' · ');
   const h = [];
-  h.push('<div class="dm-score"><span class="' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span><span class="dash">\u2013</span><span class="' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>');
+  h.push('<div class="dm-score"><span class="' + (aWin ? 'win' : '') + '">' + (m.team_a_score || 0) + '</span><span class="dash">–</span><span class="' + (bWin ? 'win' : '') + '">' + (m.team_b_score || 0) + '</span></div>');
   h.push('<div class="dm-meta">' + escapeHtml(meta) + '</div>');
 
   h.push('<div class="dm-sides dm-top">');
@@ -651,7 +647,7 @@ function renderMatchDetail(body, m, d) {
 
   h.push('<div class="dm-section-title">Games</div>');
   if (d.games.length) d.games.forEach(g => h.push(gameHtml(m, g, d)));
-  else h.push('<div class="dm-empty">' + (matchHasResults(m) ? 'Result recorded without game-by-game detail.' : 'This match hasn\u2019t been played yet.') + '</div>');
+  else h.push('<div class="dm-empty">' + (matchHasResults(m) ? 'Result recorded without game-by-game detail.' : 'This match hasn’t been played yet.') + '</div>');
 
   body.innerHTML = h.join('');
   body.querySelectorAll('img[data-mon]').forEach(img => attachIconFallback(img, img.getAttribute('data-mon')));
@@ -1318,7 +1314,7 @@ async function init() {
     await detectAdmin();
     if (!published && !isAdmin) {
       banner.className = 'banner';
-      banner.textContent = 'The postseason hasn\u2019t started yet - check back when the brackets go live.';
+      banner.textContent = 'The postseason hasn’t started yet - check back when the brackets go live.';
       banner.hidden = false;
       return;
     }
@@ -1360,7 +1356,7 @@ async function init() {
       const pj = await pjPromise;
       const arr = Array.isArray(pj) ? pj : (pj.pokemon || []);
       arr.forEach(p => { pokemonById[p.id] = p; });
-    } catch (e) { console.error('pokemon.json:', e); showToast('Pokémon data didn\u2019t load - names/icons may be missing.', 'err'); }
+    } catch (e) { console.error('pokemon.json:', e); showToast('Pokémon data didn’t load - names/icons may be missing.', 'err'); }
 
     document.getElementById('season-sub').textContent = season.name;
     if (!season.postseason_published && isAdmin) document.getElementById('preview-note').hidden = false;
